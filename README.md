@@ -38,19 +38,34 @@ That's it — it now behaves like a native app with its own icon.
 
 ## Features
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
-  Translator. Add/edit/delete your own (icon, name, system prompt, model, temperature).
-- **Model per agent** — `deepseek-chat` (DeepSeek‑V3, fast) or `deepseek-reasoner`
-  (R1, shows step‑by‑step reasoning). Type any model name your key can access.
-- **Streaming replies** with a stop button; reasoning shown in a dimmed block.
+  Translator. Add/edit/delete your own (icon, name, system prompt, model, thinking,
+  temperature).
+- **Model per agent** — `deepseek-v4-pro` (flagship) or `deepseek-v4-flash` (fast/cheap).
+  Type any model name your key can access.
+- **Thinking mode per agent** — Off / Low / Medium / High. On makes DeepSeek V4 reason
+  step-by-step; the reasoning is streamed into a dimmed block above the answer.
+- **Streaming replies** with a stop button.
 - **Conversations saved** per agent (in your browser).
 - **Everything local** — your API key and chats live only in your browser's
   `localStorage`; nothing is sent anywhere except DeepSeek's API.
 
-## About the model name
-DeepSeek's public API currently exposes **`deepseek-chat`** and **`deepseek-reasoner`**.
-If/when your account has access to a newer model (e.g. a "V4 / pro" tier), just type its
-exact model id into the agent's **Model** field or Settings → *Default model* — the app
-sends whatever name you enter, so it works the moment DeepSeek enables it for your key.
+## Models (as of July 2026)
+DeepSeek **V4** is the current generation (released 24 Apr 2026), both with a **1M-token
+context**:
+
+| Model | Use for |
+|---|---|
+| **`deepseek-v4-pro`** | flagship reasoning/coding/agents (1.6T params) |
+| **`deepseek-v4-flash`** | fast, cheap everyday chat (284B params) |
+
+**Thinking mode** is toggled per agent in the app. Under the hood it sends
+`"thinking": {"type": "enabled"}` + `"reasoning_effort"` on the request; the
+chain-of-thought comes back in `reasoning_content`.
+
+> ⚠️ The older **`deepseek-chat`** and **`deepseek-reasoner`** names are **retired after
+> 24 Jul 2026** (they just route to `deepseek-v4-flash`). This app already defaults to the
+> V4 names. Any future model your key gets access to also works — just type its id into
+> the agent's **Model** field.
 
 ## Security note
 Because the page calls DeepSeek directly from the browser, your API key is stored on the
