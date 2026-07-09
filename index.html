@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#0b0f17" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="DS Agents" />
+<link rel="manifest" href="manifest.json" />
+<title>DeepSeek Agents</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#111827; --panel2:#0f1521; --line:#1f2937;
+    --text:#e5e7eb; --muted:#9ca3af; --accent:#4f7cff; --accent2:#8b5cf6;
+    --user:#1e3a8a; --bot:#111827; --danger:#ef4444; --ok:#22c55e;
+    --radius:16px; --safe-b:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg);color:var(--text);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex;flex-direction:column;height:100dvh;overflow:hidden;
+  }
+  button{font:inherit;color:inherit;cursor:pointer}
+  input,textarea,select{font:inherit}
+
+  /* Top bar */
+  header{
+    display:flex;align-items:center;gap:10px;padding:10px 12px;
+    padding-top:calc(10px + env(safe-area-inset-top,0px));
+    background:linear-gradient(180deg,#0d1320,#0b0f17);border-bottom:1px solid var(--line);
+    position:relative;z-index:5;
+  }
+  .icon-btn{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    width:42px;height:42px;display:grid;place-items:center;font-size:18px;flex:0 0 auto;
+  }
+  .title{flex:1;min-width:0}
+  .title .name{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .title .sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* Chat area */
+  main{flex:1;overflow-y:auto;padding:16px 12px 8px;-webkit-overflow-scrolling:touch}
+  .msg{max-width:88%;padding:11px 14px;border-radius:var(--radius);margin:8px 0;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere}
+  .msg.user{background:var(--user);margin-left:auto;border-bottom-right-radius:4px}
+  .msg.bot{background:var(--bot);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg.err{background:#3b1113;border:1px solid #7f1d1d;color:#fecaca}
+  .msg .think{color:var(--muted);font-style:italic;font-size:14px;border-left:2px solid var(--line);padding-left:10px;margin-bottom:8px;display:block;white-space:pre-wrap}
+  .msg code{background:#0008;padding:1px 5px;border-radius:6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em}
+  .msg pre{background:#0009;border:1px solid var(--line);padding:12px;border-radius:10px;overflow-x:auto;margin:8px 0}
+  .msg pre code{background:none;padding:0}
+  .empty{color:var(--muted);text-align:center;margin-top:14vh;padding:0 24px}
+  .empty h2{color:var(--text);font-size:18px;margin:0 0 6px}
+  .cursor{display:inline-block;width:8px;height:16px;background:var(--accent);vertical-align:text-bottom;animation:blink 1s steps(2) infinite;border-radius:2px}
+  @keyframes blink{50%{opacity:0}}
+
+  /* Composer */
+  .composer{
+    border-top:1px solid var(--line);background:var(--panel2);
+    padding:8px 10px calc(8px + var(--safe-b));display:flex;gap:8px;align-items:flex-end;
+  }
+  .composer textarea{
+    flex:1;resize:none;background:var(--panel);color:var(--text);border:1px solid var(--line);
+    border-radius:14px;padding:11px 14px;max-height:38vh;min-height:44px;outline:none;
+  }
+  .send{
+    background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;
+    border-radius:14px;min-width:48px;height:44px;font-size:18px;font-weight:700;flex:0 0 auto;
+  }
+  .send.stop{background:var(--danger)}
+  .send:disabled{opacity:.4}
+
+  /* Sheets / drawers */
+  .scrim{position:fixed;inset:0;background:#000a;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .sheet{
+    position:fixed;z-index:30;background:var(--panel);border:1px solid var(--line);
+    display:flex;flex-direction:column;transition:transform .25s ease;
+  }
+  /* left drawer (agents) */
+  .drawer{top:0;bottom:0;left:0;width:min(86vw,360px);border-radius:0 18px 18px 0;transform:translateX(-105%);padding-top:env(safe-area-inset-top,0px)}
+  .drawer.on{transform:translateX(0)}
+  /* bottom sheet (settings/editor) */
+  .bottom{left:0;right:0;bottom:0;max-height:92dvh;border-radius:18px 18px 0 0;transform:translateY(105%);padding-bottom:var(--safe-b)}
+  .bottom.on{transform:translateY(0)}
+  .sheet h3{margin:0;padding:16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .sheet .body{overflow-y:auto;padding:14px 16px}
+  .sheet .foot{border-top:1px solid var(--line);padding:12px 16px;display:flex;gap:10px}
+
+  .agent-row{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;border:1px solid transparent}
+  .agent-row:hover,.agent-row.active{background:var(--panel2);border-color:var(--line)}
+  .agent-row .av{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:#0f1521;border:1px solid var(--line);flex:0 0 auto}
+  .agent-row .meta{flex:1;min-width:0}
+  .agent-row .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .agent-row .meta small{color:var(--muted)}
+  .agent-row .edit{opacity:.6;font-size:16px;padding:6px}
+
+  label{display:block;font-size:13px;color:var(--muted);margin:14px 0 6px}
+  .field{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:11px 13px;outline:none}
+  textarea.field{resize:vertical;min-height:90px}
+  .row2{display:flex;gap:10px}.row2>div{flex:1}
+  .btn{border-radius:12px;padding:12px 14px;border:1px solid var(--line);background:var(--panel2);flex:1;text-align:center;font-weight:600}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff}
+  .btn.danger{color:#fca5a5;border-color:#7f1d1d}
+  .btn.ghost{background:transparent}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px}
+  .hint a{color:var(--accent)}
+  .pill{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .kv b{font-weight:600}
+  .status{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + var(--safe-b));background:#000c;border:1px solid var(--line);padding:8px 14px;border-radius:999px;font-size:13px;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none}
+  .status.on{opacity:1}
+  .add-agent{width:100%;margin-top:8px;border:1px dashed var(--line);background:transparent;border-radius:14px;padding:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+  <header>
+    <button class="icon-btn" id="menuBtn" aria-label="Agents">☰</button>
+    <div class="title">
+      <div class="name" id="hAgent">DeepSeek Agents</div>
+      <div class="sub" id="hSub">Tap ☰ to pick an agent</div>
+    </div>
+    <button class="icon-btn" id="clearBtn" aria-label="Clear chat">🧹</button>
+    <button class="icon-btn" id="setBtn" aria-label="Settings">⚙️</button>
+  </header>
+
+  <main id="chat"></main>
+
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Message your agent…" enterkeyhint="send"></textarea>
+    <button class="send" id="sendBtn">➤</button>
+  </div>
+
+  <div class="status" id="toast"></div>
+
+  <!-- Scrim -->
+  <div class="scrim" id="scrim"></div>
+
+  <!-- Agents drawer -->
+  <aside class="sheet drawer" id="drawer">
+    <h3>🤖 Agents</h3>
+    <div class="body" id="agentList"></div>
+    <div class="foot" style="display:block">
+      <button class="add-agent" id="addAgent">＋ New agent</button>
+    </div>
+  </aside>
+
+  <!-- Settings sheet -->
+  <section class="sheet bottom" id="settings">
+    <h3>⚙️ Settings <span class="pill" id="connPill">not set</span></h3>
+    <div class="body">
+      <label>DeepSeek API key</label>
+      <input class="field" id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+      <div class="hint">Stored only in this browser (localStorage). Get one at <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">platform.deepseek.com</a>.</div>
+
+      <label>API base URL</label>
+      <input class="field" id="baseUrl" value="https://api.deepseek.com" />
+      <div class="hint">Default works for DeepSeek. Any OpenAI-compatible endpoint works too.</div>
+
+      <label>Default model</label>
+      <input class="field" id="defModel" list="models" value="deepseek-chat" />
+      <datalist id="models">
+        <option value="deepseek-chat"></option>
+        <option value="deepseek-reasoner"></option>
+      </datalist>
+      <div class="hint"><b>deepseek-chat</b> = DeepSeek-V3 (fast). <b>deepseek-reasoner</b> = R1 (deep reasoning). Type any model name your key can access.</div>
+
+      <div style="margin-top:14px" class="kv"><span>Account balance / usage</span><b><a href="https://platform.deepseek.com/usage" target="_blank" rel="noopener" style="color:var(--accent)">open ↗</a></b></div>
+    </div>
+    <div class="foot">
+      <button class="btn primary" id="saveSettings">Save</button>
+      <button class="btn ghost" data-close>Close</button>
+    </div>
+  </section>
+
+  <!-- Agent editor sheet -->
+  <section class="sheet bottom" id="editor">
+    <h3 id="edTitle">New agent</h3>
+    <div class="body">
+      <div class="row2">
+        <div style="flex:0 0 84px">
+          <label>Icon</label>
+          <input class="field" id="edEmoji" maxlength="2" value="🤖" style="text-align:center;font-size:22px" />
+        </div>
+        <div>
+          <label>Name</label>
+          <input class="field" id="edName" placeholder="e.g. Coder" />
+        </div>
+      </div>
+
+      <label>System prompt (the agent's role & rules)</label>
+      <textarea class="field" id="edPrompt" placeholder="You are a senior software engineer. Be concise and give runnable code."></textarea>
+
+      <div class="row2">
+        <div>
+          <label>Model</label>
+          <input class="field" id="edModel" list="models" placeholder="(use default)" />
+        </div>
+        <div>
+          <label>Temperature <span id="tempVal">1.0</span></label>
+          <input id="edTemp" type="range" min="0" max="1.5" step="0.1" value="1" style="width:100%;margin-top:14px" />
+        </div>
+      </div>
+      <div class="hint">Tip: 0.0 for code/math, ~1.0 for chat, ~1.3 for creative writing.</div>
+    </div>
+    <div class="foot">
+      <button class="btn primary" id="saveAgent">Save agent</button>
+      <button class="btn danger" id="delAgent" style="flex:0 0 auto">Delete</button>
+      <button class="btn ghost" data-close style="flex:0 0 auto">Close</button>
+    </div>
+  </section>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const store = {
+  get k(){return localStorage.getItem("ds_key")||""},        set k(v){localStorage.setItem("ds_key",v)},
+  get base(){return localStorage.getItem("ds_base")||"https://api.deepseek.com"}, set base(v){localStorage.setItem("ds_base",v)},
+  get model(){return localStorage.getItem("ds_model")||"deepseek-chat"}, set model(v){localStorage.setItem("ds_model",v)},
+  get agents(){try{return JSON.parse(localStorage.getItem("ds_agents"))||null}catch(e){return null}}, set agents(v){localStorage.setItem("ds_agents",JSON.stringify(v))},
+  get cur(){return localStorage.getItem("ds_cur")||""}, set cur(v){localStorage.setItem("ds_cur",v)},
+  conv(id){try{return JSON.parse(localStorage.getItem("ds_conv_"+id))||[]}catch(e){return []}},
+  saveConv(id,m){localStorage.setItem("ds_conv_"+id,JSON.stringify(m.slice(-200)))},
+  clearConv(id){localStorage.removeItem("ds_conv_"+id)},
+};
+
+const uid = () => Math.random().toString(36).slice(2,9);
+const DEFAULT_AGENTS = [
+  {id:uid(),emoji:"💬",name:"General Assistant",prompt:"You are a helpful, friendly assistant. Answer clearly and concisely.",model:"",temp:1.0},
+  {id:uid(),emoji:"👨‍💻",name:"Coder",prompt:"You are a senior software engineer. Give correct, runnable code with brief explanations. Prefer modern idioms.",model:"deepseek-chat",temp:0.0},
+  {id:uid(),emoji:"🧠",name:"Deep Reasoner",prompt:"Think step by step and reason carefully before answering hard problems in math, logic, and analysis.",model:"deepseek-reasoner",temp:0.6},
+  {id:uid(),emoji:"✍️",name:"Writer",prompt:"You are a skilled writer and editor. Improve clarity, tone, and flow. Offer options when useful.",model:"",temp:1.3},
+  {id:uid(),emoji:"🌍",name:"Translator",prompt:"You are an expert translator. Detect the language and translate accurately, preserving tone. If asked, explain nuances.",model:"",temp:0.3},
+];
+let agents = store.agents; if(!agents){agents=DEFAULT_AGENTS;store.agents=agents;}
+let currentId = store.cur || agents[0].id;
+if(!agents.find(a=>a.id===currentId)) currentId = agents[0].id;
+let messages = [];
+let editingId = null;
+let controller = null; // AbortController for streaming
+
+/* ---------- UI helpers ---------- */
+function toast(t){const el=$("#toast");el.textContent=t;el.classList.add("on");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("on"),2200);}
+function openSheet(id){$("#scrim").classList.add("on");$(id).classList.add("on");}
+function closeAll(){$("#scrim").classList.remove("on");document.querySelectorAll(".sheet.on").forEach(s=>s.classList.remove("on"));}
+$("#scrim").onclick=closeAll;
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeAll);
+
+function esc(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+// minimal, safe markdown: code fences, inline code, bold, links
+function md(t){
+  t=esc(t);
+  t=t.replace(/```([\s\S]*?)```/g,(m,c)=>"<pre><code>"+c.replace(/^\n/,"")+"</code></pre>");
+  t=t.replace(/`([^`\n]+)`/g,"<code>$1</code>");
+  t=t.replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>");
+  t=t.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener" style="color:var(--accent)">$1</a>');
+  return t;
+}
+
+/* ---------- Header / agent ---------- */
+function curAgent(){return agents.find(a=>a.id===currentId)||agents[0];}
+function refreshHeader(){
+  const a=curAgent();
+  $("#hAgent").textContent=a.emoji+" "+a.name;
+  $("#hSub").textContent=(a.model||store.model)+" · temp "+a.temp;
+}
+
+/* ---------- Chat rendering ---------- */
+function renderChat(){
+  const c=$("#chat");c.innerHTML="";
+  if(!messages.length){
+    c.innerHTML='<div class="empty"><h2>'+esc(curAgent().emoji+" "+curAgent().name)+'</h2><div>'+
+      (store.k? "Say hi to start the conversation." :
+      "⚠️ Add your DeepSeek API key in ⚙️ Settings to begin.")+'</div></div>';
+    return;
+  }
+  for(const m of messages){
+    if(m.role==="system")continue;
+    const d=document.createElement("div");
+    d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
+    let html="";
+    if(m.reasoning) html+='<span class="think">'+esc(m.reasoning)+'</span>';
+    html+=md(m.content||"");
+    if(m.streaming) html+='<span class="cursor"></span>';
+    d.innerHTML=html;
+    c.appendChild(d);
+  }
+  c.scrollTop=c.scrollHeight;
+}
+function loadConv(){messages=store.conv(currentId);renderChat();refreshHeader();}
+
+/* ---------- Agents drawer ---------- */
+function renderAgents(){
+  const list=$("#agentList");list.innerHTML="";
+  for(const a of agents){
+    const row=document.createElement("div");
+    row.className="agent-row"+(a.id===currentId?" active":"");
+    row.innerHTML='<div class="av">'+esc(a.emoji)+'</div>'+
+      '<div class="meta"><b>'+esc(a.name)+'</b><small>'+esc((a.model||store.model))+'</small></div>'+
+      '<button class="edit" aria-label="Edit">✎</button>';
+    row.querySelector(".meta").onclick=row.querySelector(".av").onclick=()=>{
+      currentId=a.id;store.cur=a.id;loadConv();renderAgents();closeAll();
+    };
+    row.querySelector(".edit").onclick=(e)=>{e.stopPropagation();openEditor(a.id);};
+    list.appendChild(row);
+  }
+}
+
+/* ---------- Agent editor ---------- */
+function openEditor(id){
+  editingId=id;
+  const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0};
+  $("#edTitle").textContent=id?"Edit agent":"New agent";
+  $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
+  $("#edModel").value=a.model;$("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);
+  $("#delAgent").style.display=(id&&agents.length>1)?"":"none";
+  closeAll();openSheet("#editor");
+}
+$("#edTemp").oninput=e=>$("#tempVal").textContent=Number(e.target.value).toFixed(1);
+$("#addAgent").onclick=()=>openEditor(null);
+$("#saveAgent").onclick=()=>{
+  const name=$("#edName").value.trim()||"Agent";
+  const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value)};
+  if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
+  else{const a={id:uid(),...data};agents.push(a);currentId=a.id;store.cur=a.id;}
+  store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
+};
+$("#delAgent").onclick=()=>{
+  if(!editingId)return;
+  agents=agents.filter(a=>a.id!==editingId);store.agents=agents;store.clearConv(editingId);
+  if(currentId===editingId){currentId=agents[0].id;store.cur=currentId;}
+  renderAgents();loadConv();closeAll();toast("Agent deleted");
+};
+
+/* ---------- Settings ---------- */
+function refreshConnPill(){const p=$("#connPill");if(store.k){p.textContent="key saved";p.style.color="var(--ok)";}else{p.textContent="not set";p.style.color="var(--muted)";}}
+$("#setBtn").onclick=()=>{$("#apiKey").value=store.k;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
+$("#saveSettings").onclick=()=>{
+  store.k=$("#apiKey").value.trim();
+  store.base=($("#baseUrl").value.trim()||"https://api.deepseek.com").replace(/\/+$/,"");
+  store.model=$("#defModel").value.trim()||"deepseek-chat";
+  refreshConnPill();renderChat();closeAll();toast("Saved");
+};
+$("#menuBtn").onclick=()=>{renderAgents();closeAll();openSheet("#drawer");};
+$("#clearBtn").onclick=()=>{if(confirm("Clear this conversation?")){store.clearConv(currentId);loadConv();toast("Cleared");}};
+
+/* ---------- Composer ---------- */
+const input=$("#input");
+function autoGrow(){input.style.height="auto";input.style.height=Math.min(input.scrollHeight,window.innerHeight*0.38)+"px";}
+input.addEventListener("input",autoGrow);
+input.addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&!e.shiftKey&&!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){
+    e.preventDefault();send();
+  }
+});
+$("#sendBtn").onclick=()=>{ if(controller){controller.abort();} else {send();} };
+
+function setSending(on){
+  const b=$("#sendBtn");
+  if(on){b.classList.add("stop");b.textContent="■";}
+  else{b.classList.remove("stop");b.textContent="➤";}
+}
+
+/* ---------- API call (streaming) ---------- */
+async function send(){
+  const text=input.value.trim();
+  if(!text)return;
+  if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
+  input.value="";autoGrow();
+
+  const a=curAgent();
+  messages.push({role:"user",content:text});
+  const bot={role:"assistant",content:"",reasoning:"",streaming:true};
+  messages.push(bot);
+  renderChat();
+
+  // Build request payload (OpenAI-compatible)
+  const sys=a.prompt?[{role:"system",content:a.prompt}]:[];
+  const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&m.content).map(m=>({role:m.role,content:m.content}));
+  const payload={
+    model:a.model||store.model,
+    messages:[...sys,...hist],
+    temperature:a.temp,
+    stream:true,
+  };
+
+  controller=new AbortController();
+  setSending(true);
+  try{
+    const res=await fetch(store.base+"/chat/completions",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+store.k},
+      body:JSON.stringify(payload),
+      signal:controller.signal,
+    });
+    if(!res.ok){
+      let detail="";try{const j=await res.json();detail=j.error?.message||JSON.stringify(j);}catch(e){detail=await res.text().catch(()=>"");}
+      throw new Error("HTTP "+res.status+(detail?": "+detail:""));
+    }
+    const reader=res.body.getReader();
+    const dec=new TextDecoder();
+    let buf="";
+    while(true){
+      const {value,done}=await reader.read();
+      if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      let idx;
+      while((idx=buf.indexOf("\n"))>=0){
+        let line=buf.slice(0,idx).trim();buf=buf.slice(idx+1);
+        if(!line.startsWith("data:"))continue;
+        const data=line.slice(5).trim();
+        if(data==="[DONE]"){continue;}
+        try{
+          const j=JSON.parse(data);
+          const d=j.choices?.[0]?.delta||{};
+          if(d.reasoning_content) bot.reasoning+=d.reasoning_content;
+          if(d.content) bot.content+=d.content;
+          renderChat();
+        }catch(e){/* ignore keep-alive/partial */}
+      }
+    }
+    bot.streaming=false;
+    if(!bot.content&&!bot.reasoning){bot.content="(empty response)";}
+  }catch(err){
+    bot.streaming=false;
+    if(err.name==="AbortError"){bot.content=bot.content||"⏹ stopped.";}
+    else{bot.error=true;bot.content="⚠️ "+err.message;}
+  }finally{
+    controller=null;setSending(false);
+    renderChat();store.saveConv(currentId,messages);
+  }
+}
+
+/* ---------- Boot ---------- */
+renderAgents();loadConv();refreshConnPill();
+if(!store.k){setTimeout(()=>{$("#setBtn").click();},400);}
+</script>
+</body>
+</html>
