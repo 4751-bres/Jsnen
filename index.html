@@ -146,6 +146,18 @@
   .role-card textarea{min-height:68px}
   .stage-badge{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 7px;text-transform:uppercase}
   @media(max-width:420px){.role-grid{grid-template-columns:1fr}}
+
+  /* workflow run */
+  .workflow-progress{display:none;padding:8px 12px;border-bottom:1px solid var(--line);background:#101a33;color:#c7d2fe;font-size:13px}
+  .workflow-actions{display:none;border-top:1px solid var(--line);background:var(--panel2);padding:12px 10px calc(12px + var(--safe-b))}
+  .workflow-actions .summary{font-weight:700;margin-bottom:4px}
+  .workflow-actions .cost-note{font-size:12px;color:var(--muted);margin-bottom:10px}
+  .workflow-actions textarea{min-height:64px;margin-bottom:8px}
+  .workflow-action-row{display:flex;gap:8px;flex-wrap:wrap}
+  .workflow-action-row .btn{min-width:120px}
+  .retry-role{display:block;margin-top:10px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:9px;padding:5px 9px;font-size:12px}
+  .msg .who.role{color:#a78bfa}
+  .msg.final{border-color:var(--accent2);box-shadow:0 0 0 1px #8b5cf633}
 </style>
 </head>
 <body>
@@ -161,7 +173,19 @@
 
   <main id="chat"></main>
 
+  <div class="workflow-progress" id="workflowProgress"></div>
   <div class="responders" id="responders"></div>
+
+  <div class="workflow-actions" id="workflowActions">
+    <div class="summary" id="workflowActionText"></div>
+    <div class="cost-note" id="workflowCostNote"></div>
+    <textarea class="field" id="reviewGuidance" placeholder="Optional guidance for the final synthesis…"></textarea>
+    <div class="workflow-action-row">
+      <button class="btn primary" id="approveSynthesis">Approve &amp; synthesize</button>
+      <button class="btn primary" id="resumeWorkflow">Resume workflow</button>
+      <button class="btn danger" id="cancelWorkflow">Cancel run</button>
+    </div>
+  </div>
 
   <div class="composer">
     <textarea id="input" rows="1" placeholder="Message your agent…" enterkeyhint="send"></textarea>
@@ -413,6 +437,30 @@ function buildWorkflowMessages(workflow,run,role,agent){
   ].filter(Boolean).join("\n\n");
   return [{role:"system",content:system},{role:"user",content:body}];
 }
+function recordRoleOutput(run,role,output,now){
+  const outputs=(run.outputs||[]).filter(o=>o.roleId!==role.id).concat({roleId:role.id,content:output.content||"",reasoning:output.reasoning||"",error:false,completedAt:now});
+  return {...run,outputs,completedRoleIds:[...new Set([...(run.completedRoleIds||[]),role.id])],nextRoleIndex:run.nextRoleIndex+1,updatedAt:now};
+}
+function recordRoleFailure(run,role,output,now){
+  const outputs=(run.outputs||[]).filter(o=>o.roleId!==role.id).concat({roleId:role.id,content:output.content||"",reasoning:output.reasoning||"",error:true,completedAt:now});
+  return {...run,status:"stopped",outputs,completedRoleIds:(run.completedRoleIds||[]).filter(id=>id!==role.id),updatedAt:now};
+}
+function nextWorkflowAction(workflow,run){
+  const synthIndex=workflow.roles.findIndex(r=>r.stage==="synthesis");
+  if(run.nextRoleIndex<synthIndex)return {type:"role",role:workflow.roles[run.nextRoleIndex],run};
+  if(run.status!=="synthesizing"&&run.nextRoleIndex===synthIndex)return {type:"review",run:{...run,status:"review"}};
+  if(run.status==="synthesizing"&&run.nextRoleIndex===synthIndex)return {type:"role",role:workflow.roles[synthIndex],run};
+  return {type:"complete",run:{...run,status:"complete"}};
+}
+function retryWorkflowRole(workflow,run,roleId,now){
+  const index=workflow.roles.findIndex(r=>r.id===roleId);
+  if(index<0)return run;
+  const keep=new Set(workflow.roles.slice(0,index).map(r=>r.id));
+  return {...run,status:"stopped",nextRoleIndex:index,
+    outputs:(run.outputs||[]).filter(o=>keep.has(o.roleId)),
+    completedRoleIds:(run.completedRoleIds||[]).filter(id=>keep.has(id)),
+    updatedAt:now};
+}
 /* workflow-core:end */
 
 const DEFAULT_AGENTS = [
@@ -436,6 +484,7 @@ let editingGroupId = null;
 let editingWorkflowId = null;
 let workflowDraft = null;
 let workflowDraftDirty = false;
+let currentRun = null;
 let controller = null; // AbortController for streaming
 
 /* ---------- UI helpers ---------- */
@@ -467,7 +516,12 @@ function refreshHeader(){
   if(isWorkflow()){
     const w=curWorkflow();
     $("#hAgent").textContent=w.emoji+" "+w.name;
-    $("#hSub").textContent=w.roles.length+" roles · "+(w.template||"custom")+" workflow";
+    if(currentRun&&["running","synthesizing"].includes(currentRun.status)){
+      const role=w.roles[currentRun.nextRoleIndex];
+      $("#hSub").textContent=(role?role.name:"Finishing")+" · "+Math.min(currentRun.nextRoleIndex+1,w.roles.length)+" of "+w.roles.length;
+    }else{
+      $("#hSub").textContent=w.roles.length+" roles · "+(w.template||"custom")+" workflow";
+    }
     $("#input").placeholder="Give this workflow a task…";
   }else if(isGroup()){
     const g=curGroup(), n=groupMembers(g).length;
@@ -519,17 +573,51 @@ function renderChat(){
     if(m.role==="system")continue;
     const d=document.createElement("div");
     d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
+    if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
     let html="";
-    if(m.role!=="user" && isGroup() && m.agentName) html+='<span class="who">'+esc((m.agentEmoji||"🤖")+" "+m.agentName)+'</span>';
+    if(m.role!=="user"&&m.workflowRoleName)html+='<span class="who role">'+esc(m.workflowRoleName+" · "+(m.agentEmoji||"🤖")+" "+(m.agentName||"Agent"))+'</span>';
+    else if(m.role!=="user"&&m.agentName)html+='<span class="who">'+esc((m.agentEmoji||"🤖")+" "+m.agentName)+'</span>';
     if(m.reasoning) html+='<span class="think">'+esc(m.reasoning)+'</span>';
     html+=md(m.content||"");
     if(m.streaming) html+='<span class="cursor"></span>';
     d.innerHTML=html;
+    if(m.role!=="user"&&m.workflowRoleId&&currentRun&&["review","stopped"].includes(currentRun.status)&&m.runId===currentRun.id&&!m.streaming){
+      const retry=document.createElement("button");retry.className="retry-role";retry.textContent="↻ Retry this role";
+      retry.onclick=()=>retryRoleFromUi(m.workflowRoleId);d.appendChild(retry);
+    }
     c.appendChild(d);
   }
   c.scrollTop=c.scrollHeight;
 }
-function loadConv(){messages=store.conv(currentId);renderChat();refreshHeader();renderResponders();}
+function renderWorkflowUi(){
+  const progress=$("#workflowProgress"),actions=$("#workflowActions"),composer=document.querySelector(".composer");
+  if(!isWorkflow()){
+    progress.style.display=actions.style.display="none";composer.style.display="flex";input.disabled=false;$("#menuBtn").disabled=false;return;
+  }
+  const run=currentRun,w=curWorkflow();
+  progress.style.display="none";actions.style.display="none";composer.style.display="flex";
+  input.disabled=false;$("#menuBtn").disabled=!!controller;
+  if(!run||run.status==="complete")return;
+  const role=w.roles[run.nextRoleIndex],step=Math.min(run.nextRoleIndex+1,w.roles.length);
+  progress.textContent=run.status==="review"?"Review checkpoint":(role?role.name:"Workflow")+" · "+step+" of "+w.roles.length;
+  progress.style.display="block";
+  if(["running","synthesizing"].includes(run.status)){
+    input.disabled=true;return;
+  }
+  composer.style.display="none";actions.style.display="block";
+  const review=run.status==="review";
+  $("#workflowActionText").textContent=review?"Review the agents' work before final synthesis":"Workflow stopped at "+(role?role.name:"the next role");
+  $("#workflowCostNote").textContent=review?"Final synthesis uses 1 more API response.":"Resume retries the current role.";
+  $("#reviewGuidance").style.display=review?"block":"none";
+  $("#approveSynthesis").style.display=review?"block":"none";
+  $("#resumeWorkflow").style.display=review?"none":"block";
+  $("#cancelWorkflow").style.display="block";
+}
+function loadConv(){
+  messages=store.conv(currentId);currentRun=isWorkflow()?store.run(currentId):null;
+  if(currentRun)store.saveRun(currentId,currentRun);
+  renderChat();refreshHeader();renderResponders();renderWorkflowUi();
+}
 
 /* ---------- Agents & groups drawer ---------- */
 function selectAgent(id){currentKind="agent";currentId=id;store.kind="agent";store.cur=id;loadConv();renderAgents();closeAll();}
@@ -759,7 +847,11 @@ $("#saveSettings").onclick=()=>{
   refreshConnPill();renderChat();closeAll();toast("Saved");
 };
 $("#menuBtn").onclick=()=>{renderAgents();closeAll();openSheet("#drawer");};
-$("#clearBtn").onclick=()=>{if(confirm("Clear this conversation?")){store.clearConv(currentId);loadConv();toast("Cleared");}};
+$("#clearBtn").onclick=()=>{if(confirm("Clear this conversation?")){
+  store.clearConv(currentId);
+  if(isWorkflow()){store.clearRun(currentId);currentRun=null;}
+  loadConv();toast("Cleared");
+}};
 
 /* ---------- Composer ---------- */
 const input=$("#input");
@@ -776,6 +868,7 @@ function setSending(on){
   const b=$("#sendBtn");
   if(on){b.classList.add("stop");b.textContent="■";}
   else{b.classList.remove("stop");b.textContent="➤";}
+  renderWorkflowUi();
 }
 
 /* ---------- Build OpenAI-compatible message list for a given responder ---------- */
@@ -874,6 +967,79 @@ async function runAgent(agent){
   return result!==false&&!result.aborted;
 }
 
+/* ---------- Workflow execution ---------- */
+function saveCurrentRun(){if(isWorkflow()&&currentRun)store.saveRun(currentId,currentRun);}
+function workflowMessageMeta(workflow,run,role,agent){
+  return {agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,workflowRoleId:role.id,workflowRoleName:role.name,workflowStage:role.stage,runId:run.id};
+}
+async function startWorkflowRun(task){
+  const workflow=curWorkflow(),errors=validateWorkflow(workflow,agents);
+  if(errors.length){toast(workflowErrorText[errors[0].code]||"Fix the workflow configuration");openWorkflowEditor(workflow.id);return;}
+  if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
+  currentRun=newRun(workflow,task,Date.now(),uid);
+  messages.push({role:"user",content:task,runId:currentRun.id});
+  store.saveConv(currentId,messages);saveCurrentRun();renderChat();renderWorkflowUi();
+  await continueWorkflowRun();
+}
+async function continueWorkflowRun(){
+  if(controller||!isWorkflow()||!currentRun)return;
+  const workflow=curWorkflow();
+  if(currentRun.status!=="synthesizing")currentRun={...currentRun,status:"running",updatedAt:Date.now()};
+  saveCurrentRun();renderWorkflowUi();refreshHeader();
+  while(isWorkflow()&&currentRun){
+    const action=nextWorkflowAction(workflow,currentRun);
+    currentRun=action.run;saveCurrentRun();renderWorkflowUi();refreshHeader();
+    if(action.type==="review"||action.type==="complete"){
+      renderChat();return;
+    }
+    const role=action.role,agent=agents.find(a=>a.id===role.agentId);
+    if(!agent){
+      currentRun=recordRoleFailure(currentRun,role,{content:"Assigned agent no longer exists.",reasoning:""},Date.now());
+      saveCurrentRun();renderChat();renderWorkflowUi();return;
+    }
+    const result=await streamCompletion(agent,buildWorkflowMessages(workflow,currentRun,role,agent),workflowMessageMeta(workflow,currentRun,role,agent));
+    if(result===false)return;
+    if(result.aborted||result.bot.error){
+      currentRun=recordRoleFailure(currentRun,role,result.bot,Date.now());
+      saveCurrentRun();renderChat();renderWorkflowUi();refreshHeader();return;
+    }
+    currentRun=recordRoleOutput(currentRun,role,result.bot,Date.now());
+    saveCurrentRun();renderWorkflowUi();refreshHeader();
+  }
+}
+async function approveWorkflowSynthesis(guidance){
+  if(!currentRun||currentRun.status!=="review")return;
+  currentRun={...currentRun,status:"synthesizing",guidance:String(guidance||"").trim(),updatedAt:Date.now()};
+  saveCurrentRun();renderWorkflowUi();await continueWorkflowRun();
+}
+function removeRoleMessagesFrom(roleId){
+  const workflow=curWorkflow(),index=workflow.roles.findIndex(r=>r.id===roleId);
+  if(index<0)return;
+  const remove=new Set(workflow.roles.slice(index).map(r=>r.id)),runId=currentRun.id;
+  messages=messages.filter(m=>!(m.runId===runId&&remove.has(m.workflowRoleId)));
+  store.saveConv(currentId,messages);
+}
+async function retryRoleFromUi(roleId){
+  if(controller||!currentRun)return;
+  removeRoleMessagesFrom(roleId);
+  currentRun=retryWorkflowRole(curWorkflow(),currentRun,roleId,Date.now());saveCurrentRun();renderChat();renderWorkflowUi();
+  await continueWorkflowRun();
+}
+async function resumeWorkflow(){
+  if(controller||!currentRun||currentRun.status!=="stopped")return;
+  const role=curWorkflow().roles[currentRun.nextRoleIndex];
+  if(role){removeRoleMessagesFrom(role.id);currentRun=retryWorkflowRole(curWorkflow(),currentRun,role.id,Date.now());}
+  await continueWorkflowRun();
+}
+function cancelWorkflow(){
+  if(controller)controller.abort();
+  if(!currentRun)return;
+  currentRun={...currentRun,status:"complete",cancelled:true,updatedAt:Date.now()};saveCurrentRun();renderChat();renderWorkflowUi();refreshHeader();toast("Workflow cancelled");
+}
+$("#approveSynthesis").onclick=()=>approveWorkflowSynthesis($("#reviewGuidance").value);
+$("#resumeWorkflow").onclick=resumeWorkflow;
+$("#cancelWorkflow").onclick=cancelWorkflow;
+
 /* ---------- Composer send ---------- */
 function send(){
   const text=input.value.trim();
@@ -883,6 +1049,7 @@ function send(){
   messages.push({role:"user",content:text});
   store.saveConv(currentId,messages);
   renderChat();
+  if(isWorkflow()){messages.pop();store.saveConv(currentId,messages);startWorkflowRun(text);return;}
   if(isGroup()){renderResponders();return;} // in a group you choose who replies
   runAgent(curAgent());
 }

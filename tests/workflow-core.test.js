@@ -10,7 +10,7 @@ function loadCore() {
   const context = {};
   vm.createContext(context);
   vm.runInContext(
-    `${match[1]}\nthis.workflowCore={WORKFLOW_PRESETS,makeWorkflowPreset,validateWorkflow,normalizeStoredWorkflows,newRun,normalizeRunAfterReload,buildWorkflowMessages};`,
+    `${match[1]}\nthis.workflowCore={WORKFLOW_PRESETS,makeWorkflowPreset,validateWorkflow,normalizeStoredWorkflows,newRun,normalizeRunAfterReload,buildWorkflowMessages,nextWorkflowAction,recordRoleOutput,recordRoleFailure,retryWorkflowRole};`,
     context
   );
   return context.workflowCore;
@@ -87,4 +87,47 @@ test("synthesis prompt includes guidance and every labeled output", () => {
   assert.match(msgs.at(-1).content, /Prefer reversible choices/);
   assert.match(msgs.at(-1).content, /\[Risk Analyst\]: out2/);
   assert.match(msgs.at(-1).content, /self-contained final answer/i);
+});
+
+test("action sequence pauses after critique and before synthesis", () => {
+  const c = loadCore();
+  const wf = c.makeWorkflowPreset("research", agents, idFactory());
+  let run = c.newRun(wf, "Investigate", 1, idFactory());
+  assert.equal(c.nextWorkflowAction(wf, run).role.stage, "work");
+  for (const role of wf.roles.slice(0, -1))
+    run = c.recordRoleOutput(run, role, { content: role.name, reasoning: "" }, 2);
+  const action = c.nextWorkflowAction(wf, run);
+  assert.equal(action.type, "review");
+  assert.equal(action.run.status, "review");
+});
+
+test("approval enables exactly the synthesis role", () => {
+  const c = loadCore();
+  const wf = c.makeWorkflowPreset("research", agents, idFactory());
+  let run = c.newRun(wf, "Investigate", 1, idFactory());
+  for (const role of wf.roles.slice(0, -1))
+    run = c.recordRoleOutput(run, role, { content: "ok", reasoning: "" }, 2);
+  run = { ...c.nextWorkflowAction(wf, run).run, status: "synthesizing", guidance: "Focus on uncertainty" };
+  assert.equal(c.nextWorkflowAction(wf, run).role.stage, "synthesis");
+});
+
+test("failure stays on the same role for resume", () => {
+  const c = loadCore();
+  const wf = c.makeWorkflowPreset("coding", agents, idFactory());
+  const run = c.recordRoleFailure(c.newRun(wf, "Code", 1, idFactory()), wf.roles[0], { content: "HTTP 500", reasoning: "" }, 2);
+  assert.equal(run.status, "stopped");
+  assert.equal(run.nextRoleIndex, 0);
+  assert.equal(run.outputs[0].error, true);
+});
+
+test("retry clears target and every downstream output", () => {
+  const c = loadCore();
+  const wf = c.makeWorkflowPreset("coding", agents, idFactory());
+  let run = c.newRun(wf, "Code", 1, idFactory());
+  for (const role of wf.roles)
+    run = c.recordRoleOutput(run, role, { content: role.name, reasoning: "" }, 2);
+  run = c.retryWorkflowRole(wf, run, wf.roles[1].id, 3);
+  assert.deepEqual(Array.from(run.outputs, o => o.roleId), [wf.roles[0].id]);
+  assert.equal(run.nextRoleIndex, 1);
+  assert.equal(run.status, "stopped");
 });
