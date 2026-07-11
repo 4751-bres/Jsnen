@@ -19,3 +19,9 @@ test("group and duplicate controls are present", () => {
   for (const id of ["groupList", "addGroup", "groupEditor", "dupAgent", "responders"])
     assert.match(html, new RegExp(`id=["']${id}["']`));
 });
+
+test("workflow navigation and editor controls are present", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  for (const id of ["workflowList", "addWorkflow", "workflowEditor", "wfTemplate", "wfRoles", "saveWorkflow", "delWorkflow"])
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+});
