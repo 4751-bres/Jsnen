@@ -114,6 +114,25 @@
   .status{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + var(--safe-b));background:#000c;border:1px solid var(--line);padding:8px 14px;border-radius:999px;font-size:13px;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none}
   .status.on{opacity:1}
   .add-agent{width:100%;margin-top:8px;border:1px dashed var(--line);background:transparent;border-radius:14px;padding:12px;color:var(--muted)}
+  .sect-label{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:6px 6px 8px}
+
+  /* Group responder bar */
+  .responders{display:none;gap:8px;overflow-x:auto;padding:8px 10px;border-top:1px solid var(--line);background:var(--panel2);-webkit-overflow-scrolling:touch}
+  .chip-btn{flex:0 0 auto;display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:14px;white-space:nowrap}
+  .chip-btn:active{transform:scale(.96)}
+  .chip-btn.all{border-style:dashed;color:var(--muted)}
+  .chip-btn:disabled{opacity:.4}
+
+  /* who-said-it label in group */
+  .msg .who{display:block;font-size:12px;font-weight:700;color:var(--accent);margin-bottom:5px}
+
+  /* member picker in group editor */
+  .mem{display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);margin-bottom:8px}
+  .mem.sel{border-color:var(--accent);background:#101a33}
+  .mem .av{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:18px;background:#0f1521;border:1px solid var(--line);flex:0 0 auto}
+  .mem .meta{flex:1;min-width:0}.mem .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mem .meta small{color:var(--muted)}
+  .mem .tick{width:22px;height:22px;border-radius:999px;border:1px solid var(--line);display:grid;place-items:center;color:#fff;font-size:13px;flex:0 0 auto}
+  .mem.sel .tick{background:var(--accent);border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -129,6 +148,8 @@
 
   <main id="chat"></main>
 
+  <div class="responders" id="responders"></div>
+
   <div class="composer">
     <textarea id="input" rows="1" placeholder="Message your agent…" enterkeyhint="send"></textarea>
     <button class="send" id="sendBtn">➤</button>
@@ -141,8 +162,14 @@
 
   <!-- Agents drawer -->
   <aside class="sheet drawer" id="drawer">
-    <h3>🤖 Agents</h3>
-    <div class="body" id="agentList"></div>
+    <h3>🤖 Agents &amp; Groups</h3>
+    <div class="body">
+      <div class="sect-label">Group chats</div>
+      <div id="groupList"></div>
+      <button class="add-agent" id="addGroup">＋ New group</button>
+      <div class="sect-label" style="margin-top:18px">Single agents</div>
+      <div id="agentList"></div>
+    </div>
     <div class="foot" style="display:block">
       <button class="add-agent" id="addAgent">＋ New agent</button>
     </div>
@@ -213,9 +240,35 @@
       <input id="edTemp" type="range" min="0" max="1.5" step="0.1" value="1" style="width:100%;margin-top:6px" />
       <div class="hint">Temp: 0.0 for code/math, ~1.0 chat, ~1.3 creative. Thinking On makes V4 reason step-by-step (slower, better on hard tasks).</div>
     </div>
-    <div class="foot">
+    <div class="foot" style="flex-wrap:wrap">
       <button class="btn primary" id="saveAgent">Save agent</button>
+      <button class="btn" id="dupAgent" style="flex:0 0 auto">⧉ Duplicate</button>
       <button class="btn danger" id="delAgent" style="flex:0 0 auto">Delete</button>
+      <button class="btn ghost" data-close style="flex:0 0 auto">Close</button>
+    </div>
+  </section>
+
+  <!-- Group editor sheet -->
+  <section class="sheet bottom" id="groupEditor">
+    <h3 id="grTitle">New group</h3>
+    <div class="body">
+      <div class="row2">
+        <div style="flex:0 0 84px">
+          <label>Icon</label>
+          <input class="field" id="grEmoji" maxlength="2" value="👥" style="text-align:center;font-size:22px" />
+        </div>
+        <div>
+          <label>Name</label>
+          <input class="field" id="grName" placeholder="e.g. Brainstorm room" />
+        </div>
+      </div>
+      <label>Members — tap agents to add or remove</label>
+      <div id="grMembers"></div>
+      <div class="hint">In a group chat, send a message then tap which agent should reply. Each agent sees the others' replies (labelled by name) and answers in its own voice.</div>
+    </div>
+    <div class="foot">
+      <button class="btn primary" id="saveGroup">Save group</button>
+      <button class="btn danger" id="delGroup" style="flex:0 0 auto">Delete</button>
       <button class="btn ghost" data-close style="flex:0 0 auto">Close</button>
     </div>
   </section>
@@ -228,7 +281,9 @@ const store = {
   get base(){return localStorage.getItem("ds_base")||"https://api.deepseek.com"}, set base(v){localStorage.setItem("ds_base",v)},
   get model(){return localStorage.getItem("ds_model")||"deepseek-v4-pro"}, set model(v){localStorage.setItem("ds_model",v)},
   get agents(){try{return JSON.parse(localStorage.getItem("ds_agents"))||null}catch(e){return null}}, set agents(v){localStorage.setItem("ds_agents",JSON.stringify(v))},
+  get groups(){try{return JSON.parse(localStorage.getItem("ds_groups"))||[]}catch(e){return []}}, set groups(v){localStorage.setItem("ds_groups",JSON.stringify(v))},
   get cur(){return localStorage.getItem("ds_cur")||""}, set cur(v){localStorage.setItem("ds_cur",v)},
+  get kind(){return localStorage.getItem("ds_kind")||"agent"}, set kind(v){localStorage.setItem("ds_kind",v)},
   conv(id){try{return JSON.parse(localStorage.getItem("ds_conv_"+id))||[]}catch(e){return []}},
   saveConv(id,m){localStorage.setItem("ds_conv_"+id,JSON.stringify(m.slice(-200)))},
   clearConv(id){localStorage.removeItem("ds_conv_"+id)},
@@ -243,10 +298,14 @@ const DEFAULT_AGENTS = [
   {id:uid(),emoji:"🌍",name:"Translator",prompt:"You are an expert translator. Detect the language and translate accurately, preserving tone. If asked, explain nuances.",model:"deepseek-v4-flash",temp:0.3,think:"off"},
 ];
 let agents = store.agents; if(!agents){agents=DEFAULT_AGENTS;store.agents=agents;}
+let groups = store.groups;
+let currentKind = store.kind;               // "agent" | "group"
 let currentId = store.cur || agents[0].id;
-if(!agents.find(a=>a.id===currentId)) currentId = agents[0].id;
+if(currentKind==="group"){ if(!groups.find(g=>g.id===currentId)){currentKind="agent";currentId=agents[0].id;} }
+else if(!agents.find(a=>a.id===currentId)) currentId = agents[0].id;
 let messages = [];
 let editingId = null;
+let editingGroupId = null;
 let controller = null; // AbortController for streaming
 
 /* ---------- UI helpers ---------- */
@@ -267,21 +326,55 @@ function md(t){
   return t;
 }
 
-/* ---------- Header / agent ---------- */
+/* ---------- Header / agent / group ---------- */
 function curAgent(){return agents.find(a=>a.id===currentId)||agents[0];}
+function curGroup(){return groups.find(g=>g.id===currentId);}
+function isGroup(){return currentKind==="group" && !!curGroup();}
+function groupMembers(g){return (g.members||[]).map(id=>agents.find(a=>a.id===id)).filter(Boolean);}
 function refreshHeader(){
-  const a=curAgent();
-  $("#hAgent").textContent=a.emoji+" "+a.name;
-  $("#hSub").textContent=(a.model||store.model)+" · temp "+a.temp;
+  if(isGroup()){
+    const g=curGroup(), n=groupMembers(g).length;
+    $("#hAgent").textContent=g.emoji+" "+g.name;
+    $("#hSub").textContent=n+" agent"+(n===1?"":"s")+" · tap a name below to reply";
+    $("#input").placeholder="Message the group… then tap who replies";
+  }else{
+    const a=curAgent();
+    $("#hAgent").textContent=a.emoji+" "+a.name;
+    $("#hSub").textContent=(a.model||store.model)+" · temp "+a.temp;
+    $("#input").placeholder="Message your agent…";
+  }
+}
+function renderResponders(){
+  const bar=$("#responders");
+  if(!isGroup()){bar.style.display="none";bar.innerHTML="";return;}
+  const mems=groupMembers(curGroup());
+  bar.innerHTML="";bar.style.display="flex";
+  const busy=!!controller;
+  mems.forEach(a=>{
+    const b=document.createElement("button");
+    b.className="chip-btn";b.disabled=busy;
+    b.innerHTML='<span>'+esc(a.emoji)+'</span><span>'+esc(a.name)+'</span>';
+    b.onclick=()=>groupRespond(a);
+    bar.appendChild(b);
+  });
+  if(mems.length>1){
+    const all=document.createElement("button");
+    all.className="chip-btn all";all.disabled=busy;
+    all.innerHTML='<span>🔁</span><span>Everyone</span>';
+    all.onclick=()=>everyoneRespond();
+    bar.appendChild(all);
+  }
 }
 
 /* ---------- Chat rendering ---------- */
 function renderChat(){
   const c=$("#chat");c.innerHTML="";
   if(!messages.length){
-    c.innerHTML='<div class="empty"><h2>'+esc(curAgent().emoji+" "+curAgent().name)+'</h2><div>'+
-      (store.k? "Say hi to start the conversation." :
-      "⚠️ Add your DeepSeek API key in ⚙️ Settings to begin.")+'</div></div>';
+    const title=isGroup()?(curGroup().emoji+" "+curGroup().name):(curAgent().emoji+" "+curAgent().name);
+    const sub = !store.k ? "⚠️ Add your DeepSeek API key in ⚙️ Settings to begin."
+      : isGroup() ? "Send a message, then tap an agent below to have it reply."
+      : "Say hi to start the conversation.";
+    c.innerHTML='<div class="empty"><h2>'+esc(title)+'</h2><div>'+sub+'</div></div>';
     return;
   }
   for(const m of messages){
@@ -289,6 +382,7 @@ function renderChat(){
     const d=document.createElement("div");
     d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
     let html="";
+    if(m.role!=="user" && isGroup() && m.agentName) html+='<span class="who">'+esc((m.agentEmoji||"🤖")+" "+m.agentName)+'</span>';
     if(m.reasoning) html+='<span class="think">'+esc(m.reasoning)+'</span>';
     html+=md(m.content||"");
     if(m.streaming) html+='<span class="cursor"></span>';
@@ -297,20 +391,37 @@ function renderChat(){
   }
   c.scrollTop=c.scrollHeight;
 }
-function loadConv(){messages=store.conv(currentId);renderChat();refreshHeader();}
+function loadConv(){messages=store.conv(currentId);renderChat();refreshHeader();renderResponders();}
 
-/* ---------- Agents drawer ---------- */
+/* ---------- Agents & groups drawer ---------- */
+function selectAgent(id){currentKind="agent";currentId=id;store.kind="agent";store.cur=id;loadConv();renderAgents();closeAll();}
+function selectGroup(id){currentKind="group";currentId=id;store.kind="group";store.cur=id;loadConv();renderAgents();closeAll();}
 function renderAgents(){
+  // groups
+  const glist=$("#groupList");glist.innerHTML="";
+  if(!groups.length){
+    glist.innerHTML='<div class="hint" style="margin:0 6px 6px">No groups yet. Create one to chat with several agents at once.</div>';
+  }
+  for(const g of groups){
+    const mems=groupMembers(g);
+    const row=document.createElement("div");
+    row.className="agent-row"+(currentKind==="group"&&g.id===currentId?" active":"");
+    row.innerHTML='<div class="av">'+esc(g.emoji)+'</div>'+
+      '<div class="meta"><b>'+esc(g.name)+'</b><small>'+mems.map(a=>esc(a.emoji)).join(" ")+' · '+mems.length+' agent'+(mems.length===1?"":"s")+'</small></div>'+
+      '<button class="edit" aria-label="Edit group">✎</button>';
+    row.querySelector(".meta").onclick=row.querySelector(".av").onclick=()=>selectGroup(g.id);
+    row.querySelector(".edit").onclick=(e)=>{e.stopPropagation();openGroupEditor(g.id);};
+    glist.appendChild(row);
+  }
+  // single agents
   const list=$("#agentList");list.innerHTML="";
   for(const a of agents){
     const row=document.createElement("div");
-    row.className="agent-row"+(a.id===currentId?" active":"");
+    row.className="agent-row"+(currentKind==="agent"&&a.id===currentId?" active":"");
     row.innerHTML='<div class="av">'+esc(a.emoji)+'</div>'+
       '<div class="meta"><b>'+esc(a.name)+'</b><small>'+esc((a.model||store.model))+'</small></div>'+
       '<button class="edit" aria-label="Edit">✎</button>';
-    row.querySelector(".meta").onclick=row.querySelector(".av").onclick=()=>{
-      currentId=a.id;store.cur=a.id;loadConv();renderAgents();closeAll();
-    };
+    row.querySelector(".meta").onclick=row.querySelector(".av").onclick=()=>selectAgent(a.id);
     row.querySelector(".edit").onclick=(e)=>{e.stopPropagation();openEditor(a.id);};
     list.appendChild(row);
   }
@@ -325,6 +436,7 @@ function openEditor(id){
   $("#edModel").value=a.model;$("#edThink").value=a.think||"off";
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);
   $("#delAgent").style.display=(id&&agents.length>1)?"":"none";
+  $("#dupAgent").style.display=id?"":"none";
   closeAll();openSheet("#editor");
 }
 $("#edTemp").oninput=e=>$("#tempVal").textContent=Number(e.target.value).toFixed(1);
@@ -337,11 +449,62 @@ $("#saveAgent").onclick=()=>{
   else{const a={id:uid(),...data};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
 };
+$("#dupAgent").onclick=()=>{
+  // duplicate using the current form values, so any edits carry into the copy
+  const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
+    prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value};
+  const a={id:uid(),...data};agents.push(a);store.agents=agents;
+  currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
+  renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
+};
 $("#delAgent").onclick=()=>{
   if(!editingId)return;
   agents=agents.filter(a=>a.id!==editingId);store.agents=agents;store.clearConv(editingId);
-  if(currentId===editingId){currentId=agents[0].id;store.cur=currentId;}
+  // drop the deleted agent from any group memberships
+  groups.forEach(g=>g.members=(g.members||[]).filter(id=>id!==editingId));store.groups=groups;
+  if(currentKind==="agent"&&currentId===editingId){currentId=agents[0].id;store.cur=currentId;}
   renderAgents();loadConv();closeAll();toast("Agent deleted");
+};
+
+/* ---------- Group editor ---------- */
+function openGroupEditor(id){
+  editingGroupId=id;
+  const g=id?groups.find(x=>x.id===id):{emoji:"👥",name:"",members:agents.slice(0,Math.min(3,agents.length)).map(a=>a.id)};
+  $("#grTitle").textContent=id?"Edit group":"New group";
+  $("#grEmoji").value=g.emoji;$("#grName").value=g.name;
+  const wrap=$("#grMembers");wrap.innerHTML="";
+  const sel=new Set(g.members||[]);
+  agents.forEach(a=>{
+    const on=sel.has(a.id);
+    const row=document.createElement("div");
+    row.className="mem"+(on?" sel":"");row.dataset.id=a.id;
+    row.innerHTML='<div class="av">'+esc(a.emoji)+'</div>'+
+      '<div class="meta"><b>'+esc(a.name)+'</b><small>'+esc(a.model||store.model)+'</small></div>'+
+      '<span class="tick">'+(on?"✓":"")+'</span>';
+    row.onclick=()=>{const s=row.classList.toggle("sel");row.querySelector(".tick").textContent=s?"✓":"";};
+    wrap.appendChild(row);
+  });
+  $("#delGroup").style.display=id?"":"none";
+  closeAll();openSheet("#groupEditor");
+}
+$("#addGroup").onclick=()=>{
+  if(!agents.length){toast("Create an agent first");return;}
+  openGroupEditor(null);
+};
+$("#saveGroup").onclick=()=>{
+  const members=[...$("#grMembers").querySelectorAll(".mem.sel")].map(r=>r.dataset.id);
+  if(members.length<1){toast("Pick at least one agent");return;}
+  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members};
+  if(editingGroupId){Object.assign(groups.find(g=>g.id===editingGroupId),data);}
+  else{const g={id:uid(),...data};groups.push(g);currentKind="group";currentId=g.id;store.kind="group";store.cur=g.id;}
+  store.groups=groups;renderAgents();loadConv();closeAll();toast("Group saved");
+};
+$("#delGroup").onclick=()=>{
+  if(!editingGroupId)return;
+  groups=groups.filter(g=>g.id!==editingGroupId);store.groups=groups;store.clearConv(editingGroupId);
+  if(currentKind==="group"&&currentId===editingGroupId){currentKind="agent";currentId=agents[0].id;store.kind="agent";store.cur=currentId;}
+  renderAgents();loadConv();closeAll();toast("Group deleted");
 };
 
 /* ---------- Settings ---------- */
@@ -373,34 +536,51 @@ function setSending(on){
   else{b.classList.remove("stop");b.textContent="➤";}
 }
 
-/* ---------- API call (streaming) ---------- */
-async function send(){
-  const text=input.value.trim();
-  if(!text)return;
-  if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
-  input.value="";autoGrow();
+/* ---------- Build OpenAI-compatible message list for a given responder ---------- */
+function buildApiMessages(agent){
+  const sys=[];
+  if(isGroup()){
+    const base=agent.prompt?agent.prompt+"\n\n":"";
+    sys.push({role:"system",content:base+
+      "You are \""+agent.name+"\" in a group chat with a human user and other AI agents. "+
+      "Messages from other participants are prefixed with their name in square brackets, e.g. \"[Coder]: ...\". "+
+      "Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name."});
+    const hist=messages.filter(m=>!m.streaming&&m.content).map(m=>{
+      if(m.role==="user") return {role:"user",content:m.content};
+      if(m.agentId===agent.id) return {role:"assistant",content:m.content};   // this agent's own past turns
+      return {role:"user",content:"["+(m.agentName||"Agent")+"]: "+m.content}; // another agent's turn = context
+    });
+    return [...sys,...hist];
+  }
+  if(agent.prompt) sys.push({role:"system",content:agent.prompt});
+  const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&m.content).map(m=>({role:m.role,content:m.content}));
+  return [...sys,...hist];
+}
 
-  const a=curAgent();
-  messages.push({role:"user",content:text});
+/* ---------- Stream one response from a specific agent ---------- */
+// returns true if it completed normally, false if aborted
+async function runAgent(agent){
+  if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return false;}
+  const convId=currentId;
   const bot={role:"assistant",content:"",reasoning:"",streaming:true};
+  if(isGroup()){bot.agentId=agent.id;bot.agentName=agent.name;bot.agentEmoji=agent.emoji;}
+  const apiMessages=buildApiMessages(agent);
   messages.push(bot);
   renderChat();
 
-  // Build request payload (OpenAI-compatible)
-  const sys=a.prompt?[{role:"system",content:a.prompt}]:[];
-  const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&m.content).map(m=>({role:m.role,content:m.content}));
   const payload={
-    model:a.model||store.model,
-    messages:[...sys,...hist],
-    temperature:a.temp,
+    model:agent.model||store.model,
+    messages:apiMessages,
+    temperature:agent.temp,
     stream:true,
   };
   // DeepSeek V4 thinking mode (reasoning_content). "off" => cheaper non-thinking path.
-  if(a.think && a.think!=="off"){payload.thinking={type:"enabled"};payload.reasoning_effort=a.think;}
+  if(agent.think && agent.think!=="off"){payload.thinking={type:"enabled"};payload.reasoning_effort=agent.think;}
   else{payload.thinking={type:"disabled"};}
 
   controller=new AbortController();
-  setSending(true);
+  setSending(true);renderResponders();
+  let aborted=false;
   try{
     const res=await fetch(store.base+"/chat/completions",{
       method:"POST",
@@ -438,11 +618,45 @@ async function send(){
     if(!bot.content&&!bot.reasoning){bot.content="(empty response)";}
   }catch(err){
     bot.streaming=false;
-    if(err.name==="AbortError"){bot.content=bot.content||"⏹ stopped.";}
+    if(err.name==="AbortError"){aborted=true;bot.content=bot.content||"⏹ stopped.";}
     else{bot.error=true;bot.content="⚠️ "+err.message;}
   }finally{
     controller=null;setSending(false);
-    renderChat();store.saveConv(currentId,messages);
+    renderChat();store.saveConv(convId,messages);renderResponders();
+  }
+  return !aborted;
+}
+
+/* ---------- Composer send ---------- */
+function send(){
+  const text=input.value.trim();
+  if(!text)return;
+  if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
+  input.value="";autoGrow();
+  messages.push({role:"user",content:text});
+  store.saveConv(currentId,messages);
+  renderChat();
+  if(isGroup()){renderResponders();return;} // in a group you choose who replies
+  runAgent(curAgent());
+}
+
+/* ---------- Group: one agent replies ---------- */
+function groupRespond(agent){
+  if(controller)return;
+  const text=input.value.trim();
+  if(text){input.value="";autoGrow();messages.push({role:"user",content:text});store.saveConv(currentId,messages);renderChat();}
+  runAgent(agent);
+}
+
+/* ---------- Group: every member replies once, in order ---------- */
+async function everyoneRespond(){
+  if(controller)return;
+  const text=input.value.trim();
+  if(text){input.value="";autoGrow();messages.push({role:"user",content:text});store.saveConv(currentId,messages);renderChat();}
+  const mems=groupMembers(curGroup());
+  for(const a of mems){
+    const ok=await runAgent(a);
+    if(!ok)break; // user hit stop
   }
 }
 
