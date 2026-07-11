@@ -10,7 +10,7 @@ function loadCore() {
   const context = {};
   vm.createContext(context);
   vm.runInContext(
-    `${match[1]}\nthis.workflowCore={WORKFLOW_PRESETS,makeWorkflowPreset,validateWorkflow,normalizeStoredWorkflows,newRun,normalizeRunAfterReload};`,
+    `${match[1]}\nthis.workflowCore={WORKFLOW_PRESETS,makeWorkflowPreset,validateWorkflow,normalizeStoredWorkflows,newRun,normalizeRunAfterReload,buildWorkflowMessages};`,
     context
   );
   return context.workflowCore;
@@ -63,4 +63,28 @@ test("run owns task and becomes stopped after reload", () => {
   assert.deepEqual(Array.from(run.outputs), []);
   assert.equal(c.normalizeRunAfterReload({ ...run, status: "running" }).status, "stopped");
   assert.equal(c.normalizeRunAfterReload({ ...run, status: "review" }).status, "review");
+});
+
+test("critique prompt labels prior outputs and asks for corrections", () => {
+  const c = loadCore();
+  const wf = c.makeWorkflowPreset("coding", agents, idFactory());
+  const run = { task: "Build parser", guidance: "", outputs: [{ roleId: wf.roles[0].id, content: "Use regex", reasoning: "" }] };
+  const msgs = c.buildWorkflowMessages(wf, run, wf.roles[2], agents[2]);
+  assert.match(msgs[0].content, /Reviewer/);
+  assert.match(msgs.at(-1).content, /\[Architect\]: Use regex/);
+  assert.match(msgs.at(-1).content, /concrete errors/i);
+});
+
+test("synthesis prompt includes guidance and every labeled output", () => {
+  const c = loadCore();
+  const wf = c.makeWorkflowPreset("decision", agents, idFactory());
+  const run = {
+    task: "Pick A or B",
+    guidance: "Prefer reversible choices",
+    outputs: wf.roles.slice(0, 3).map((r, i) => ({ roleId: r.id, content: `out${i}`, reasoning: "" })),
+  };
+  const msgs = c.buildWorkflowMessages(wf, run, wf.roles[3], agents[3]);
+  assert.match(msgs.at(-1).content, /Prefer reversible choices/);
+  assert.match(msgs.at(-1).content, /\[Risk Analyst\]: out2/);
+  assert.match(msgs.at(-1).content, /self-contained final answer/i);
 });

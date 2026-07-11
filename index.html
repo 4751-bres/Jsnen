@@ -395,6 +395,24 @@ function newRun(workflow,task,now,idFactory){
 function normalizeRunAfterReload(run){
   return run&&["running","synthesizing"].includes(run.status)?{...run,status:"stopped"}:run;
 }
+function buildWorkflowMessages(workflow,run,role,agent){
+  const labels=new Map(workflow.roles.map(r=>[r.id,r.name]));
+  const prior=(run.outputs||[]).filter(o=>o.content).map(o=>"["+(labels.get(o.roleId)||"Role")+"]: "+o.content).join("\n\n");
+  const stageRule=role.stage==="critique"
+    ? "Identify concrete errors, unsupported assumptions, missing alternatives, risks, and recommended corrections. Do not merely write a fresh answer."
+    : role.stage==="synthesis"
+      ? "Resolve disagreements, apply valid corrections, and return one self-contained final answer."
+      : "Produce your assigned contribution. Be concrete and do not impersonate other roles.";
+  const system=[agent.prompt||"","You are the "+role.name+" role in a multi-agent workflow.",role.instruction,stageRule,"Do not prefix your answer with your role or agent name."].filter(Boolean).join("\n\n");
+  const body=[
+    "Original task:\n"+run.task,
+    prior&&"Earlier role outputs:\n"+prior,
+    run.guidance&&role.stage==="synthesis"&&"User review guidance:\n"+run.guidance,
+    role.stage==="critique"&&"Return the critique with concrete errors and corrections.",
+    role.stage==="synthesis"&&"Return the self-contained final answer now."
+  ].filter(Boolean).join("\n\n");
+  return [{role:"system",content:system},{role:"user",content:body}];
+}
 /* workflow-core:end */
 
 const DEFAULT_AGENTS = [
@@ -781,14 +799,11 @@ function buildApiMessages(agent){
   return [...sys,...hist];
 }
 
-/* ---------- Stream one response from a specific agent ---------- */
-// returns true if it completed normally, false if aborted
-async function runAgent(agent){
+/* ---------- Stream one response ---------- */
+async function streamCompletion(agent,apiMessages,meta={}){
   if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return false;}
   const convId=currentId;
-  const bot={role:"assistant",content:"",reasoning:"",streaming:true};
-  if(isGroup()){bot.agentId=agent.id;bot.agentName=agent.name;bot.agentEmoji=agent.emoji;}
-  const apiMessages=buildApiMessages(agent);
+  const bot={role:"assistant",content:"",reasoning:"",streaming:true,...meta};
   messages.push(bot);
   renderChat();
 
@@ -848,7 +863,15 @@ async function runAgent(agent){
     controller=null;setSending(false);
     renderChat();store.saveConv(convId,messages);renderResponders();
   }
-  return !aborted;
+  return {ok:!aborted&&!bot.error,aborted,bot};
+}
+
+/* ---------- Stream one response from a specific agent ---------- */
+// returns true if it completed normally, false if aborted
+async function runAgent(agent){
+  const meta=isGroup()?{agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji}:{};
+  const result=await streamCompletion(agent,buildApiMessages(agent),meta);
+  return result!==false&&!result.aborted;
 }
 
 /* ---------- Composer send ---------- */
