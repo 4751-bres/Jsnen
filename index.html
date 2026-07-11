@@ -282,6 +282,10 @@ const store = {
   get model(){return localStorage.getItem("ds_model")||"deepseek-v4-pro"}, set model(v){localStorage.setItem("ds_model",v)},
   get agents(){try{return JSON.parse(localStorage.getItem("ds_agents"))||null}catch(e){return null}}, set agents(v){localStorage.setItem("ds_agents",JSON.stringify(v))},
   get groups(){try{return JSON.parse(localStorage.getItem("ds_groups"))||[]}catch(e){return []}}, set groups(v){localStorage.setItem("ds_groups",JSON.stringify(v))},
+  get workflows(){try{return normalizeStoredWorkflows(JSON.parse(localStorage.getItem("ds_workflows")))}catch(e){return []}}, set workflows(v){localStorage.setItem("ds_workflows",JSON.stringify(v))},
+  run(id){try{return normalizeRunAfterReload(JSON.parse(localStorage.getItem("ds_run_"+id)))}catch(e){return null}},
+  saveRun(id,v){if(v)localStorage.setItem("ds_run_"+id,JSON.stringify(v));else localStorage.removeItem("ds_run_"+id)},
+  clearRun(id){localStorage.removeItem("ds_run_"+id)},
   get cur(){return localStorage.getItem("ds_cur")||""}, set cur(v){localStorage.setItem("ds_cur",v)},
   get kind(){return localStorage.getItem("ds_kind")||"agent"}, set kind(v){localStorage.setItem("ds_kind",v)},
   conv(id){try{return JSON.parse(localStorage.getItem("ds_conv_"+id))||[]}catch(e){return []}},
@@ -290,6 +294,60 @@ const store = {
 };
 
 const uid = () => Math.random().toString(36).slice(2,9);
+
+/* workflow-core:start */
+const WORKFLOW_PRESETS={
+  research:{emoji:"🔎",name:"Research",roles:[
+    ["Investigator","Develop the strongest initial findings and expose assumptions.","work"],
+    ["Skeptic","Challenge claims, assumptions, and missing alternatives.","critique"],
+    ["Fact Checker","Identify unsupported facts, contradictions, and verification gaps.","critique"],
+    ["Synthesizer","Resolve disagreements and produce one supported final answer.","synthesis"]]},
+  coding:{emoji:"💻",name:"Coding",roles:[
+    ["Architect","Define the approach, interfaces, constraints, and edge cases.","work"],
+    ["Implementer","Produce the concrete runnable solution.","work"],
+    ["Reviewer","Find correctness, security, edge-case, and maintainability defects.","critique"],
+    ["Synthesizer","Apply valid review corrections and return the final solution.","synthesis"]]},
+  decision:{emoji:"⚖️",name:"Decision",roles:[
+    ["Advocate","Develop the strongest case for the leading option.","work"],
+    ["Challenger","Argue against it and present the strongest alternatives.","critique"],
+    ["Risk Analyst","Evaluate failure modes, reversibility, and trade-offs.","critique"],
+    ["Synthesizer","Give one clear recommendation with its decisive reasons.","synthesis"]]}
+};
+function makeWorkflowPreset(template,agents,idFactory){
+  const selected=WORKFLOW_PRESETS[template]?template:"research",p=WORKFLOW_PRESETS[selected];
+  return {id:idFactory(),emoji:p.emoji,name:p.name,template:selected,
+    roles:p.roles.map((r,i)=>({id:idFactory(),name:r[0],instruction:r[1],stage:r[2],agentId:agents[i%Math.max(agents.length,1)]?.id||""}))};
+}
+function validateWorkflow(wf,agents){
+  const errors=[],roles=Array.isArray(wf?.roles)?wf.roles:[],known=new Set(agents.map(a=>a.id));
+  if(roles.length<2||roles.length>5)errors.push({code:"role-count",roleId:null});
+  for(const r of roles){
+    if(!String(r.name||"").trim())errors.push({code:"role-name",roleId:r.id});
+    if(!known.has(r.agentId))errors.push({code:"missing-agent",roleId:r.id});
+    if(!["work","critique","synthesis"].includes(r.stage))errors.push({code:"invalid-stage",roleId:r.id});
+  }
+  if(!roles.some(r=>r.stage==="work"))errors.push({code:"missing-work",roleId:null});
+  if(!roles.some(r=>r.stage==="critique"))errors.push({code:"missing-critique",roleId:null});
+  const synth=roles.filter(r=>r.stage==="synthesis");
+  if(synth.length!==1||roles.at(-1)?.stage!=="synthesis")errors.push({code:"synthesis-count",roleId:synth[0]?.id||null});
+  let sawCritique=false;
+  for(const r of roles.slice(0,-1)){
+    if(r.stage==="critique")sawCritique=true;
+    if(r.stage==="work"&&sawCritique){errors.push({code:"stage-order",roleId:r.id});break;}
+  }
+  return errors;
+}
+function normalizeStoredWorkflows(value){
+  return Array.isArray(value)?value.filter(w=>w&&typeof w.id==="string"&&Array.isArray(w.roles)):[];
+}
+function newRun(workflow,task,now,idFactory){
+  return {id:idFactory(),workflowId:workflow.id,task,status:"running",nextRoleIndex:0,completedRoleIds:[],outputs:[],guidance:"",startedAt:now,updatedAt:now};
+}
+function normalizeRunAfterReload(run){
+  return run&&["running","synthesizing"].includes(run.status)?{...run,status:"stopped"}:run;
+}
+/* workflow-core:end */
+
 const DEFAULT_AGENTS = [
   {id:uid(),emoji:"💬",name:"General Assistant",prompt:"You are a helpful, friendly assistant. Answer clearly and concisely.",model:"deepseek-v4-flash",temp:1.0,think:"off"},
   {id:uid(),emoji:"👨‍💻",name:"Coder",prompt:"You are a senior software engineer. Give correct, runnable code with brief explanations. Prefer modern idioms.",model:"deepseek-v4-pro",temp:0.0,think:"medium"},
@@ -299,9 +357,11 @@ const DEFAULT_AGENTS = [
 ];
 let agents = store.agents; if(!agents){agents=DEFAULT_AGENTS;store.agents=agents;}
 let groups = store.groups;
-let currentKind = store.kind;               // "agent" | "group"
+let workflows = store.workflows;
+let currentKind = store.kind;               // "agent" | "group" | "workflow"
 let currentId = store.cur || agents[0].id;
 if(currentKind==="group"){ if(!groups.find(g=>g.id===currentId)){currentKind="agent";currentId=agents[0].id;} }
+else if(currentKind==="workflow"){if(!workflows.find(w=>w.id===currentId)){currentKind="agent";currentId=agents[0].id;}}
 else if(!agents.find(a=>a.id===currentId)) currentId = agents[0].id;
 let messages = [];
 let editingId = null;
