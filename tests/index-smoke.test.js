@@ -43,3 +43,16 @@ test("legacy agent and group entry points remain defined", () => {
   for (const name of ["buildApiMessages", "runAgent", "groupRespond", "everyoneRespond", "dupAgent"])
     assert.ok(html.includes(name), `missing legacy entry point ${name}`);
 });
+
+test("workflow UI guards active clear, run replacement, and deleted-agent repair", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  assert.match(html, /if\(controller\)\{toast\("Stop the current response before clearing"\)/);
+  assert.match(html, /!currentRun\|\|currentRun\.id!==runId/);
+  assert.ok(html.includes("Unassigned — deleted agent"));
+  assert.ok(html.includes("Finish or cancel the active run before editing"));
+});
+
+test("new workflow runs clear stale review guidance", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  assert.match(html, /reviewGuidance"\)\.value=""/);
+});

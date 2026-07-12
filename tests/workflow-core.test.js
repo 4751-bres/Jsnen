@@ -10,7 +10,7 @@ function loadCore() {
   const context = {};
   vm.createContext(context);
   vm.runInContext(
-    `${match[1]}\nthis.workflowCore={WORKFLOW_PRESETS,makeWorkflowPreset,validateWorkflow,normalizeStoredWorkflows,newRun,normalizeRunAfterReload,buildWorkflowMessages,nextWorkflowAction,recordRoleOutput,recordRoleFailure,retryWorkflowRole};`,
+    `${match[1]}\nthis.workflowCore={WORKFLOW_PRESETS,makeWorkflowPreset,validateWorkflow,normalizeStoredWorkflows,newRun,normalizeRunAfterReload,buildWorkflowMessages,nextWorkflowAction,recordRoleOutput,recordRoleFailure,retryWorkflowRole,prepareRunResume,canEditWorkflowRun};`,
     context
   );
   return context.workflowCore;
@@ -149,4 +149,35 @@ test("retrying the first role clears every structured output", () => {
   run = c.retryWorkflowRole(wf, run, wf.roles[0].id, 3);
   assert.deepEqual(Array.from(run.outputs), []);
   assert.deepEqual(Array.from(run.completedRoleIds), []);
+});
+
+test("resume at the synthesis role retries synthesis instead of returning to review", () => {
+  const c = loadCore();
+  const wf = c.makeWorkflowPreset("research", agents, idFactory());
+  let run = c.newRun(wf, "Investigate", 1, idFactory());
+  for (const role of wf.roles.slice(0, -1))
+    run = c.recordRoleOutput(run, role, { content: "ok", reasoning: "" }, 2);
+  run = { ...run, status: "stopped" };
+  run = c.prepareRunResume(wf, run, 3);
+  const action = c.nextWorkflowAction(wf, run);
+  assert.equal(action.type, "role");
+  assert.equal(action.role.stage, "synthesis");
+});
+
+test("workflow editing is blocked only while a run is unfinished", () => {
+  const c = loadCore();
+  assert.equal(c.canEditWorkflowRun(null), true);
+  assert.equal(c.canEditWorkflowRun({ status: "complete" }), true);
+  for (const status of ["running", "review", "stopped", "synthesizing"])
+    assert.equal(c.canEditWorkflowRun({ status }), false);
+});
+
+test("initial work prompt includes bounded completed conversation context", () => {
+  const c = loadCore();
+  const wf = c.makeWorkflowPreset("research", agents, idFactory());
+  const run = c.newRun(wf, "Continue", 1, idFactory());
+  run.history = [{ role: "user", content: "Earlier question" }, { role: "assistant", content: "Earlier answer" }];
+  const msgs = c.buildWorkflowMessages(wf, run, wf.roles[0], agents[0]);
+  assert.match(msgs.at(-1).content, /Relevant completed conversation/);
+  assert.match(msgs.at(-1).content, /Earlier answer/);
 });

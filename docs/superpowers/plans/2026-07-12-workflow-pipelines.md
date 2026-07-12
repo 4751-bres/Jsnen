@@ -647,4 +647,3 @@ git commit -m "Document multi-agent workflows"
 Run: `node --test tests/*.test.js && git status --short --branch && git log -8 --oneline`
 
 Expected: all tests PASS; branch contains the separated spec, plan, inherited baseline, workflow-core, UI, execution, and documentation commits; no uncommitted files remain.
-

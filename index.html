@@ -422,6 +422,7 @@ function normalizeRunAfterReload(run){
 function buildWorkflowMessages(workflow,run,role,agent){
   const labels=new Map(workflow.roles.map(r=>[r.id,r.name]));
   const prior=(run.outputs||[]).filter(o=>o.content).map(o=>"["+(labels.get(o.roleId)||"Role")+"]: "+o.content).join("\n\n");
+  const history=role.stage==="work"&&!(run.outputs||[]).length?(run.history||[]).map(m=>"["+(m.role==="assistant"?"Assistant":"User")+"]: "+m.content).join("\n\n"):"";
   const stageRule=role.stage==="critique"
     ? "Identify concrete errors, unsupported assumptions, missing alternatives, risks, and recommended corrections. Do not merely write a fresh answer."
     : role.stage==="synthesis"
@@ -429,6 +430,7 @@ function buildWorkflowMessages(workflow,run,role,agent){
       : "Produce your assigned contribution. Be concrete and do not impersonate other roles.";
   const system=[agent.prompt||"","You are the "+role.name+" role in a multi-agent workflow.",role.instruction,stageRule,"Do not prefix your answer with your role or agent name."].filter(Boolean).join("\n\n");
   const body=[
+    history&&"Relevant completed conversation:\n"+history,
     "Original task:\n"+run.task,
     prior&&"Earlier role outputs:\n"+prior,
     run.guidance&&role.stage==="synthesis"&&"User review guidance:\n"+run.guidance,
@@ -460,6 +462,13 @@ function retryWorkflowRole(workflow,run,roleId,now){
     outputs:(run.outputs||[]).filter(o=>keep.has(o.roleId)),
     completedRoleIds:(run.completedRoleIds||[]).filter(id=>keep.has(id)),
     updatedAt:now};
+}
+function prepareRunResume(workflow,run,now){
+  const role=workflow.roles[run.nextRoleIndex];
+  return {...run,status:role?.stage==="synthesis"?"synthesizing":"stopped",updatedAt:now};
+}
+function canEditWorkflowRun(run){
+  return !run||run.status==="complete";
 }
 /* workflow-core:end */
 
@@ -592,11 +601,11 @@ function renderChat(){
 function renderWorkflowUi(){
   const progress=$("#workflowProgress"),actions=$("#workflowActions"),composer=document.querySelector(".composer");
   if(!isWorkflow()){
-    progress.style.display=actions.style.display="none";composer.style.display="flex";input.disabled=false;$("#menuBtn").disabled=false;return;
+    progress.style.display=actions.style.display="none";composer.style.display="flex";input.disabled=false;$("#menuBtn").disabled=false;$("#clearBtn").disabled=!!controller;return;
   }
   const run=currentRun,w=curWorkflow();
   progress.style.display="none";actions.style.display="none";composer.style.display="flex";
-  input.disabled=false;$("#menuBtn").disabled=!!controller;
+  input.disabled=false;$("#menuBtn").disabled=!!controller;$("#clearBtn").disabled=!!controller;
   if(!run||run.status==="complete")return;
   const role=w.roles[run.nextRoleIndex],step=Math.min(run.nextRoleIndex+1,w.roles.length);
   progress.textContent=run.status==="review"?"Review checkpoint":(role?role.name:"Workflow")+" · "+step+" of "+w.roles.length;
@@ -754,7 +763,8 @@ function renderWorkflowRoles(){
   const wrap=$("#wfRoles");wrap.innerHTML="";
   workflowDraft.roles.forEach((r,index)=>{
     const card=document.createElement("div");card.className="role-card";card.dataset.roleId=r.id;
-    const agentOptions=agents.map(a=>'<option value="'+esc(a.id)+'"'+(a.id===r.agentId?' selected':'')+'>'+esc(a.emoji+" "+a.name)+'</option>').join("");
+    const missingAgent=!agents.some(a=>a.id===r.agentId);
+    const agentOptions=(missingAgent?'<option value="'+esc(r.agentId)+'" selected>⚠ Unassigned — deleted agent</option>':'')+agents.map(a=>'<option value="'+esc(a.id)+'"'+(a.id===r.agentId?' selected':'')+'>'+esc(a.emoji+" "+a.name)+'</option>').join("");
     card.innerHTML='<div class="role-head"><b>Role '+(index+1)+'</b><span class="stage-badge">'+esc(stageLabel(r.stage))+'</span><div class="role-actions">'+
       '<button type="button" data-action="up" aria-label="Move up">↑</button><button type="button" data-action="down" aria-label="Move down">↓</button><button type="button" data-action="remove" aria-label="Remove">×</button></div></div>'+
       '<div class="role-grid"><div><label>Role name</label><input class="field" data-field="name" value="'+esc(r.name)+'"></div>'+
@@ -789,6 +799,8 @@ function openWorkflowEditor(id){
   editingWorkflowId=id;
   workflowDraft=id?cloneWorkflow(workflows.find(w=>w.id===id)):makeWorkflowPreset("research",agents,uid);
   workflowDraftDirty=false;
+  const activeRun=id?store.run(id):null;
+  if(!canEditWorkflowRun(activeRun)){toast("Finish or cancel the active run before editing");return;}
   $("#wfTitle").textContent=id?"Edit workflow":"New workflow";
   $("#wfEmoji").value=workflowDraft.emoji;$("#wfName").value=workflowDraft.name;$("#wfTemplate").value=workflowDraft.template||"custom";
   $("#delWorkflow").style.display=id?"":"none";
@@ -798,7 +810,6 @@ $("#addWorkflow").onclick=()=>{
   if(!agents.length){toast("Create an agent first");return;}
   openWorkflowEditor(null);
 };
-$("#wfEmoji").oninput=$("#wfName").oninput=()=>{workflowDraftDirty=true;};
 $("#wfTemplate").onchange=()=>{
   const template=$("#wfTemplate").value;if(template==="custom"){workflowDraft.template="custom";workflowDraftDirty=true;return;}
   if(workflowDraftDirty&&!confirm("Replace the current roles with the selected template?")){$("#wfTemplate").value=workflowDraft.template||"custom";return;}
@@ -825,6 +836,7 @@ $("#saveWorkflow").onclick=()=>{
     const first=errors[0];if(first.roleId)$("#wfRoles").querySelector('[data-role-id="'+first.roleId+'"]')?.classList.add("invalid");
     toast(workflowErrorText[first.code]||"Fix the workflow configuration");return;
   }
+  if(editingWorkflowId&&!canEditWorkflowRun(store.run(editingWorkflowId))){toast("Finish or cancel the active run before editing");closeAll();return;}
   const saved=cloneWorkflow(workflowDraft);
   if(editingWorkflowId)Object.assign(workflows.find(w=>w.id===editingWorkflowId),saved);
   else{workflows.push(saved);currentKind="workflow";currentId=saved.id;store.kind="workflow";store.cur=saved.id;}
@@ -847,7 +859,8 @@ $("#saveSettings").onclick=()=>{
   refreshConnPill();renderChat();closeAll();toast("Saved");
 };
 $("#menuBtn").onclick=()=>{renderAgents();closeAll();openSheet("#drawer");};
-$("#clearBtn").onclick=()=>{if(confirm("Clear this conversation?")){
+$("#clearBtn").onclick=()=>{if(controller){toast("Stop the current response before clearing");return;}
+  if(confirm("Clear this conversation?")){
   store.clearConv(currentId);
   if(isWorkflow()){store.clearRun(currentId);currentRun=null;}
   loadConv();toast("Cleared");
@@ -976,7 +989,13 @@ async function startWorkflowRun(task){
   const workflow=curWorkflow(),errors=validateWorkflow(workflow,agents);
   if(errors.length){toast(workflowErrorText[errors[0].code]||"Fix the workflow configuration");openWorkflowEditor(workflow.id);return;}
   if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
+function workflowHistorySnapshot(){
+  return messages.filter(m=>!m.streaming&&!m.error&&m.content&&(m.role==="user"||m.role==="assistant"))
+    .slice(-12).map(m=>({role:m.role,content:m.content}));
+}
+  $("#reviewGuidance").value="";
   currentRun=newRun(workflow,task,Date.now(),uid);
+  currentRun.history=workflowHistorySnapshot();
   messages.push({role:"user",content:task,runId:currentRun.id});
   store.saveConv(currentId,messages);saveCurrentRun();renderChat();renderWorkflowUi();
   await continueWorkflowRun();
@@ -997,7 +1016,9 @@ async function continueWorkflowRun(){
       currentRun=recordRoleFailure(currentRun,role,{content:"Assigned agent no longer exists.",reasoning:""},Date.now());
       saveCurrentRun();renderChat();renderWorkflowUi();return;
     }
+    const runId=currentRun.id;
     const result=await streamCompletion(agent,buildWorkflowMessages(workflow,currentRun,role,agent),workflowMessageMeta(workflow,currentRun,role,agent));
+    if(!currentRun||currentRun.id!==runId)return;
     if(result===false)return;
     if(result.aborted||result.bot.error){
       currentRun=recordRoleFailure(currentRun,role,result.bot,Date.now());
@@ -1023,12 +1044,14 @@ async function retryRoleFromUi(roleId){
   if(controller||!currentRun)return;
   removeRoleMessagesFrom(roleId);
   currentRun=retryWorkflowRole(curWorkflow(),currentRun,roleId,Date.now());saveCurrentRun();renderChat();renderWorkflowUi();
+  currentRun=prepareRunResume(curWorkflow(),currentRun,Date.now());saveCurrentRun();
   await continueWorkflowRun();
 }
 async function resumeWorkflow(){
   if(controller||!currentRun||currentRun.status!=="stopped")return;
   const role=curWorkflow().roles[currentRun.nextRoleIndex];
   if(role){removeRoleMessagesFrom(role.id);currentRun=retryWorkflowRole(curWorkflow(),currentRun,role.id,Date.now());}
+  currentRun=prepareRunResume(curWorkflow(),currentRun,Date.now());saveCurrentRun();
   await continueWorkflowRun();
 }
 function cancelWorkflow(){
