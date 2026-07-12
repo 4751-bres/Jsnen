@@ -31,3 +31,15 @@ test("workflow progress and review controls are present", () => {
   for (const id of ["workflowProgress", "workflowActions", "reviewGuidance", "approveSynthesis", "resumeWorkflow", "cancelWorkflow"])
     assert.match(html, new RegExp(`id=["']${id}["']`));
 });
+
+test("workflow persistence keys remain browser local", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  for (const key of ["ds_workflows", "ds_run_", "ds_conv_", "ds_key"])
+    assert.ok(html.includes(key), `missing ${key}`);
+});
+
+test("legacy agent and group entry points remain defined", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  for (const name of ["buildApiMessages", "runAgent", "groupRespond", "everyoneRespond", "dupAgent"])
+    assert.ok(html.includes(name), `missing legacy entry point ${name}`);
+});

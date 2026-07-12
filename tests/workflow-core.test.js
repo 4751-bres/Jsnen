@@ -131,3 +131,22 @@ test("retry clears target and every downstream output", () => {
   assert.equal(run.nextRoleIndex, 1);
   assert.equal(run.status, "stopped");
 });
+
+test("malformed storage and deleted agents fail safely", () => {
+  const c = loadCore();
+  assert.deepEqual(Array.from(c.normalizeStoredWorkflows({ bad: true })), []);
+  const wf = c.makeWorkflowPreset("research", agents, idFactory());
+  const remaining = agents.filter(a => a.id !== wf.roles[0].agentId);
+  assert.ok(c.validateWorkflow(wf, remaining).some(e => e.code === "missing-agent"));
+});
+
+test("retrying the first role clears every structured output", () => {
+  const c = loadCore();
+  const wf = c.makeWorkflowPreset("coding", agents, idFactory());
+  let run = c.newRun(wf, "Code", 1, idFactory());
+  for (const role of wf.roles)
+    run = c.recordRoleOutput(run, role, { content: "done", reasoning: "" }, 2);
+  run = c.retryWorkflowRole(wf, run, wf.roles[0].id, 3);
+  assert.deepEqual(Array.from(run.outputs), []);
+  assert.deepEqual(Array.from(run.completedRoleIds), []);
+});

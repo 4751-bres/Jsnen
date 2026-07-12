@@ -1,8 +1,9 @@
 # DeepSeek Agents 📱🤖
 
 A tiny, mobile-first web app that connects **your DeepSeek API key** to any number of
-custom **agents** (each with its own name, system prompt, model, and temperature), and
-lets you chat with them from your **phone's browser** — installable to the home screen.
+custom **agents**, group chats, and reusable multi-agent workflows. Chat with one agent,
+let several agents respond together, or run a structured work-and-critique pipeline from
+your **phone's browser** — installable to the home screen.
 
 No server, no build step, no dependencies. It's a single static HTML page that talks to
 the DeepSeek API directly from your browser (DeepSeek's API allows browser/CORS requests).
@@ -26,7 +27,7 @@ You need to host the page somewhere public over HTTPS. The easiest free option i
 - Open that URL in Safari (iPhone) or Chrome (Android).
 - Tap **⚙️ Settings** → paste your **DeepSeek API key** → **Save**.
   - Get a key at <https://platform.deepseek.com/api_keys>.
-- Tap **☰** to pick an agent, then start chatting.
+- Tap **☰** to pick an agent, group, or workflow, then start chatting.
 
 ### 3. (Optional) Install it like an app
 - **iPhone:** Share button → *Add to Home Screen*.
@@ -40,14 +41,37 @@ That's it — it now behaves like a native app with its own icon.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).
+- **Group chats** — select several agents, ask a question, then choose one responder or
+  tap **Everyone** to hear from every member in order.
+- **Multi-agent workflows** — build a 2–5-role pipeline from Research, Coding, or
+  Decision templates and assign any existing agent to each editable role.
+- **Human review checkpoint** — work and critique roles run automatically, then pause so
+  you can inspect results, retry a role, add guidance, cancel, or approve final synthesis.
+- **Safe recovery** — stop and resume the current role; interrupted runs recover as
+  stopped after reload instead of silently restarting API requests.
 - **Model per agent** — `deepseek-v4-pro` (flagship) or `deepseek-v4-flash` (fast/cheap).
   Type any model name your key can access.
 - **Thinking mode per agent** — Off / Low / Medium / High. On makes DeepSeek V4 reason
   step-by-step; the reasoning is streamed into a dimmed block above the answer.
 - **Streaming replies** with a stop button.
-- **Conversations saved** per agent (in your browser).
+- **Duplicate agents** to create quick prompt/model variants.
+- **Conversations saved** per agent, group, and workflow (in your browser).
 - **Everything local** — your API key and chats live only in your browser's
-  `localStorage`; nothing is sent anywhere except DeepSeek's API.
+  `localStorage`; nothing is sent anywhere except the configured DeepSeek-compatible API.
+
+## How workflows run
+
+1. Choose **Research**, **Coding**, or **Decision**, then edit the 2–5 role assignments
+   if needed.
+2. Submit one task. Work roles respond first, followed by critique roles, sequentially.
+3. At the review checkpoint, inspect every labeled output. You can retry any earlier role
+   (which clears stale downstream outputs), add synthesis guidance, or cancel.
+4. Tap **Approve & synthesize** to run the final role and produce one corrected answer.
+
+Each role response is one API request, and final synthesis is one additional request. The
+review screen shows that next-request cost in plain language; the app does not guess a
+currency price. Workflow definitions, structured run state, outputs, and recovery status
+remain in this browser's `localStorage`.
 
 ## Models (as of July 2026)
 DeepSeek **V4** is the current generation (released 24 Apr 2026), both with a **1M-token
