@@ -368,6 +368,56 @@ const store = {
 
 const uid = () => Math.random().toString(36).slice(2,9);
 
+/* roleplay-core:start */
+function normalizeRoleplay(value,members,agents){
+  const source=value&&typeof value==="object"?value:{};
+  const old=source.characters&&typeof source.characters==="object"?source.characters:{};
+  const characters={};
+  for(const id of members||[]){
+    const agent=agents.find(a=>a.id===id),sheet=old[id]||{};
+    characters[id]={name:String(sheet.name||agent?.name||"Character"),description:String(sheet.description||"")};
+  }
+  return {enabled:source.enabled===true,mature:source.mature===true,
+    setting:String(source.setting||""),opening:String(source.opening||""),
+    user:{name:String(source.user?.name||""),description:String(source.user?.description||"")},characters};
+}
+function normalizeStoredGroups(value,agents){
+  return Array.isArray(value)?value.filter(g=>g&&typeof g.id==="string").map(g=>{
+    const members=Array.isArray(g.members)?g.members.filter(id=>typeof id==="string"):[];
+    return {...g,members,roleplay:normalizeRoleplay(g.roleplay,members,agents)};
+  }):[];
+}
+function isRoleplayGroup(group){return group?.roleplay?.enabled===true;}
+function roleplayCharacter(group,agent){
+  const sheet=group?.roleplay?.characters?.[agent.id]||{};
+  return {name:String(sheet.name||agent.name||"Character"),description:String(sheet.description||"")};
+}
+function buildGroupApiMessages(group,agent,messages){
+  if(!isRoleplayGroup(group)){
+    const base=agent.prompt?agent.prompt+"\n\n":"";
+    const system=base+"You are \""+agent.name+"\" in a group chat with a human user and other AI agents. Messages from other participants are prefixed with their name in square brackets. Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name.";
+    const history=messages.filter(m=>!m.streaming&&m.content).map(m=>m.role==="user"
+      ?{role:"user",content:m.content}
+      :m.agentId===agent.id?{role:"assistant",content:m.content}
+      :{role:"user",content:"["+(m.agentName||"Agent")+"]: "+m.content});
+    return [{role:"system",content:system},...history];
+  }
+  const rp=group.roleplay,character=roleplayCharacter(group,agent);
+  const cast=(group.members||[]).filter(id=>id!==agent.id).map(id=>rp.characters[id]).filter(Boolean).map(c=>c.name+": "+c.description).join("\n");
+  const system=[agent.prompt,"For this roleplay group, play "+character.name+".","Character: "+character.description,
+    "User character: "+rp.user.name+" — "+rp.user.description,"Setting: "+rp.setting,
+    cast&&"Other characters:\n"+cast,rp.mature&&"Mature-mode preference: enabled.",
+    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name."
+  ].filter(Boolean).join("\n\n");
+  const history=messages.filter(m=>!m.streaming&&m.content).map(m=>{
+    if(m.role==="user")return {role:"user",content:"["+(rp.user.name||"User")+"]: "+m.content};
+    if(m.agentId===agent.id)return {role:"assistant",content:m.content};
+    return {role:"user",content:"["+(m.characterName||m.agentName||"Character")+"]: "+m.content};
+  });
+  return [{role:"system",content:system},...history];
+}
+/* roleplay-core:end */
+
 /* workflow-core:start */
 const WORKFLOW_PRESETS={
   research:{emoji:"🔎",name:"Research",roles:[
@@ -480,7 +530,7 @@ const DEFAULT_AGENTS = [
   {id:uid(),emoji:"🌍",name:"Translator",prompt:"You are an expert translator. Detect the language and translate accurately, preserving tone. If asked, explain nuances.",model:"deepseek-v4-flash",temp:0.3,think:"off"},
 ];
 let agents = store.agents; if(!agents){agents=DEFAULT_AGENTS;store.agents=agents;}
-let groups = store.groups;
+let groups = normalizeStoredGroups(store.groups,agents);
 let workflows = store.workflows;
 let currentKind = store.kind;               // "agent" | "group" | "workflow"
 let currentId = store.cur || agents[0].id;
@@ -888,17 +938,7 @@ function setSending(on){
 function buildApiMessages(agent){
   const sys=[];
   if(isGroup()){
-    const base=agent.prompt?agent.prompt+"\n\n":"";
-    sys.push({role:"system",content:base+
-      "You are \""+agent.name+"\" in a group chat with a human user and other AI agents. "+
-      "Messages from other participants are prefixed with their name in square brackets, e.g. \"[Coder]: ...\". "+
-      "Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name."});
-    const hist=messages.filter(m=>!m.streaming&&m.content).map(m=>{
-      if(m.role==="user") return {role:"user",content:m.content};
-      if(m.agentId===agent.id) return {role:"assistant",content:m.content};   // this agent's own past turns
-      return {role:"user",content:"["+(m.agentName||"Agent")+"]: "+m.content}; // another agent's turn = context
-    });
-    return [...sys,...hist];
+    return buildGroupApiMessages(curGroup(),agent,messages);
   }
   if(agent.prompt) sys.push({role:"system",content:agent.prompt});
   const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&m.content).map(m=>({role:m.role,content:m.content}));
