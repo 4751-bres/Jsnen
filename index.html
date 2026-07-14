@@ -395,7 +395,8 @@ function normalizeRoleplay(value,members,agents){
   const characters={};
   for(const id of members||[]){
     const agent=agents.find(a=>a.id===id),sheet=old[id]||{};
-    characters[id]={name:String(sheet.name||agent?.name||"Character"),description:String(sheet.description||"")};
+    const hasName=Object.prototype.hasOwnProperty.call(sheet,"name");
+    characters[id]={name:hasName?String(sheet.name):String(agent?.name||"Character"),description:String(sheet.description||"")};
   }
   return {enabled:source.enabled===true,mature:source.mature===true,
     setting:String(source.setting||""),opening:String(source.opening||""),
@@ -415,7 +416,7 @@ function roleplayCharacter(group,agent){
 function buildGroupApiMessages(group,agent,messages){
   if(!isRoleplayGroup(group)){
     const base=agent.prompt?agent.prompt+"\n\n":"";
-    const system=base+"You are \""+agent.name+"\" in a group chat with a human user and other AI agents. Messages from other participants are prefixed with their name in square brackets. Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name.";
+    const system=base+"You are \""+agent.name+"\" in a group chat with a human user and other AI agents. Messages from other participants are prefixed with their name in square brackets, e.g. \"[Coder]: ...\". Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name.";
     const history=messages.filter(m=>!m.streaming&&m.content).map(m=>m.role==="user"
       ?{role:"user",content:m.content}
       :m.agentId===agent.id?{role:"assistant",content:m.content}
@@ -435,6 +436,10 @@ function buildGroupApiMessages(group,agent,messages){
     return {role:"user",content:"["+(m.characterName||m.agentName||"Character")+"]: "+m.content};
   });
   return [{role:"system",content:system},...history];
+}
+function didResponseComplete(result){return result!==false&&result?.ok===true;}
+function groupAfterAgentDelete(group,agentId){
+  return isRoleplayGroup(group)?group:{...group,members:(group.members||[]).filter(id=>id!==agentId)};
 }
 function validateRoleplay(roleplay,members,adultConfirmed){
   if(!roleplay?.enabled)return [];
@@ -794,7 +799,7 @@ $("#delAgent").onclick=()=>{
   if(!editingId)return;
   agents=agents.filter(a=>a.id!==editingId);store.agents=agents;store.clearConv(editingId);
   // drop the deleted agent from any group memberships
-  groups.forEach(g=>g.members=(g.members||[]).filter(id=>id!==editingId));store.groups=groups;
+  groups=groups.map(g=>groupAfterAgentDelete(g,editingId));store.groups=groups;
   if(currentKind==="agent"&&currentId===editingId){currentId=agents[0].id;store.cur=currentId;}
   renderAgents();loadConv();closeAll();toast("Agent deleted");
 };
@@ -820,9 +825,11 @@ function renderRoleplayCharacters(){
   for(const id of members){
     const agent=agents.find(a=>a.id===id),character=groupRoleplayDraft.characters[id];
     const card=document.createElement("div");card.className="rp-character";card.dataset.id=id;
-    card.innerHTML='<b>'+esc((agent?.emoji||"🤖")+" "+(agent?.name||"Agent"))+'</b>'+
-      '<label>Character name</label><input class="field" data-field="name" value="'+esc(character.name)+'">'+
-      '<label>Character description</label><textarea class="field" data-field="description">'+esc(character.description)+'</textarea>';
+    card.innerHTML='<b>'+esc((agent?.emoji||"⚠️")+" "+(agent?.name||"Unavailable character"))+'</b>'+
+      '<label>Character name</label><input class="field" data-field="name">'+
+      '<label>Character description</label><textarea class="field" data-field="description"></textarea>';
+    const nameInput=card.querySelector('[data-field="name"]'),descriptionInput=card.querySelector('[data-field="description"]');
+    nameInput.value=character.name;descriptionInput.value=character.description;
     wrap.appendChild(card);
   }
 }
@@ -847,6 +854,13 @@ function openGroupEditor(id){
   $("#grEmoji").value=g.emoji;$("#grName").value=g.name;
   const wrap=$("#grMembers");wrap.innerHTML="";
   const sel=new Set(g.members||[]);
+  const missing=(g.members||[]).filter(id=>!agents.some(a=>a.id===id));
+  missing.forEach(id=>{
+    const row=document.createElement("div");row.className="mem sel missing";row.dataset.id=id;
+    row.innerHTML='<div class="av">⚠️</div><div class="meta"><b>'+esc(groupRoleplayDraft.characters[id]?.name||"Missing character")+'</b><small>Unavailable — deleted agent · tap to remove</small></div><span class="tick">✓</span>';
+    row.onclick=()=>{syncRoleplayCharacterInputs();const selected=row.classList.toggle("sel");row.querySelector(".tick").textContent=selected?"✓":"";renderRoleplayCharacters();};
+    wrap.appendChild(row);
+  });
   agents.forEach(a=>{
     const on=sel.has(a.id),row=document.createElement("div");
     row.className="mem"+(on?" sel":"");row.dataset.id=a.id;
@@ -1097,7 +1111,7 @@ async function runAgent(agent){
   const character=isGroup()&&isRoleplayGroup(curGroup())?roleplayCharacter(curGroup(),agent):null;
   const meta=isGroup()?{agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,...(character?{characterName:character.name}:{})}:{};
   const result=await streamCompletion(agent,buildApiMessages(agent),meta);
-  return result!==false&&!result.aborted;
+  return didResponseComplete(result);
 }
 
 /* ---------- Workflow execution ---------- */
