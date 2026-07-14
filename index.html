@@ -133,6 +133,11 @@
   .mem .meta{flex:1;min-width:0}.mem .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mem .meta small{color:var(--muted)}
   .mem .tick{width:22px;height:22px;border-radius:999px;border:1px solid var(--line);display:grid;place-items:center;color:#fff;font-size:13px;flex:0 0 auto}
   .mem.sel .tick{background:var(--accent);border-color:var(--accent)}
+  .toggle-row{display:flex;align-items:center;gap:10px;margin:14px 0;font-weight:700}
+  .toggle-row input{width:20px;height:20px;accent-color:var(--accent)}
+  #grRpFields{border-top:1px solid var(--line);margin-top:14px;padding-top:4px}
+  .rp-character{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:10px;margin:8px 0}
+  .rp-character b{display:block;margin-bottom:6px}.rp-character textarea{min-height:72px}
 
   /* workflow editor */
   .role-card{border:1px solid var(--line);background:var(--panel2);border-radius:14px;padding:12px;margin:10px 0}
@@ -304,6 +309,21 @@
       </div>
       <label>Members — tap agents to add or remove</label>
       <div id="grMembers"></div>
+      <label class="toggle-row"><input id="grRoleplay" type="checkbox" /> <span>🎭 Roleplay mode</span></label>
+      <div id="grRpFields" style="display:none">
+        <label>Setting / scenario</label>
+        <textarea class="field" id="grRpSetting" placeholder="World, tone, premise, and important facts"></textarea>
+        <label>Opening scene</label>
+        <textarea class="field" id="grRpOpening" placeholder="Optional first scene shown before the story begins"></textarea>
+        <label>Your character name</label>
+        <input class="field" id="grRpUserName" placeholder="Who you play" />
+        <label>Your character</label>
+        <textarea class="field" id="grRpUserDescription" placeholder="Identity, personality, appearance, goals, and boundaries"></textarea>
+        <label class="toggle-row"><input id="grRpMature" type="checkbox" /> <span>Mature roleplay</span></label>
+        <label class="toggle-row" id="grRpAdultRow" style="display:none"><input id="grRpAdult" type="checkbox" /> <span>I confirm I am an adult</span></label>
+        <div class="sect-label">AI characters</div>
+        <div id="grRpCharacters"></div>
+      </div>
       <div class="hint">In a group chat, send a message then tap which agent should reply. Each agent sees the others' replies (labelled by name) and answers in its own voice.</div>
     </div>
     <div class="foot">
@@ -415,6 +435,14 @@ function buildGroupApiMessages(group,agent,messages){
     return {role:"user",content:"["+(m.characterName||m.agentName||"Character")+"]: "+m.content};
   });
   return [{role:"system",content:system},...history];
+}
+function validateRoleplay(roleplay,members,adultConfirmed){
+  if(!roleplay?.enabled)return [];
+  const errors=[];
+  if(!roleplay.user?.name?.trim())errors.push("user-name");
+  for(const id of members||[])if(!roleplay.characters?.[id]?.name?.trim())errors.push("character-name:"+id);
+  if(roleplay.mature&&!adultConfirmed)errors.push("adult-confirmation");
+  return errors;
 }
 /* roleplay-core:end */
 
@@ -540,6 +568,7 @@ else if(!agents.find(a=>a.id===currentId)) currentId = agents[0].id;
 let messages = [];
 let editingId = null;
 let editingGroupId = null;
+let groupRoleplayDraft = null;
 let editingWorkflowId = null;
 let workflowDraft = null;
 let workflowDraftDirty = false;
@@ -767,24 +796,67 @@ $("#delAgent").onclick=()=>{
 };
 
 /* ---------- Group editor ---------- */
+function selectedGroupMemberIds(){
+  return [...$("#grMembers").querySelectorAll(".mem.sel")].map(row=>row.dataset.id);
+}
+function syncRoleplayCharacterInputs(){
+  if(!groupRoleplayDraft)return;
+  $("#grRpCharacters").querySelectorAll(".rp-character").forEach(card=>{
+    groupRoleplayDraft.characters[card.dataset.id]={
+      name:card.querySelector('[data-field="name"]').value,
+      description:card.querySelector('[data-field="description"]').value
+    };
+  });
+}
+function renderRoleplayCharacters(){
+  syncRoleplayCharacterInputs();
+  const members=selectedGroupMemberIds();
+  groupRoleplayDraft=normalizeRoleplay(groupRoleplayDraft,members,agents);
+  const wrap=$("#grRpCharacters");wrap.innerHTML="";
+  for(const id of members){
+    const agent=agents.find(a=>a.id===id),character=groupRoleplayDraft.characters[id];
+    const card=document.createElement("div");card.className="rp-character";card.dataset.id=id;
+    card.innerHTML='<b>'+esc((agent?.emoji||"🤖")+" "+(agent?.name||"Agent"))+'</b>'+
+      '<label>Character name</label><input class="field" data-field="name" value="'+esc(character.name)+'">'+
+      '<label>Character description</label><textarea class="field" data-field="description">'+esc(character.description)+'</textarea>';
+    wrap.appendChild(card);
+  }
+}
+function renderRoleplayEditor(){
+  const enabled=$("#grRoleplay").checked;
+  groupRoleplayDraft.enabled=enabled;$("#grRpFields").style.display=enabled?"block":"none";
+  $("#grRpAdultRow").style.display=$("#grRpMature").checked?"flex":"none";
+  if(enabled)renderRoleplayCharacters();
+}
+function collectRoleplayEditor(members){
+  syncRoleplayCharacterInputs();
+  groupRoleplayDraft={...groupRoleplayDraft,enabled:$("#grRoleplay").checked,mature:$("#grRpMature").checked,
+    setting:$("#grRpSetting").value.trim(),opening:$("#grRpOpening").value.trim(),
+    user:{name:$("#grRpUserName").value.trim(),description:$("#grRpUserDescription").value.trim()}};
+  return normalizeRoleplay(groupRoleplayDraft,members,agents);
+}
 function openGroupEditor(id){
   editingGroupId=id;
   const g=id?groups.find(x=>x.id===id):{emoji:"👥",name:"",members:agents.slice(0,Math.min(3,agents.length)).map(a=>a.id)};
+  groupRoleplayDraft=normalizeRoleplay(g.roleplay,g.members||[],agents);
   $("#grTitle").textContent=id?"Edit group":"New group";
   $("#grEmoji").value=g.emoji;$("#grName").value=g.name;
   const wrap=$("#grMembers");wrap.innerHTML="";
   const sel=new Set(g.members||[]);
   agents.forEach(a=>{
-    const on=sel.has(a.id);
-    const row=document.createElement("div");
+    const on=sel.has(a.id),row=document.createElement("div");
     row.className="mem"+(on?" sel":"");row.dataset.id=a.id;
-    row.innerHTML='<div class="av">'+esc(a.emoji)+'</div>'+
-      '<div class="meta"><b>'+esc(a.name)+'</b><small>'+esc(a.model||store.model)+'</small></div>'+
-      '<span class="tick">'+(on?"✓":"")+'</span>';
-    row.onclick=()=>{const s=row.classList.toggle("sel");row.querySelector(".tick").textContent=s?"✓":"";};
+    row.innerHTML='<div class="av">'+esc(a.emoji)+'</div><div class="meta"><b>'+esc(a.name)+'</b><small>'+esc(a.model||store.model)+'</small></div><span class="tick">'+(on?"✓":"")+'</span>';
+    row.onclick=()=>{syncRoleplayCharacterInputs();const selected=row.classList.toggle("sel");row.querySelector(".tick").textContent=selected?"✓":"";renderRoleplayCharacters();};
     wrap.appendChild(row);
   });
-  $("#delGroup").style.display=id?"":"none";
+  $("#grRoleplay").checked=groupRoleplayDraft.enabled;$("#grRpSetting").value=groupRoleplayDraft.setting;
+  $("#grRpOpening").value=groupRoleplayDraft.opening;$("#grRpUserName").value=groupRoleplayDraft.user.name;
+  $("#grRpUserDescription").value=groupRoleplayDraft.user.description;$("#grRpMature").checked=groupRoleplayDraft.mature;
+  $("#grRpAdult").checked=groupRoleplayDraft.mature;
+  $("#grRoleplay").onchange=renderRoleplayEditor;
+  $("#grRpMature").onchange=()=>{$("#grRpAdultRow").style.display=$("#grRpMature").checked?"flex":"none";if(!$("#grRpMature").checked)$("#grRpAdult").checked=false;};
+  renderRoleplayEditor();$("#delGroup").style.display=id?"":"none";
   closeAll();openSheet("#groupEditor");
 }
 $("#addGroup").onclick=()=>{
@@ -792,9 +864,12 @@ $("#addGroup").onclick=()=>{
   openGroupEditor(null);
 };
 $("#saveGroup").onclick=()=>{
-  const members=[...$("#grMembers").querySelectorAll(".mem.sel")].map(r=>r.dataset.id);
+  const members=selectedGroupMemberIds();
   if(members.length<1){toast("Pick at least one agent");return;}
-  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members};
+  const roleplay=collectRoleplayEditor(members),errors=validateRoleplay(roleplay,members,$("#grRpAdult").checked);
+  if(errors.includes("adult-confirmation")){toast("Confirm that you are an adult");return;}
+  if(errors.length){toast("Complete the roleplay character details");return;}
+  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay};
   if(editingGroupId){Object.assign(groups.find(g=>g.id===editingGroupId),data);}
   else{const g={id:uid(),...data};groups.push(g);currentKind="group";currentId=g.id;store.kind="group";store.cur=g.id;}
   store.groups=groups;renderAgents();loadConv();closeAll();toast("Group saved");
