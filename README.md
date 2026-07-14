@@ -43,6 +43,10 @@ That's it — it now behaves like a native app with its own icon.
   temperature).
 - **Group chats** — select several agents, ask a question, then choose one responder or
   tap **Everyone** to hear from every member in order.
+- **Roleplay groups** — turn any group into a persistent scene with your character, one
+  character sheet per AI agent, an optional opening scene, and **Continue scene** for
+  sequential character replies. Mature roleplay is an explicit browser-local preference;
+  the app sends no separate moderation request and the configured API controls its responses.
 - **Multi-agent workflows** — build a 2–5-role pipeline from Research, Coding, or
   Decision templates and assign any existing agent to each editable role.
 - **Human review checkpoint** — work and critique roles run automatically, then pause so
