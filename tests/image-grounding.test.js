@@ -51,6 +51,8 @@ test('roleplay grounding outranks the stay-in-character instruction',()=>{
   const sys=groupCore().buildGroupApiMessages(rpGroup(),agent,[{role:'user',content:'',images:[image]}])[0].content;
   assert.ok(sys.indexOf('IMAGE GROUNDING')>sys.indexOf('Remain in character'));
   assert.ok(sys.includes('cannot establish who someone is'));
+  assert.ok(sys.includes('may accept the user'),'casting a picture as a character stays allowed');
+  assert.ok(sys.includes('the picture does not confirm them'));
 });
 
 test('roleplay without images carries no grounding block',()=>{
