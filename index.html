@@ -72,6 +72,13 @@
   }
   .send.stop{background:var(--danger)}
   .send:disabled{opacity:.4}
+  .attachments{display:flex;gap:8px;padding:6px 10px;overflow-x:auto;background:var(--panel2)}
+  .attachments:empty{display:none}
+  .attachment{position:relative;flex:0 0 auto}
+  .attachment img,.msg img.chat-image{max-width:180px;max-height:160px;border-radius:10px;object-fit:contain}
+  .attachment button{position:absolute;right:0;top:0;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:50%;width:28px;height:28px}
+  .msg img.chat-image{display:block;margin:8px 0;max-width:100%;max-height:360px}
+  #attachBtn{min-width:44px;height:44px;font-size:22px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--text)}
 
   /* Sheets / drawers */
   .scrim{position:fixed;inset:0;background:#000a;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
@@ -192,7 +199,10 @@
     </div>
   </div>
 
+  <div class="attachments" id="attachments" aria-live="polite"></div>
+  <input id="imageFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
   <div class="composer">
+    <button id="attachBtn" aria-label="Attach images" title="Attach images or paste a screenshot">📎</button>
     <textarea id="input" rows="1" placeholder="Message your agent…" enterkeyhint="send"></textarea>
     <button class="send" id="sendBtn">➤</button>
   </div>
@@ -233,12 +243,13 @@
       <div class="hint">Default works for DeepSeek. Any OpenAI-compatible endpoint works too.</div>
 
       <label>Default model</label>
-      <input class="field" id="defModel" list="models" value="deepseek-v4-pro" />
+      <input class="field" id="defModel" list="models" value="deepseek-flash" />
       <datalist id="models">
+        <option value="deepseek-flash"></option>
         <option value="deepseek-v4-pro"></option>
         <option value="deepseek-v4-flash"></option>
       </datalist>
-      <div class="hint"><b>deepseek-v4-pro</b> = flagship (1.6T, 1M context). <b>deepseek-v4-flash</b> = fast &amp; cheap. Type any model name your key can access. <br>Note: <code>deepseek-chat</code>/<code>deepseek-reasoner</code> retire 24 Jul 2026.</div>
+      <div class="hint"><b>deepseek-flash</b> = V4.1 Flash with image understanding. <b>deepseek-v4-pro</b> = older text-only Pro. Type any model name your key can access.</div>
 
       <div style="margin-top:14px" class="kv"><span>Account balance / usage</span><b><a href="https://platform.deepseek.com/usage" target="_blank" rel="noopener" style="color:var(--accent)">open ↗</a></b></div>
     </div>
@@ -372,7 +383,7 @@ const $ = s => document.querySelector(s);
 const store = {
   get k(){return localStorage.getItem("ds_key")||""},        set k(v){localStorage.setItem("ds_key",v)},
   get base(){return localStorage.getItem("ds_base")||"https://api.deepseek.com"}, set base(v){localStorage.setItem("ds_base",v)},
-  get model(){return localStorage.getItem("ds_model")||"deepseek-v4-pro"}, set model(v){localStorage.setItem("ds_model",v)},
+  get model(){return localStorage.getItem("ds_model")||"deepseek-flash"}, set model(v){localStorage.setItem("ds_model",v)},
   get agents(){try{return JSON.parse(localStorage.getItem("ds_agents"))||null}catch(e){return null}}, set agents(v){localStorage.setItem("ds_agents",JSON.stringify(v))},
   get groups(){try{return JSON.parse(localStorage.getItem("ds_groups"))||[]}catch(e){return []}}, set groups(v){localStorage.setItem("ds_groups",JSON.stringify(v))},
   get workflows(){try{return normalizeStoredWorkflows(JSON.parse(localStorage.getItem("ds_workflows")))}catch(e){return []}}, set workflows(v){localStorage.setItem("ds_workflows",JSON.stringify(v))},
@@ -389,6 +400,10 @@ const store = {
 const uid = () => Math.random().toString(36).slice(2,9);
 
 /* roleplay-core:start */
+function imageContent(text,images){
+  if(!images?.length)return text;
+  return [{type:"text",text:text||"Describe the attached image(s)."},...images.map(image=>({type:"image_url",image_url:{url:image.url}}))];
+}
 function normalizeRoleplay(value,members,agents){
   const source=value&&typeof value==="object"?value:{};
   const old=source.characters&&typeof source.characters==="object"?source.characters:{};
@@ -417,8 +432,8 @@ function buildGroupApiMessages(group,agent,messages){
   if(!isRoleplayGroup(group)){
     const base=agent.prompt?agent.prompt+"\n\n":"";
     const system=base+"You are \""+agent.name+"\" in a group chat with a human user and other AI agents. Messages from other participants are prefixed with their name in square brackets, e.g. \"[Coder]: ...\". Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name.";
-    const history=messages.filter(m=>!m.streaming&&m.content).map(m=>m.role==="user"
-      ?{role:"user",content:m.content}
+    const history=messages.filter(m=>!m.streaming&&(m.content||m.images?.length)).map(m=>m.role==="user"
+      ?{role:"user",content:imageContent(m.content,m.images)}
       :m.agentId===agent.id?{role:"assistant",content:m.content}
       :{role:"user",content:"["+(m.agentName||"Agent")+"]: "+m.content});
     return [{role:"system",content:system},...history];
@@ -430,8 +445,8 @@ function buildGroupApiMessages(group,agent,messages){
     cast&&"Other characters:\n"+cast,rp.mature&&"Mature-mode preference: enabled.",
     "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name."
   ].filter(Boolean).join("\n\n");
-  const history=messages.filter(m=>!m.streaming&&m.content).map(m=>{
-    if(m.role==="user")return {role:"user",content:"["+(rp.user.name||"User")+"]: "+m.content};
+  const history=messages.filter(m=>!m.streaming&&(m.content||m.images?.length)).map(m=>{
+    if(m.role==="user")return {role:"user",content:imageContent("["+(rp.user.name||"User")+"]: "+(m.content||"Describe the attached image(s)."),m.images)};
     if(m.agentId===agent.id)return {role:"assistant",content:m.content};
     return {role:"user",content:"["+(m.characterName||m.agentName||"Character")+"]: "+m.content};
   });
@@ -678,6 +693,10 @@ function renderChat(){
     html+=md(m.content||"");
     if(m.streaming) html+='<span class="cursor"></span>';
     d.innerHTML=html;
+    for(const image of m.images||[]){
+      if(!/^data:image\/(jpeg|png|webp|gif);base64,/.test(image.url||""))continue;
+      const img=document.createElement("img");img.className="chat-image";img.src=image.url;img.alt=image.name||"Attached image";d.appendChild(img);
+    }
     if(m.role!=="user"&&m.workflowRoleId&&currentRun&&["review","stopped"].includes(currentRun.status)&&m.runId===currentRun.id&&!m.streaming){
       const retry=document.createElement("button");retry.className="retry-role";retry.textContent="↻ Retry this role";
       retry.onclick=()=>retryRoleFromUi(m.workflowRoleId);d.appendChild(retry);
@@ -711,15 +730,16 @@ function renderWorkflowUi(){
   $("#cancelWorkflow").style.display="block";
 }
 function loadConv(){
+  pendingImages=[];renderAttachments();
   messages=store.conv(currentId);currentRun=isWorkflow()?store.run(currentId):null;
   if(currentRun)store.saveRun(currentId,currentRun);
   renderChat();refreshHeader();renderResponders();renderWorkflowUi();
 }
 
 /* ---------- Agents & groups drawer ---------- */
-function selectAgent(id){currentKind="agent";currentId=id;store.kind="agent";store.cur=id;loadConv();renderAgents();closeAll();}
-function selectGroup(id){currentKind="group";currentId=id;store.kind="group";store.cur=id;loadConv();renderAgents();closeAll();}
-function selectWorkflow(id){currentKind="workflow";currentId=id;store.kind="workflow";store.cur=id;loadConv();renderAgents();closeAll();}
+function selectAgent(id){if(controller){toast("Stop the response before switching");return;}currentKind="agent";currentId=id;store.kind="agent";store.cur=id;loadConv();renderAgents();closeAll();}
+function selectGroup(id){if(controller){toast("Stop the response before switching");return;}currentKind="group";currentId=id;store.kind="group";store.cur=id;loadConv();renderAgents();closeAll();}
+function selectWorkflow(id){if(controller){toast("Stop the response before switching");return;}currentKind="workflow";currentId=id;store.kind="workflow";store.cur=id;loadConv();renderAgents();closeAll();}
 function renderWorkflows(){
   const list=$("#workflowList");list.innerHTML="";
   if(!workflows.length)list.innerHTML='<div class="hint" style="margin:0 6px 6px">No workflows yet. Start from Research, Coding, or Decision.</div>';
@@ -1011,6 +1031,61 @@ $("#clearBtn").onclick=()=>{if(controller){toast("Stop the current response befo
 
 /* ---------- Composer ---------- */
 const input=$("#input");
+let pendingImages=[],readingImages=false;
+function renderAttachments(){
+  const tray=$("#attachments");tray.innerHTML="";
+  pendingImages.forEach((image,index)=>{
+    const item=document.createElement("div");item.className="attachment";
+    const img=document.createElement("img");img.src=image.url;img.alt=image.name;
+    const remove=document.createElement("button");remove.textContent="×";remove.setAttribute("aria-label","Remove "+image.name);
+    remove.onclick=()=>{pendingImages.splice(index,1);renderAttachments();};item.append(img,remove);tray.append(item);
+  });
+  $("#attachBtn").disabled=readingImages||!!controller||isWorkflow();
+  $("#attachBtn").title=isWorkflow()?"Image attachments are available in agent and group chats":"Attach images or paste a screenshot";
+}
+async function prepareImage(file){
+  if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type))throw new Error("Choose a JPEG, PNG, WebP, or GIF image.");
+  if(file.size>20*1024*1024)throw new Error("Choose images smaller than 20 MB each.");
+  const url=URL.createObjectURL(file),img=new Image();
+  try{
+    img.src=url;await img.decode();
+    const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));
+    const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+    const ctx=canvas.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    let data=canvas.toDataURL("image/jpeg",0.85);
+    if(data.length>700000)data=canvas.toDataURL("image/jpeg",0.55);
+    if(data.length>1000000)throw new Error("Image is too detailed to store. Crop it or choose a smaller image.");
+    return {name:file.name||"Pasted image",url:data};
+  }finally{URL.revokeObjectURL(url);}
+}
+async function addImages(files){
+  if(readingImages||controller||isWorkflow())return;
+  const conversation=currentId;readingImages=true;renderAttachments();
+  try{
+    for(const file of files){
+      if(pendingImages.length>=4){toast("Up to 4 images per message");break;}
+      const image=await prepareImage(file);
+      if(currentId!==conversation)break;
+      pendingImages.push(image);
+    }
+  }catch(error){toast(error.message||"Could not read this image");}
+  finally{readingImages=false;$("#imageFiles").value="";renderAttachments();}
+}
+$("#attachBtn").onclick=()=>$("#imageFiles").click();
+$("#imageFiles").onchange=e=>addImages(Array.from(e.target.files));
+input.addEventListener("paste",e=>{
+  const files=Array.from(e.clipboardData?.files||[]).filter(f=>f.type.startsWith("image/"));
+  if(files.length&&!isWorkflow()){e.preventDefault();addImages(files);}
+});
+function commitComposer(){
+  if(readingImages){toast("Wait for the images to finish loading");return false;}
+  const text=input.value.trim();
+  if(!text&&!pendingImages.length)return false;
+  const message={role:"user",content:text,...(pendingImages.length?{images:pendingImages.slice()}:{})};
+  try{store.saveConv(currentId,[...messages,message]);}
+  catch(error){toast("Browser storage is full. Remove an attachment or clear an old chat first.");return false;}
+  messages.push(message);pendingImages=[];input.value="";autoGrow();renderAttachments();renderChat();return true;
+}
 function autoGrow(){input.style.height="auto";input.style.height=Math.min(input.scrollHeight,window.innerHeight*0.38)+"px";}
 input.addEventListener("input",autoGrow);
 input.addEventListener("keydown",e=>{
@@ -1025,6 +1100,7 @@ function setSending(on){
   if(on){b.classList.add("stop");b.textContent="■";}
   else{b.classList.remove("stop");b.textContent="➤";}
   renderWorkflowUi();
+  renderAttachments();
 }
 
 /* ---------- Build OpenAI-compatible message list for a given responder ---------- */
@@ -1034,14 +1110,15 @@ function buildApiMessages(agent){
     return buildGroupApiMessages(curGroup(),agent,messages);
   }
   if(agent.prompt) sys.push({role:"system",content:agent.prompt});
-  const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&m.content).map(m=>({role:m.role,content:m.content}));
+  const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&(m.content||m.images?.length)).map(m=>({role:m.role,content:m.role==="user"?imageContent(m.content,m.images):m.content}));
   return [...sys,...hist];
 }
 
 /* ---------- Stream one response ---------- */
 async function streamCompletion(agent,apiMessages,meta={}){
   if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return false;}
-  const convId=currentId;
+  if((agent.model||store.model)==="deepseek-v4-pro"&&apiMessages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url"))){toast("This chat contains images. Set this agent's model to deepseek-flash for vision.");return false;}
+  const convId=currentId,conversationMessages=messages;
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,...meta};
   messages.push(bot);
   renderChat();
@@ -1100,7 +1177,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     else{bot.error=true;bot.content="⚠️ "+err.message;}
   }finally{
     controller=null;setSending(false);
-    renderChat();store.saveConv(convId,messages);renderResponders();
+    renderChat();try{store.saveConv(convId,conversationMessages);}catch(error){toast("Response received, but browser storage is full. This reply is not saved.");}renderResponders();
   }
   return {ok:!aborted&&!bot.error,aborted,bot};
 }
@@ -1199,31 +1276,29 @@ $("#cancelWorkflow").onclick=cancelWorkflow;
 
 /* ---------- Composer send ---------- */
 function send(){
+  if(controller||readingImages)return;
   const text=input.value.trim();
-  if(!text)return;
+  if(!text&&!pendingImages.length)return;
   if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
-  input.value="";autoGrow();
-  messages.push({role:"user",content:text});
-  store.saveConv(currentId,messages);
-  renderChat();
-  if(isWorkflow()){messages.pop();store.saveConv(currentId,messages);startWorkflowRun(text);return;}
+  if(isWorkflow()){input.value="";autoGrow();startWorkflowRun(text);return;}
+  if(!commitComposer())return;
   if(isGroup()){renderResponders();return;} // in a group you choose who replies
   runAgent(curAgent());
 }
 
 /* ---------- Group: one agent replies ---------- */
 function groupRespond(agent){
-  if(controller)return;
+  if(controller||readingImages)return;
   const text=input.value.trim();
-  if(text){input.value="";autoGrow();messages.push({role:"user",content:text});store.saveConv(currentId,messages);renderChat();}
+  if((text||pendingImages.length)&&!commitComposer())return;
   runAgent(agent);
 }
 
 /* ---------- Group: every member replies once, in order ---------- */
 async function everyoneRespond(){
-  if(controller)return;
+  if(controller||readingImages)return;
   const text=input.value.trim();
-  if(text){input.value="";autoGrow();messages.push({role:"user",content:text});store.saveConv(currentId,messages);renderChat();}
+  if((text||pendingImages.length)&&!commitComposer())return;
   const mems=groupMembers(curGroup());
   for(const a of mems){
     const ok=await runAgent(a);

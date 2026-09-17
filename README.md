@@ -38,6 +38,7 @@ That's it — it now behaves like a native app with its own icon.
 ---
 
 ## Features
+- **Image understanding** — attach up to four images with 📎, or paste a screenshot, in an agent or group chat. Send an image alone or add a question; in groups, choose a responder after sending. Use `deepseek-flash` (V4.1 Flash) for vision. Images are sent as actual image inputs, not filenames. JPEG, PNG, WebP, and GIF are accepted (GIF uses a still frame); images are resized to at most 1600 pixels and saved with the conversation in this browser. Workflow attachments are not yet supported. Browser storage limits apply; a full-storage error preserves the draft.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).
