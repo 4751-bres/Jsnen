@@ -400,6 +400,12 @@ const store = {
 const uid = () => Math.random().toString(36).slice(2,9);
 
 /* roleplay-core:start */
+const IMAGE_GROUNDING="IMAGE GROUNDING. This overrides tone, persona, and continuity instructions whenever a message contains an image.\nKeep three things separate and never merge them:\n1. Visible: what is actually in the picture. Describe only what you can see.\n2. Told: what the user or this conversation gave you. Name it as context, not as observation.\n3. Uncertain: anything you are inferring. Say that you are inferring it.\nAn image cannot establish who someone is, their name, age, relationship to anyone, role, mood, intent, or consent. Never assert those as if you read them from the picture; if asked, say the image does not show it. Do not pull character names, backstory, or earlier events in this chat into a description of what the image contains. Staying in character never licenses inventing visual detail. Describe accurately first, then respond in voice.";
+function messagesHaveImages(list){return (list||[]).some(m=>m.role!=="assistant"&&m.images?.length);}
+function groundSystem(text,list){
+  if(!messagesHaveImages(list))return text;
+  return [text,IMAGE_GROUNDING].filter(Boolean).join("\n\n");
+}
 function imageContent(text,images){
   if(!images?.length)return text;
   return [{type:"text",text:text||"Describe the attached image(s)."},...images.map(image=>({type:"image_url",image_url:{url:image.url}}))];
@@ -436,7 +442,7 @@ function buildGroupApiMessages(group,agent,messages){
       ?{role:"user",content:imageContent(m.content,m.images)}
       :m.agentId===agent.id?{role:"assistant",content:m.content}
       :{role:"user",content:"["+(m.agentName||"Agent")+"]: "+m.content});
-    return [{role:"system",content:system},...history];
+    return [{role:"system",content:groundSystem(system,messages)},...history];
   }
   const rp=group.roleplay,character=roleplayCharacter(group,agent);
   const cast=(group.members||[]).filter(id=>id!==agent.id).map(id=>rp.characters[id]).filter(Boolean).map(c=>c.name+": "+c.description).join("\n");
@@ -446,11 +452,14 @@ function buildGroupApiMessages(group,agent,messages){
     "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name."
   ].filter(Boolean).join("\n\n");
   const history=messages.filter(m=>!m.streaming&&(m.content||m.images?.length)).map(m=>{
-    if(m.role==="user")return {role:"user",content:imageContent("["+(rp.user.name||"User")+"]: "+(m.content||"Describe the attached image(s)."),m.images)};
+    if(m.role==="user"){
+      const who="["+(rp.user.name||"User")+"]";
+      return {role:"user",content:imageContent(m.content?who+": "+m.content:who+" shared an image.",m.images)};
+    }
     if(m.agentId===agent.id)return {role:"assistant",content:m.content};
     return {role:"user",content:"["+(m.characterName||m.agentName||"Character")+"]: "+m.content};
   });
-  return [{role:"system",content:system},...history];
+  return [{role:"system",content:groundSystem(system,messages)},...history];
 }
 function didResponseComplete(result){return result!==false&&result?.ok===true;}
 function groupAfterAgentDelete(group,agentId){
@@ -571,11 +580,11 @@ function canEditWorkflowRun(run){
 /* workflow-core:end */
 
 const DEFAULT_AGENTS = [
-  {id:uid(),emoji:"💬",name:"General Assistant",prompt:"You are a helpful, friendly assistant. Answer clearly and concisely.",model:"deepseek-v4-flash",temp:1.0,think:"off"},
+  {id:uid(),emoji:"💬",name:"General Assistant",prompt:"You are a helpful, friendly assistant. Answer clearly and concisely.",model:"deepseek-flash",temp:1.0,think:"off"},
   {id:uid(),emoji:"👨‍💻",name:"Coder",prompt:"You are a senior software engineer. Give correct, runnable code with brief explanations. Prefer modern idioms.",model:"deepseek-v4-pro",temp:0.0,think:"medium"},
   {id:uid(),emoji:"🧠",name:"Deep Reasoner",prompt:"Think step by step and reason carefully before answering hard problems in math, logic, and analysis.",model:"deepseek-v4-pro",temp:0.6,think:"high"},
-  {id:uid(),emoji:"✍️",name:"Writer",prompt:"You are a skilled writer and editor. Improve clarity, tone, and flow. Offer options when useful.",model:"deepseek-v4-flash",temp:1.3,think:"off"},
-  {id:uid(),emoji:"🌍",name:"Translator",prompt:"You are an expert translator. Detect the language and translate accurately, preserving tone. If asked, explain nuances.",model:"deepseek-v4-flash",temp:0.3,think:"off"},
+  {id:uid(),emoji:"✍️",name:"Writer",prompt:"You are a skilled writer and editor. Improve clarity, tone, and flow. Offer options when useful.",model:"deepseek-flash",temp:1.3,think:"off"},
+  {id:uid(),emoji:"🌍",name:"Translator",prompt:"You are an expert translator. Detect the language and translate accurately, preserving tone. If asked, explain nuances.",model:"deepseek-flash",temp:0.3,think:"off"},
 ];
 let agents = store.agents; if(!agents){agents=DEFAULT_AGENTS;store.agents=agents;}
 let groups = normalizeStoredGroups(store.groups,agents);
@@ -1018,7 +1027,7 @@ $("#setBtn").onclick=()=>{$("#apiKey").value=store.k;$("#baseUrl").value=store.b
 $("#saveSettings").onclick=()=>{
   store.k=$("#apiKey").value.trim();
   store.base=($("#baseUrl").value.trim()||"https://api.deepseek.com").replace(/\/+$/,"");
-  store.model=$("#defModel").value.trim()||"deepseek-chat";
+  store.model=$("#defModel").value.trim()||"deepseek-flash";
   refreshConnPill();renderChat();closeAll();toast("Saved");
 };
 $("#menuBtn").onclick=()=>{renderAgents();closeAll();openSheet("#drawer");};
@@ -1109,7 +1118,8 @@ function buildApiMessages(agent){
   if(isGroup()){
     return buildGroupApiMessages(curGroup(),agent,messages);
   }
-  if(agent.prompt) sys.push({role:"system",content:agent.prompt});
+  const grounded=groundSystem(agent.prompt||"",messages);
+  if(grounded) sys.push({role:"system",content:grounded});
   const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&(m.content||m.images?.length)).map(m=>({role:m.role,content:m.role==="user"?imageContent(m.content,m.images):m.content}));
   return [...sys,...hist];
 }

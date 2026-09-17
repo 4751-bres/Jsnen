@@ -38,7 +38,7 @@ That's it — it now behaves like a native app with its own icon.
 ---
 
 ## Features
-- **Image understanding** — attach up to four images with 📎, or paste a screenshot, in an agent or group chat. Send an image alone or add a question; in groups, choose a responder after sending. Use `deepseek-flash` (V4.1 Flash) for vision. Images are sent as actual image inputs, not filenames. JPEG, PNG, WebP, and GIF are accepted (GIF uses a still frame); images are resized to at most 1600 pixels and saved with the conversation in this browser. Workflow attachments are not yet supported. Browser storage limits apply; a full-storage error preserves the draft.
+- **Image understanding** — attach up to four images with 📎, or paste a screenshot, in an agent or group chat. Send an image alone or add a question; in groups, choose a responder after sending. Use `deepseek-flash` (V4.1 Flash) for vision. Images are sent as actual image inputs, not filenames. JPEG, PNG, WebP, and GIF are accepted (GIF uses a still frame); images are resized to at most 1600 pixels and saved with the conversation in this browser. Every request that carries an image also carries a grounding block that outranks the agent’s own prompt: the model is told to separate what is visible in the picture from what the conversation told it and from what it is guessing, and never to state identity, age, relationship, mood, or intent as if it read them from the image. Workflow attachments are not yet supported. Browser storage limits apply; a full-storage error preserves the draft.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).
@@ -54,7 +54,8 @@ That's it — it now behaves like a native app with its own icon.
   you can inspect results, retry a role, add guidance, cancel, or approve final synthesis.
 - **Safe recovery** — stop and resume the current role; interrupted runs recover as
   stopped after reload instead of silently restarting API requests.
-- **Model per agent** — `deepseek-v4-pro` (flagship) or `deepseek-v4-flash` (fast/cheap).
+- **Model per agent** — `deepseek-flash` (fast, cheap, sees images) or `deepseek-v4-pro`
+  (flagship reasoning, text only).
   Type any model name your key can access.
 - **Thinking mode per agent** — Off / Low / Medium / High. On makes DeepSeek V4 reason
   step-by-step; the reasoning is streamed into a dimmed block above the answer.
@@ -84,16 +85,16 @@ context**:
 
 | Model | Use for |
 |---|---|
-| **`deepseek-v4-pro`** | flagship reasoning/coding/agents (1.6T params) |
-| **`deepseek-v4-flash`** | fast, cheap everyday chat (284B params) |
+| **`deepseek-flash`** | fast, cheap everyday chat, and the only model that reads images |
+| **`deepseek-v4-pro`** | flagship reasoning/coding/agents, text only |
 
 **Thinking mode** is toggled per agent in the app. Under the hood it sends
 `"thinking": {"type": "enabled"}` + `"reasoning_effort"` on the request; the
 chain-of-thought comes back in `reasoning_content`.
 
 > ⚠️ The older **`deepseek-chat`** and **`deepseek-reasoner`** names are **retired after
-> 24 Jul 2026** (they just route to `deepseek-v4-flash`). This app already defaults to the
-> V4 names. Any future model your key gets access to also works — just type its id into
+> 24 Jul 2026** (they just route to `deepseek-flash`). `deepseek-v4-flash` still works as an
+> alias for `deepseek-flash`, but the app ships the current name. Any future model your key gets access to also works — just type its id into
 > the agent's **Model** field.
 
 ## Security note
