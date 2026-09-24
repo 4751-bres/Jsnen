@@ -48,6 +48,13 @@
   .msg.user{background:var(--user);margin-left:auto;border-bottom-right-radius:4px}
   .msg.bot{background:var(--bot);border:1px solid var(--line);border-bottom-left-radius:4px}
   .msg.err{background:#3b1113;border:1px solid #7f1d1d;color:#fecaca}
+  .msg-actions{display:flex;justify-content:flex-end;margin-top:6px;white-space:normal}
+  .copy-msg{display:grid;place-items:center;width:36px;height:32px;padding:0;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);font-size:18px;cursor:pointer}
+  .copy-msg:hover,.copy-msg:focus-visible{color:var(--text);background:#ffffff10;border-color:var(--line)}
+  .copy-msg:disabled{opacity:.4;cursor:default}
+  .msg-actions{align-items:center;gap:2px;flex-wrap:wrap}
+  .version-count,.edited-label{font-size:11px;color:var(--muted)}
+  .edited-label{margin-right:auto}
   .msg .think{color:var(--muted);font-style:italic;font-size:14px;border-left:2px solid var(--line);padding-left:10px;margin-bottom:8px;display:block;white-space:pre-wrap}
   .reasoning{margin-bottom:8px;color:var(--muted);font-size:13px}
   .reasoning summary{cursor:pointer;padding:5px 0;user-select:none}
@@ -259,6 +266,20 @@
     <div class="foot">
       <button class="btn primary" id="saveSettings">Save</button>
       <button class="btn ghost" data-close>Close</button>
+    </div>
+  </section>
+
+  <!-- Message text editor -->
+  <section class="sheet bottom" id="messageEditor">
+    <h3>Edit message</h3>
+    <div class="body">
+      <label for="messageEditText">Message text</label>
+      <textarea class="field" id="messageEditText" rows="8"></textarea>
+      <div class="hint">Saves a new version of this message. Attachments and later messages are kept. Use the arrows to return to an older version. No new AI response is requested.</div>
+    </div>
+    <div class="foot">
+      <button class="btn primary" id="saveMessageEdit">Save</button>
+      <button class="btn ghost" data-close>Cancel</button>
     </div>
   </section>
 
@@ -695,6 +716,102 @@ function renderResponders(){
 }
 
 /* ---------- Chat rendering ---------- */
+/* message-edit-core:start */
+function editedMessage(message,text){
+  if(!text.trim()&&!message.images?.length)throw new Error("A message needs text or an image.");
+  return {...message,content:text,reasoning:"",error:false,edited:true};
+}
+function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",error:!!message.error,edited:!!message.edited};}
+function captureMessageVersions(list,index){
+  const message=list[index];
+  if(!message)throw new Error("Message not found.");
+  const versions=message.versions?.length?message.versions.map(v=>({...v})):[variantText(message)];
+  const selected=Number.isInteger(message.versionIndex)&&message.versionIndex>=0&&message.versionIndex<versions.length?message.versionIndex:0;
+  versions[selected]={...variantText(message),tail:list.slice(index+1)};
+  return {versions,selected};
+}
+function editMessageVersion(list,index,text){
+  const changed=editedMessage(list[index],text),{versions}=captureMessageVersions(list,index);
+  versions.push({...variantText(changed),tail:[]});
+  return [...list.slice(0,index),{...changed,versions,versionIndex:versions.length-1},...list.slice(index+1)];
+}
+function switchMessageVersion(list,index,target){
+  const {versions}=captureMessageVersions(list,index);
+  if(!Number.isInteger(target)||target<0||target>=versions.length)throw new Error("Version not found.");
+  const chosen=versions[target],tail=chosen.tail||[];
+  versions[target]={...chosen,tail:[]};
+  return [...list.slice(0,index),{...list[index],...variantText(chosen),streaming:false,versions,versionIndex:target},...tail];
+}
+function prepareRegeneration(list,index){
+  const {versions}=captureMessageVersions(list,index);
+  versions.push({content:"",reasoning:"",error:false,edited:false,tail:[]});
+  return {prefix:list.slice(0,index),versions,versionIndex:versions.length-1};
+}
+/* message-edit-core:end */
+let messageEditTarget=null;
+function openMessageEditor(message){
+  if(controller||message.streaming){toast("Stop the response before editing.");return;}
+  if(isWorkflow()){toast("Workflow messages are managed by their run. Use Retry this role instead.");return;}
+  messageEditTarget={conversationId:currentId,message};
+  $("#messageEditText").value=message.content||"";
+  closeAll();openSheet("#messageEditor");$("#messageEditText").focus();
+}
+$("#saveMessageEdit").onclick=()=>{
+  if(controller){toast("Stop the response before editing.");return;}
+  const target=messageEditTarget;
+  if(!target||target.conversationId!==currentId)return;
+  const index=messages.indexOf(target.message);if(index<0)return;
+  let next;try{next=editMessageVersion(messages,index,$("#messageEditText").value);}
+  catch(error){toast(error.message);return;}
+  try{store.saveConv(currentId,next);}catch(error){toast("Browser storage is full. Your edit has not been applied.");return;}
+  messages=next;messageEditTarget=null;closeAll();renderChat();toast("Message updated");
+};
+function selectMessageVersion(message,target){
+  if(controller||isWorkflow()){toast("Stop the response before changing versions.");return;}
+  const index=messages.indexOf(message);if(index<0)return;
+  let next;try{next=switchMessageVersion(messages,index,target);store.saveConv(currentId,next);}
+  catch(error){toast("Could not switch versions. Browser storage may be full.");return;}
+  messages=next;renderChat();renderResponders();
+}
+async function regenerateMessage(message){
+  if(controller||isWorkflow()||message.role!=="assistant")return;
+  const index=messages.indexOf(message);if(index<0)return;
+  const agent=isGroup()?agents.find(a=>a.id===message.agentId):curAgent();
+  if(!agent){toast("The original agent is no longer available.");return;}
+  if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
+  const previous=messages,branch=prepareRegeneration(messages,index);
+  const meta={versions:branch.versions,versionIndex:branch.versionIndex};
+  for(const key of ["agentId","agentName","agentEmoji","characterName"])if(message[key])meta[key]=message[key];
+  messages=branch.prefix;
+  try{
+    const result=await streamCompletion(agent,buildApiMessages(agent),meta);
+    if(result===false){messages=previous;renderChat();}
+  }catch(error){messages=previous;renderChat();toast("Could not regenerate. The previous conversation is still available.");}
+}
+async function copyMessageText(text){
+  if(!text)return false;
+  try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}
+  const focused=document.activeElement,selection=document.getSelection();
+  const ranges=selection?Array.from({length:selection.rangeCount},(_,i)=>selection.getRangeAt(i).cloneRange()):[];
+  const field=document.createElement("textarea");field.value=text;field.readOnly=true;
+  field.style.cssText="position:fixed;left:-9999px;top:0;opacity:0";
+  document.body.appendChild(field);
+  try{field.select();return !!document.execCommand("copy");}
+  catch(e){return false;}
+  finally{field.remove();focused?.focus({preventScroll:true});if(selection){selection.removeAllRanges();ranges.forEach(r=>selection.addRange(r));}}
+}
+function messageCopyButton(message){
+  const button=document.createElement("button");button.type="button";button.className="copy-msg";button.textContent="⧉";
+  button.disabled=!message.content;
+  button.title=message.content?"Copy message":"No message text to copy";
+  button.setAttribute("aria-label",button.title);
+  button.onclick=async()=>{
+    const copied=await copyMessageText(message.content||"");
+    toast(copied?"Message copied":"Could not copy. Select the text and copy manually.");
+    if(copied){button.textContent="✓";button.setAttribute("aria-label","Message copied");setTimeout(()=>{button.textContent="⧉";button.setAttribute("aria-label",button.title);},1800);}
+  };
+  return button;
+}
 const expandedReasoning=new WeakSet();
 function renderChat(){
   const c=$("#chat");c.innerHTML="";
@@ -736,6 +853,23 @@ function renderChat(){
       const retry=document.createElement("button");retry.className="retry-role";retry.textContent="↻ Retry this role";
       retry.onclick=()=>retryRoleFromUi(m.workflowRoleId);d.appendChild(retry);
     }
+    const actions=document.createElement("div");actions.className="msg-actions";
+    if(m.edited){const label=document.createElement("span");label.className="edited-label";label.textContent="edited";actions.appendChild(label);}
+    if(!isWorkflow()){
+      if(m.versions?.length>1){
+        const selected=m.versionIndex||0;
+        const previous=document.createElement("button");previous.type="button";previous.className="copy-msg";previous.textContent="‹";previous.title="Previous message version";previous.setAttribute("aria-label",previous.title);previous.disabled=!!controller||!!m.streaming||selected===0;previous.onclick=()=>selectMessageVersion(m,selected-1);
+        const count=document.createElement("span");count.className="version-count";count.textContent=(selected+1)+" / "+m.versions.length;
+        const next=document.createElement("button");next.type="button";next.className="copy-msg";next.textContent="›";next.title="Next message version";next.setAttribute("aria-label",next.title);next.disabled=!!controller||!!m.streaming||selected===m.versions.length-1;next.onclick=()=>selectMessageVersion(m,selected+1);
+        actions.append(previous,count,next);
+      }
+      if(m.role==="assistant"){
+        const regenerate=document.createElement("button");regenerate.type="button";regenerate.className="copy-msg";regenerate.textContent="↻";regenerate.title="Regenerate reply (uses API)";regenerate.setAttribute("aria-label",regenerate.title);regenerate.disabled=!!controller||!!m.streaming;regenerate.onclick=()=>regenerateMessage(m);actions.appendChild(regenerate);
+      }
+      const edit=document.createElement("button");edit.type="button";edit.className="copy-msg";edit.textContent="✎";edit.title="Edit message";edit.setAttribute("aria-label","Edit message");edit.disabled=!!controller||!!m.streaming;
+      edit.onclick=()=>openMessageEditor(m);actions.appendChild(edit);
+    }
+    actions.appendChild(messageCopyButton(m));d.appendChild(actions);
     c.appendChild(d);
   }
   c.scrollTop=c.scrollHeight;
