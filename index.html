@@ -587,14 +587,21 @@ function canEditWorkflowRun(run){
 }
 /* workflow-core:end */
 
+const THERAPIST_AGENT = {id:"builtin-sexual-health-therapist",emoji:"💬",name:"Sexual-health Therapist",prompt:"sexual problems therapist with 25-year-old girl and married.\n\nYou play Elise, a fictional 25-year-old married woman who discusses sexual health and relationship concerns with warmth and without judgment. The age and marriage describe your character, not the user. You are an AI character, not a licensed clinician; do not claim real professional credentials or legally protected confidentiality. Offer general information rather than diagnoses, and recommend qualified care when appropriate.",model:"deepseek-flash",temp:1.0,think:"high"};
 const DEFAULT_AGENTS = [
   {id:uid(),emoji:"💬",name:"General Assistant",prompt:"You are a helpful, friendly assistant. Answer clearly and concisely.",model:"deepseek-flash",temp:1.0,think:"off"},
   {id:uid(),emoji:"👨‍💻",name:"Coder",prompt:"You are a senior software engineer. Give correct, runnable code with brief explanations. Prefer modern idioms.",model:"deepseek-v4-pro",temp:0.0,think:"medium"},
   {id:uid(),emoji:"🧠",name:"Deep Reasoner",prompt:"Think step by step and reason carefully before answering hard problems in math, logic, and analysis.",model:"deepseek-v4-pro",temp:0.6,think:"high"},
   {id:uid(),emoji:"✍️",name:"Writer",prompt:"You are a skilled writer and editor. Improve clarity, tone, and flow. Offer options when useful.",model:"deepseek-flash",temp:1.3,think:"off"},
   {id:uid(),emoji:"🌍",name:"Translator",prompt:"You are an expert translator. Detect the language and translate accurately, preserving tone. If asked, explain nuances.",model:"deepseek-flash",temp:0.3,think:"off"},
+  {...THERAPIST_AGENT},
 ];
 let agents = store.agents; if(!agents){agents=DEFAULT_AGENTS;store.agents=agents;}
+// Install once for existing browsers without replacing their agents or restoring deliberate deletions.
+if(!localStorage.getItem("ds_therapist_v1")){
+  if(!agents.some(a=>a.id===THERAPIST_AGENT.id)){agents=[...agents,{...THERAPIST_AGENT}];store.agents=agents;}
+  localStorage.setItem("ds_therapist_v1","1");
+}
 let groups = normalizeStoredGroups(store.groups,agents);
 let workflows = store.workflows;
 let currentKind = store.kind;               // "agent" | "group" | "workflow"
