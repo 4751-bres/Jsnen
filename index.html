@@ -49,6 +49,9 @@
   .msg.bot{background:var(--bot);border:1px solid var(--line);border-bottom-left-radius:4px}
   .msg.err{background:#3b1113;border:1px solid #7f1d1d;color:#fecaca}
   .msg .think{color:var(--muted);font-style:italic;font-size:14px;border-left:2px solid var(--line);padding-left:10px;margin-bottom:8px;display:block;white-space:pre-wrap}
+  .reasoning{margin-bottom:8px;color:var(--muted);font-size:13px}
+  .reasoning summary{cursor:pointer;padding:5px 0;user-select:none}
+  .reasoning[open] summary{margin-bottom:6px}
   .msg code{background:#0008;padding:1px 5px;border-radius:6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em}
   .msg pre{background:#0009;border:1px solid var(--line);padding:12px;border-radius:10px;overflow-x:auto;margin:8px 0}
   .msg pre code{background:none;padding:0}
@@ -400,15 +403,20 @@ const store = {
 const uid = () => Math.random().toString(36).slice(2,9);
 
 /* roleplay-core:start */
-const IMAGE_GROUNDING="IMAGE GROUNDING. This overrides tone, persona, and continuity instructions whenever a message contains an image.\nKeep three things separate and never merge them:\n1. Visible: what is actually in the picture. Describe only what you can see.\n2. Told: what the user or this conversation gave you. Name it as context, not as observation.\n3. Uncertain: anything you are inferring. Say that you are inferring it.\nAn image cannot establish who someone is, their name, age, relationship to anyone, role, mood, intent, or consent. Never assert those as if you read them from the picture; if asked, say the image does not show it. You may accept the user's casting of an image (that a picture stands in for a character) as a premise. What you may not do is describe the picture as if it showed that character's identity, role, feelings, or history; those come from the conversation, and the picture does not confirm them. Staying in character never licenses inventing visual detail. Describe accurately first, then respond in voice.";
-function messagesHaveImages(list){return (list||[]).some(m=>m.role!=="assistant"&&m.images?.length);}
+const IMAGE_GROUNDING="IMAGE CONTEXT: Use the attached image as visual context for the user's message. Accept the user's fictional casting (for example, 'this is Riley') as a story premise. Keep details visible in the image distinct from facts supplied by the conversation; do not invent visual details or treat a picture as proof of someone's feelings or intentions. Respond naturally in the requested voice. Do not automatically give an image inventory or recite these instructions; discuss uncertainty only when it matters to the user's question.";
+const NARRATION_RULES="In fictional scenes, text between single asterisks, such as *I open the door*, is action or scene narration, not spoken dialogue. Accept user-provided scene events as context. Write your own character's actions in *asterisks* and dialogue as ordinary text. Keep each character's traits, relationships, actions, and knowledge attached to that character; do not transfer them to the user or invent the user's thoughts or choices. Explicit out-of-character corrections update the scene.";
+function agentInstructions(agent){
+  if(!agent.prompt)return "";
+  return "ASSISTANT INSTRUCTIONS AND CHARACTER DESCRIPTION:\n"+agent.prompt+"\n\nThe description above defines you, the assistant (or your fictional character), unless it explicitly identifies someone else. It is not a profile of the user. In fictional scenes, answer as the assigned character rather than explaining how to play them.\n"+NARRATION_RULES;
+}
+function messagesHaveImages(list){const latest=(list||[]).filter(m=>m.role==="user"&&!m.streaming).at(-1);return !!latest?.images?.length;}
 function groundSystem(text,list){
   if(!messagesHaveImages(list))return text;
   return [text,IMAGE_GROUNDING].filter(Boolean).join("\n\n");
 }
 function imageContent(text,images){
   if(!images?.length)return text;
-  return [{type:"text",text:text||"Describe the attached image(s)."},...images.map(image=>({type:"image_url",image_url:{url:image.url}}))];
+  return [{type:"text",text:text||"An image is attached."},...images.map(image=>({type:"image_url",image_url:{url:image.url}}))];
 }
 function normalizeRoleplay(value,members,agents){
   const source=value&&typeof value==="object"?value:{};
@@ -449,7 +457,7 @@ function buildGroupApiMessages(group,agent,messages){
   const system=[agent.prompt,"For this roleplay group, play "+character.name+".","Character: "+character.description,
     "User character: "+rp.user.name+" — "+rp.user.description,"Setting: "+rp.setting,
     cast&&"Other characters:\n"+cast,rp.mature&&"Mature-mode preference: enabled.",
-    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name."
+    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",NARRATION_RULES
   ].filter(Boolean).join("\n\n");
   const history=messages.filter(m=>!m.streaming&&(m.content||m.images?.length)).map(m=>{
     if(m.role==="user"){
@@ -612,14 +620,18 @@ $("#scrim").onclick=closeAll;
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeAll);
 
 function esc(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
-// minimal, safe markdown: code fences, inline code, bold, links
+// Protect code and link attributes before formatting narration and emphasis.
 function md(t){
-  t=esc(t);
-  t=t.replace(/```([\s\S]*?)```/g,(m,c)=>"<pre><code>"+c.replace(/^\n/,"")+"</code></pre>");
-  t=t.replace(/`([^`\n]+)`/g,"<code>$1</code>");
+  const tokens=[];
+  const keep=html=>"\u0000"+(tokens.push(html)-1)+"\u0000";
+  t=esc(t.replace(/\u0000/g,""));
+  t=t.replace(/```([\s\S]*?)```/g,(m,c)=>keep("<pre><code>"+c.replace(/^\n/,"")+"</code></pre>"));
+  t=t.replace(/`([^`\n]+)`/g,(m,c)=>keep("<code>"+c+"</code>"));
+  t=t.replace(/\\\*/g,()=>keep("*"));
+  t=t.replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,(m,label,url)=>keep('<a href="'+url.replace(/"/g,"&quot;")+'" target="_blank" rel="noopener" style="color:var(--accent)">'+label+'</a>'));
   t=t.replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>");
-  t=t.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener" style="color:var(--accent)">$1</a>');
-  return t;
+  t=t.replace(/\*([^*\n]+)\*/g,"<em>$1</em>");
+  return t.replace(/\u0000(\d+)\u0000/g,(m,i)=>tokens[Number(i)]);
 }
 
 /* ---------- Header / agent / group ---------- */
@@ -676,6 +688,7 @@ function renderResponders(){
 }
 
 /* ---------- Chat rendering ---------- */
+const expandedReasoning=new WeakSet();
 function renderChat(){
   const c=$("#chat");c.innerHTML="";
   if(!messages.length){
@@ -698,10 +711,16 @@ function renderChat(){
     if(m.role!=="user"&&m.workflowRoleName)html+='<span class="who role">'+esc(m.workflowRoleName+" · "+(m.agentEmoji||"🤖")+" "+(m.agentName||"Agent"))+'</span>';
     else if(m.role!=="user"&&m.characterName)html+='<span class="who">'+esc(m.characterName+" · "+(m.agentEmoji||"🤖")+" "+(m.agentName||"Agent"))+'</span>';
     else if(m.role!=="user"&&m.agentName)html+='<span class="who">'+esc((m.agentEmoji||"🤖")+" "+m.agentName)+'</span>';
-    if(m.reasoning) html+='<span class="think">'+esc(m.reasoning)+'</span>';
     html+=md(m.content||"");
     if(m.streaming) html+='<span class="cursor"></span>';
     d.innerHTML=html;
+    if(m.reasoning){
+      const details=document.createElement("details");details.className="reasoning";details.open=expandedReasoning.has(m);
+      const summary=document.createElement("summary");summary.textContent=m.streaming&&!m.content?"Thinking…":"Reasoning";
+      const text=document.createElement("div");text.className="think";text.textContent=m.reasoning;
+      details.append(summary,text);details.addEventListener("toggle",()=>{if(details.isConnected){if(details.open)expandedReasoning.add(m);else expandedReasoning.delete(m);}});
+      d.prepend(details);
+    }
     for(const image of m.images||[]){
       if(!/^data:image\/(jpeg|png|webp|gif);base64,/.test(image.url||""))continue;
       const img=document.createElement("img");img.className="chat-image";img.src=image.url;img.alt=image.name||"Attached image";d.appendChild(img);
@@ -1118,7 +1137,7 @@ function buildApiMessages(agent){
   if(isGroup()){
     return buildGroupApiMessages(curGroup(),agent,messages);
   }
-  const grounded=groundSystem(agent.prompt||"",messages);
+  const grounded=groundSystem(agentInstructions(agent),messages);
   if(grounded) sys.push({role:"system",content:grounded});
   const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&(m.content||m.images?.length)).map(m=>({role:m.role,content:m.role==="user"?imageContent(m.content,m.images):m.content}));
   return [...sys,...hist];

@@ -17,7 +17,7 @@ test('single-agent image-only message sends real image_url blocks to fetch',asyn
   vm.runInContext(core+'\n'+functions,ctx);
   await ctx.streamCompletion(agent,ctx.buildApiMessages(agent));
   assert.equal(payload.model,'deepseek-flash');
-  assert.deepEqual(payload.messages[1].content,[{type:'text',text:'Describe the attached image(s).'},{type:'image_url',image_url:{url:image.url}}]);
+  assert.deepEqual(payload.messages[1].content,[{type:'text',text:'An image is attached.'},{type:'image_url',image_url:{url:image.url}}]);
 });
 test('every group responder retains user image data and speaker labels',()=>{
   const ctx=context();vm.runInContext(core,ctx);

@@ -38,10 +38,11 @@ That's it — it now behaves like a native app with its own icon.
 ---
 
 ## Features
-- **Image understanding** — attach up to four images with 📎, or paste a screenshot, in an agent or group chat. Send an image alone or add a question; in groups, choose a responder after sending. Use `deepseek-flash` (V4.1 Flash) for vision. Images are sent as actual image inputs, not filenames. JPEG, PNG, WebP, and GIF are accepted (GIF uses a still frame); images are resized to at most 1600 pixels and saved with the conversation in this browser. Every request that carries an image also carries a grounding block that outranks the agent’s own prompt: the model is told to separate what is visible in the picture from what the conversation told it and from what it is guessing, and never to state identity, age, relationship, mood, or intent as if it read them from the image. Workflow attachments are not yet supported. Browser storage limits apply; a full-storage error preserves the draft.
+- **Image understanding** — attach up to four images with 📎, or paste a screenshot, in an agent or group chat. Send an image alone or add a question; in groups, choose a responder after sending. Use `deepseek-flash` (V4.1 Flash) for vision. Images are sent as actual image inputs, not filenames. JPEG, PNG, WebP, and GIF are accepted (GIF uses a still frame); images are resized to at most 1600 pixels and saved with the conversation in this browser. When the latest user turn includes an image, a short image-context instruction accepts fictional casting while keeping visible details distinct from story context. It does not demand an inventory or a lecture, and is not repeated on later text-only turns. Workflow attachments are not yet supported. Browser storage limits apply; a full-storage error preserves the draft.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).
+- **Character narration** — single-agent prompts are framed as the assistant's instructions, not a profile of the user. In fictional scenes, single-asterisk `*actions*` are treated as narration and displayed in italics; character traits stay attached to their owner. Roleplay groups use the same narration conventions.
 - **Group chats** — select several agents, ask a question, then choose one responder or
   tap **Everyone** to hear from every member in order.
 - **Roleplay groups** — turn any group into a persistent scene with your character, one
@@ -57,8 +58,8 @@ That's it — it now behaves like a native app with its own icon.
 - **Model per agent** — `deepseek-flash` (fast, cheap, sees images) or `deepseek-v4-pro`
   (flagship reasoning, text only).
   Type any model name your key can access.
-- **Thinking mode per agent** — Off / Low / Medium / High. On makes DeepSeek V4 reason
-  step-by-step; the reasoning is streamed into a dimmed block above the answer.
+- **Thinking mode per agent** — Off / Low / Medium / High. Reasoning streams into a
+  collapsed **Reasoning** disclosure above the answer; open it only when you want to see it.
 - **Streaming replies** with a stop button.
 - **Duplicate agents** to create quick prompt/model variants.
 - **Conversations saved** per agent, group, and workflow (in your browser).

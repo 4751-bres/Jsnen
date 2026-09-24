@@ -23,17 +23,20 @@ function groupCore(){const ctx=vm.createContext({});vm.runInContext(core,ctx);re
 test('image turns append grounding after the agent prompt',()=>{
   const out=build([{role:'user',content:'',images:[image]}]);
   assert.equal(out[0].role,'system');
-  assert.ok(out[0].content.startsWith('Analyze images'));
-  assert.ok(out[0].content.includes('IMAGE GROUNDING'));
+  assert.ok(out[0].content.includes('Analyze images'));
+  assert.ok(out[0].content.includes('IMAGE CONTEXT'));
 });
 
-test('text-only turns leave the system prompt byte-for-byte unchanged',()=>{
-  assert.equal(build([{role:'user',content:'hi'}])[0].content,'Analyze images');
+test('text-only turns include character framing without image instructions',()=>{
+  const prompt=build([{role:'user',content:'hi'}])[0].content;
+  assert.ok(prompt.includes('Analyze images'));
+  assert.ok(prompt.includes('not a profile of the user'));
+  assert.ok(!prompt.includes('IMAGE CONTEXT'));
 });
 
 test('grounding is added even when the agent has no prompt of its own',()=>{
   const out=build([{role:'user',content:'',images:[image]}],{...agent,prompt:''});
-  assert.ok(out[0].content.startsWith('IMAGE GROUNDING'));
+  assert.ok(out[0].content.startsWith('IMAGE CONTEXT'));
 });
 
 test('an image-only roleplay turn is labeled factually, not as a directive',()=>{
@@ -47,22 +50,30 @@ test('a roleplay turn with text keeps the speaker prefix',()=>{
   assert.equal(built[1].content[0].text,'[Alex]: Look at this');
 });
 
-test('roleplay grounding outranks the stay-in-character instruction',()=>{
+test('image guidance preserves voice and casting without mandating an inventory',()=>{
   const sys=groupCore().buildGroupApiMessages(rpGroup(),agent,[{role:'user',content:'',images:[image]}])[0].content;
-  assert.ok(sys.indexOf('IMAGE GROUNDING')>sys.indexOf('Remain in character'));
-  assert.ok(sys.includes('cannot establish who someone is'));
-  assert.ok(sys.includes('may accept the user'),'casting a picture as a character stays allowed');
-  assert.ok(sys.includes('the picture does not confirm them'));
+  assert.ok(sys.includes('IMAGE CONTEXT'));
+  assert.ok(sys.includes("Accept the user's fictional casting"));
+  assert.ok(sys.includes('Do not automatically give an image inventory'));
+  assert.ok(!sys.includes('overrides tone'));
 });
 
 test('roleplay without images carries no grounding block',()=>{
   const sys=groupCore().buildGroupApiMessages(rpGroup(),agent,[{role:'user',content:'I enter.'}])[0].content;
-  assert.ok(!sys.includes('IMAGE GROUNDING'));
+  assert.ok(!sys.includes('IMAGE CONTEXT'));
 });
 
 test('plain group chats ground image turns too',()=>{
   const sys=groupCore().buildGroupApiMessages({members:['a']},agent,[{role:'user',content:'',images:[image]}])[0].content;
-  assert.ok(sys.includes('IMAGE GROUNDING'));
+  assert.ok(sys.includes('IMAGE CONTEXT'));
+});
+
+test('an old image does not keep injecting image instructions into later text turns',()=>{
+  const turns=[{role:'user',content:'Look',images:[image]},{role:'assistant',content:'I see it.'},{role:'user',content:'*I put the phone away* Hello again.'}];
+  const built=build(turns);
+  assert.ok(!built[0].content.includes('IMAGE CONTEXT'));
+  assert.equal(built[1].content[1].image_url.url,image.url);
+  assert.ok(!groupCore().buildGroupApiMessages(rpGroup(),agent,turns)[0].content.includes('IMAGE CONTEXT'));
 });
 
 test('shipped defaults and fallbacks use current model ids',()=>{
