@@ -17,7 +17,7 @@ test('single-agent image-only message sends real image_url blocks to fetch',asyn
   vm.runInContext(core+'\n'+functions,ctx);
   await ctx.streamCompletion(agent,ctx.buildApiMessages(agent));
   assert.equal(payload.model,'deepseek-flash');
-  assert.deepEqual(payload.messages[1].content,[{type:'text',text:'An image is attached.'},{type:'image_url',image_url:{url:image.url}}]);
+  assert.deepEqual(payload.messages[1].content,[{type:'text',text:'[user]: Shared an image.'},{type:'image_url',image_url:{url:image.url}}]);
 });
 test('every group responder retains user image data and speaker labels',()=>{
   const ctx=context();vm.runInContext(core,ctx);
@@ -25,7 +25,7 @@ test('every group responder retains user image data and speaker labels',()=>{
   const messages=[{role:'user',content:'Read this',images:[image]},{role:'assistant',agentId:'b',agentName:'B',content:'A chart.'}];
   for(const id of ['a','b']){
     const built=ctx.buildGroupApiMessages(group,{...agent,id},messages);
-    assert.equal(built[1].content[0].text,'[User]: Read this');
+    assert.equal(built[1].content[0].text,'[user]: Read this');
     assert.equal(built[1].content[1].image_url.url,image.url);
   }
   const plain=ctx.buildGroupApiMessages({members:['a']},agent,[messages[0]]);

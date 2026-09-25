@@ -36,18 +36,18 @@ test('text-only turns include character framing without image instructions',()=>
 
 test('grounding is added even when the agent has no prompt of its own',()=>{
   const out=build([{role:'user',content:'',images:[image]}],{...agent,prompt:''});
-  assert.ok(out[0].content.startsWith('IMAGE CONTEXT'));
+  assert.ok(out[0].content.includes('IMAGE CONTEXT'));
 });
 
 test('an image-only roleplay turn is labeled factually, not as a directive',()=>{
   const built=groupCore().buildGroupApiMessages(rpGroup(),agent,[{role:'user',content:'',images:[image]}]);
-  assert.equal(built[1].content[0].text,'[Alex] shared an image.');
+  assert.equal(built[1].content[0].text,'[user]: Shared an image.');
   assert.equal(built[1].content[1].image_url.url,image.url);
 });
 
 test('a roleplay turn with text keeps the speaker prefix',()=>{
   const built=groupCore().buildGroupApiMessages(rpGroup(),agent,[{role:'user',content:'Look at this',images:[image]}]);
-  assert.equal(built[1].content[0].text,'[Alex]: Look at this');
+  assert.equal(built[1].content[0].text,'[user]: Look at this');
 });
 
 test('image guidance preserves voice and casting without mandating an inventory',()=>{

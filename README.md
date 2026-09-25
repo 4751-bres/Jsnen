@@ -42,7 +42,7 @@ That's it — it now behaves like a native app with its own icon.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator, and Sexual-health Therapist. The therapist is a fictional adult AI character for sexual-health and relationship conversations, not a licensed clinician. It is also added once for existing users without replacing their agents or chats. Like other agents, it can be edited or deleted. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).
-- **Character narration** — single-agent prompts are framed as the assistant's instructions, not a profile of the user. In fictional scenes, single-asterisk `*actions*` are treated as narration and displayed in italics; character traits stay attached to their owner. Roleplay groups use the same narration conventions.
+- **Character narration** — single-agent and roleplay-group requests label the responding speaker `[char]` and the user `[user]`; other group characters have named labels. These are added to the API context, leaving saved messages and copied text unchanged. Character instructions encourage a direct first-person voice. Single-asterisk `*actions*` are scene events, displayed in italics: characters react to what happened without silently rewriting the user's actions. Character reactions can still include disagreement. The configured API controls its responses.
 - **Group chats** — select several agents, ask a question, then choose one responder or
   tap **Everyone** to hear from every member in order.
 - **Roleplay groups** — turn any group into a persistent scene with your character, one

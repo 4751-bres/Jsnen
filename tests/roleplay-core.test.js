@@ -68,11 +68,12 @@ test("roleplay prompt separates user, selected character, and cast turns", () =>
     { role: "assistant", agentId: "a", agentName: "Mara", content: "You're late." },
   ];
   const output = core.buildGroupApiMessages(group, agents[0], messages);
-  assert.match(output[0].content, /play Mara/);
+  assert.match(output[0].content, /you are Mara \(\[char\]\)/);
   assert.match(output[0].content, /User character: Rin/);
-  assert.equal(output[1].content, "[Rin]: I enter.");
-  assert.equal(output[2].content, "[Basil]: I look up.");
+  assert.equal(output[1].content, "[user]: I enter.");
+  assert.equal(output[2].content, "[character: Basil]: I look up.");
   assert.equal(output[3].role, "assistant");
+  assert.equal(output[3].content,"[char]: You're late.");
 });
 
 test("normal group prompts retain current behavior", () => {

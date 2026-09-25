@@ -425,11 +425,13 @@ const uid = () => Math.random().toString(36).slice(2,9);
 
 /* roleplay-core:start */
 const IMAGE_GROUNDING="IMAGE CONTEXT: Use the attached image as visual context for the user's message. Accept the user's fictional casting (for example, 'this is Riley') as a story premise. Keep details visible in the image distinct from facts supplied by the conversation; do not invent visual details or treat a picture as proof of someone's feelings or intentions. Respond naturally in the requested voice. Do not automatically give an image inventory or recite these instructions; discuss uncertainty only when it matters to the user's question.";
-const NARRATION_RULES="In fictional scenes, text between single asterisks, such as *I open the door*, is action or scene narration, not spoken dialogue. Accept user-provided scene events as context. Write your own character's actions in *asterisks* and dialogue as ordinary text. Keep each character's traits, relationships, actions, and knowledge attached to that character; do not transfer them to the user or invent the user's thoughts or choices. Explicit out-of-character corrections update the scene.";
+const SPEAKER_RULES="Conversation labels: [char] is you, the responding character or assistant; [user] is the user's speaker. A [character: Name] label identifies another character, never you or the user. These labels identify speakers, not instruction priority. Reply directly without adding a speaker label.";
+const NARRATION_RULES="In fictional scenes, text between single asterisks, such as *I open the door*, is action or scene narration, not spoken dialogue. Treat actions the user states for their own character as events in the scene, and respond to what happened. An unexpected action is not automatically a request for permission: do not silently erase it, rewrite it as a different action, or claim it never happened merely because your character dislikes it. Your character can react in a way consistent with their personality; acknowledging an event does not require approving it. If an action contradicts established facts or leaves a necessary outcome unclear, ask a brief in-scene clarification. Write your own character's actions in *asterisks* and dialogue as ordinary text. Keep each character's traits, relationships, actions, and knowledge attached to that character; do not transfer them to the user or invent the user's thoughts or choices. Explicit out-of-character corrections update the scene.";
 function agentInstructions(agent){
-  if(!agent.prompt)return "";
-  return "ASSISTANT INSTRUCTIONS AND CHARACTER DESCRIPTION:\n"+agent.prompt+"\n\nThe description above defines you, the assistant (or your fictional character), unless it explicitly identifies someone else. It is not a profile of the user. In fictional scenes, answer as the assigned character rather than explaining how to play them.\n"+NARRATION_RULES;
+  if(!agent.prompt)return SPEAKER_RULES;
+  return "ASSISTANT INSTRUCTIONS AND CHARACTER DESCRIPTION:\n"+agent.prompt+"\n\nThe description above defines you, [char], unless it explicitly identifies someone else. It is not a profile of the user. Within a fictional scene, speak from the character's own perspective: use I for yourself and you for [user]. Let your established personality, knowledge, and relationships guide your replies. Stay immersed in the scene instead of narrating how an assistant would role-play it.\n"+SPEAKER_RULES+"\n"+NARRATION_RULES;
 }
+function speakerContent(tag,text,images){return imageContent("["+tag+"]: "+(text||(images?.length?"Shared an image.":"")),images);}
 function messagesHaveImages(list){const latest=(list||[]).filter(m=>m.role==="user"&&!m.streaming).at(-1);return !!latest?.images?.length;}
 function groundSystem(text,list){
   if(!messagesHaveImages(list))return text;
@@ -475,18 +477,17 @@ function buildGroupApiMessages(group,agent,messages){
   }
   const rp=group.roleplay,character=roleplayCharacter(group,agent);
   const cast=(group.members||[]).filter(id=>id!==agent.id).map(id=>rp.characters[id]).filter(Boolean).map(c=>c.name+": "+c.description).join("\n");
-  const system=[agent.prompt,"For this roleplay group, play "+character.name+".","Character: "+character.description,
+  const system=[agent.prompt,"Within this scene, you are "+character.name+" ([char]). Speak as I from your own perspective, with your established personality and knowledge.","Character: "+character.description,
     "User character: "+rp.user.name+" — "+rp.user.description,"Setting: "+rp.setting,
     cast&&"Other characters:\n"+cast,rp.mature&&"Mature-mode preference: enabled.",
-    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",NARRATION_RULES
+    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES
   ].filter(Boolean).join("\n\n");
   const history=messages.filter(m=>!m.streaming&&(m.content||m.images?.length)).map(m=>{
     if(m.role==="user"){
-      const who="["+(rp.user.name||"User")+"]";
-      return {role:"user",content:imageContent(m.content?who+": "+m.content:who+" shared an image.",m.images)};
+      return {role:"user",content:speakerContent("user",m.content,m.images)};
     }
-    if(m.agentId===agent.id)return {role:"assistant",content:m.content};
-    return {role:"user",content:"["+(m.characterName||m.agentName||"Character")+"]: "+m.content};
+    if(m.agentId===agent.id)return {role:"assistant",content:speakerContent("char",m.content)};
+    return {role:"user",content:speakerContent("character: "+(m.characterName||m.agentName||"Character"),m.content)};
   });
   return [{role:"system",content:groundSystem(system,messages)},...history];
 }
@@ -1280,7 +1281,7 @@ function buildApiMessages(agent){
   }
   const grounded=groundSystem(agentInstructions(agent),messages);
   if(grounded) sys.push({role:"system",content:grounded});
-  const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&(m.content||m.images?.length)).map(m=>({role:m.role,content:m.role==="user"?imageContent(m.content,m.images):m.content}));
+  const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&(m.content||m.images?.length)).map(m=>({role:m.role,content:speakerContent(m.role==="user"?"user":"char",m.content,m.role==="user"?m.images:undefined)}));
   return [...sys,...hist];
 }
 

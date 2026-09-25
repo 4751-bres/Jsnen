@@ -28,5 +28,6 @@ test('single-agent persona stays in system role and user actions remain untouche
   assert.equal(payload[0].role,'system');assert.ok(payload[0].content.includes(prompt));
   assert.ok(payload[0].content.includes('description above defines you'));
   assert.ok(payload[0].content.includes('single asterisks'));
-  assert.equal(payload[1].content,messages[0].content);
+  assert.equal(payload[1].content,'[user]: '+messages[0].content);
+  assert.equal(messages[0].content,'*I take out my phone.* Hello.');
 });
