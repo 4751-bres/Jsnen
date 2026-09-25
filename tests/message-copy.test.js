@@ -10,12 +10,20 @@ function setup(writeText,fallback=true){
     createElement:()=>({style:{},setAttribute(k,v){this[k]=v;},select(){},remove(){state.removed=true;}}),
     body:{appendChild(el){state.field=el;}},execCommand(cmd){assert.equal(cmd,'copy');return fallback;}};
   const ctx=vm.createContext({document,navigator:{clipboard:writeText?{writeText}:undefined},toast:t=>state.notices.push(t),setTimeout:()=>{}});
-  vm.runInContext(helpers,ctx);return {ctx,state};
+  vm.runInContext(source.slice(source.indexOf('/* roleplay-core:start */'),source.indexOf('/* roleplay-core:end */'))+'\n'+helpers,ctx);return {ctx,state};
 }
 test('copy preserves exact text and markdown',async()=>{
   const copied=[];const {ctx}=setup(async t=>copied.push(t));
   const text='*I wave.* Hello\n```js\nconst x = 1;\n```';
   assert.equal(await ctx.copyMessageText(text),true);assert.deepEqual(copied,[text]);
+});
+test('assistant copy removes repeated char labels while user text stays literal',async()=>{
+  const copied=[];const {ctx}=setup(async t=>copied.push(t));
+  await ctx.messageCopyButton({role:'assistant',content:'[char]: [Char]: *I wave.* Hello'}).onclick();
+  await ctx.messageCopyButton({role:'user',content:'[char]: literal example'}).onclick();
+  assert.deepEqual(copied,['*I wave.* Hello','[char]: literal example']);
+  assert.equal(ctx.speakerContent('char','[char]: [char]: Hello'),'[char]: Hello');
+  assert.equal(ctx.cleanCharacterReply('Keep [char]: inside the sentence'),'Keep [char]: inside the sentence');
 });
 test('clipboard denial falls back and cleans up without leaving focus behind',async()=>{
   const {ctx,state}=setup(async()=>{throw Error('denied');});

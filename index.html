@@ -431,8 +431,9 @@ function agentInstructions(agent){
   if(!agent.prompt)return SPEAKER_RULES;
   return "ASSISTANT INSTRUCTIONS AND CHARACTER DESCRIPTION:\n"+agent.prompt+"\n\nThe description above defines you, [char], unless it explicitly identifies someone else. It is not a profile of the user. Within a fictional scene, speak from the character's own perspective: use I for yourself and you for [user]. Let your established personality, knowledge, and relationships guide your replies. Stay immersed in the scene instead of narrating how an assistant would role-play it.\n"+SPEAKER_RULES+"\n"+NARRATION_RULES+"\n"+SCENE_STYLE;
 }
-const SCENE_STYLE="For fictional scene replies, aim for 80–120 words of natural dialogue, optionally including one brief *action*. Answer the current message directly and ask at most one relevant question. Avoid recapping the scene, repeating explanations, adding several gestures, or speculating about the user's motives. Do not pad a simple response just to reach the target. Expand only when the user asks for detail or the situation needs it.";
-function speakerContent(tag,text,images){return imageContent("["+tag+"]: "+(text||(images?.length?"Shared an image.":"")),images);}
+const SCENE_STYLE="For fictional scene replies, aim for 80–120 words of natural dialogue, optionally including one brief *action*. Text inside *asterisks* describes events or actions; it is not spoken aloud. React to that behavior without saying the user said those words or quoting the narration as dialogue. Only treat narration as spoken when it explicitly describes speech or contains a direct quotation. Answer the current message directly and ask at most one relevant question. Avoid recapping the scene, repeating explanations, adding several gestures, or speculating about the user's motives. Do not pad a simple response just to reach the target. Expand only when the user asks for detail or the situation needs it.";
+function cleanCharacterReply(text){return (text||"").replace(/^(?:\s*\[char\]\s*:\s*)+/i,"");}
+function speakerContent(tag,text,images){return imageContent("["+tag+"]: "+((tag==="char"?cleanCharacterReply(text):text)||(images?.length?"Shared an image.":"")),images);}
 function messagesHaveImages(list){const latest=(list||[]).filter(m=>m.role==="user"&&!m.streaming).at(-1);return !!latest?.images?.length;}
 function groundSystem(text,list){
   if(!messagesHaveImages(list))return text;
@@ -814,7 +815,7 @@ function messageCopyButton(message){
   button.title=message.content?"Copy message":"No message text to copy";
   button.setAttribute("aria-label",button.title);
   button.onclick=async()=>{
-    const copied=await copyMessageText(message.content||"");
+    const copied=await copyMessageText(message.role==="assistant"?cleanCharacterReply(message.content):message.content||"");
     toast(copied?"Message copied":"Could not copy. Select the text and copy manually.");
     if(copied){button.textContent="✓";button.setAttribute("aria-label","Message copied");setTimeout(()=>{button.textContent="⧉";button.setAttribute("aria-label",button.title);},1800);}
   };
@@ -843,7 +844,7 @@ function renderChat(){
     if(m.role!=="user"&&m.workflowRoleName)html+='<span class="who role">'+esc(m.workflowRoleName+" · "+(m.agentEmoji||"🤖")+" "+(m.agentName||"Agent"))+'</span>';
     else if(m.role!=="user"&&m.characterName)html+='<span class="who">'+esc(m.characterName+" · "+(m.agentEmoji||"🤖")+" "+(m.agentName||"Agent"))+'</span>';
     else if(m.role!=="user"&&m.agentName)html+='<span class="who">'+esc((m.agentEmoji||"🤖")+" "+m.agentName)+'</span>';
-    html+=md(m.content||"");
+    html+=md(m.role==="assistant"?cleanCharacterReply(m.content):m.content||"");
     if(m.streaming) html+='<span class="cursor"></span>';
     d.innerHTML=html;
     if(m.reasoning){
