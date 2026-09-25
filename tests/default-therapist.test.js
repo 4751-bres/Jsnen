@@ -18,6 +18,7 @@ test('fresh browser gets exactly one sexual-health therapist with the supplied p
   assert.ok(found[0].prompt.includes('sexual problems therapist with 25-year-old girl and married.'));
   assert.ok(found[0].prompt.includes('not a licensed clinician'));
   assert.equal(found[0].model,'deepseek-flash');
+  assert.equal(found[0].think,'off');
   assert.equal(boot(agents,flags).agents.length,agents.length);
 });
 test('existing agents are preserved and a same-name custom therapist is not overwritten',()=>{
@@ -30,7 +31,9 @@ test('existing agents are preserved and a same-name custom therapist is not over
 test('therapist edits survive reload and deletion is respected',()=>{
   const first=boot([]);
   first.agents[0].prompt='Edited';
+  first.agents[0].think='high';
   assert.equal(boot(first.agents,first.flags).agents[0].prompt,'Edited');
+  assert.equal(boot(first.agents,first.flags).agents[0].think,'high');
   assert.equal(boot([],first.flags).agents.length,0);
 });
 test('existing preset is not duplicated if migration marker is missing',()=>{

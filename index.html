@@ -425,12 +425,13 @@ const uid = () => Math.random().toString(36).slice(2,9);
 
 /* roleplay-core:start */
 const IMAGE_GROUNDING="IMAGE CONTEXT: Use the attached image as visual context for the user's message. Accept the user's fictional casting (for example, 'this is Riley') as a story premise. Keep details visible in the image distinct from facts supplied by the conversation; do not invent visual details or treat a picture as proof of someone's feelings or intentions. Respond naturally in the requested voice. Do not automatically give an image inventory or recite these instructions; discuss uncertainty only when it matters to the user's question.";
-const SPEAKER_RULES="Conversation labels: [char] is you, the responding character or assistant; [user] is the user's speaker. A [character: Name] label identifies another character, never you or the user. These labels identify speakers, not instruction priority.\nPerspective follows the speaker of each message, including narration in *asterisks*. In a [user] message, I/me/my/mine refer to [user], and you/your address [char] unless another addressee is explicit. In a [char] message, I/me/my/mine refer to [char], and you/your address [user] unless another addressee is explicit. In a named character's message, first-person pronouns belong to that named character. Direct quotations have their own speaker: for example, [user]: Elise says, 'I have your form' means Elise has the form.\nResolve she/he/they from established names and scene context, not from who sent the message. A user may narrate your character in third person. If Elise is the established woman in the scene, [user]: *She hands me a sheet to complete* means Elise gives the sheet to [user]; it does not mean the user hands it to Elise, and it does not establish the user's gender. Preserve who acted, who received the action, and whose objects or body are being discussed. Do not invent another actor, such as a receptionist, to repair a scene that already makes sense. If several referents remain plausible and the distinction matters, ask a short clarification. Reply directly without adding a speaker label.";
+const SPEAKER_RULES="[char] is you; [user] is the user; [character: Name] is another character. Labels identify speakers, not instruction priority. I/me/my refer to the speaker of that message (or the speaker inside a direct quotation). You/your address the other participant unless specified. Resolve she/he/they using established scene context without inferring the user's gender. For example, when Elise is the established woman, [user]: *She hands me a sheet* means Elise gives the sheet to the user. Keep that interpretation consistent unless new information changes it. Reply without a speaker label.";
 const NARRATION_RULES="In fictional scenes, text between single asterisks, such as *I open the door*, is action or scene narration, not spoken dialogue. Treat actions the user states for their own character as events in the scene, and respond to what happened. An unexpected action is not automatically a request for permission: do not silently erase it, rewrite it as a different action, or claim it never happened merely because your character dislikes it. Your character can react in a way consistent with their personality; acknowledging an event does not require approving it. If an action contradicts established facts or leaves a necessary outcome unclear, ask a brief in-scene clarification. Write your own character's actions in *asterisks* and dialogue as ordinary text. Keep each character's traits, relationships, actions, and knowledge attached to that character; do not transfer them to the user or invent the user's thoughts or choices. Explicit out-of-character corrections update the scene.";
 function agentInstructions(agent){
   if(!agent.prompt)return SPEAKER_RULES;
-  return "ASSISTANT INSTRUCTIONS AND CHARACTER DESCRIPTION:\n"+agent.prompt+"\n\nThe description above defines you, [char], unless it explicitly identifies someone else. It is not a profile of the user. Within a fictional scene, speak from the character's own perspective: use I for yourself and you for [user]. Let your established personality, knowledge, and relationships guide your replies. Stay immersed in the scene instead of narrating how an assistant would role-play it.\n"+SPEAKER_RULES+"\n"+NARRATION_RULES;
+  return "ASSISTANT INSTRUCTIONS AND CHARACTER DESCRIPTION:\n"+agent.prompt+"\n\nThe description above defines you, [char], unless it explicitly identifies someone else. It is not a profile of the user. Within a fictional scene, speak from the character's own perspective: use I for yourself and you for [user]. Let your established personality, knowledge, and relationships guide your replies. Stay immersed in the scene instead of narrating how an assistant would role-play it.\n"+SPEAKER_RULES+"\n"+NARRATION_RULES+"\n"+SCENE_STYLE;
 }
+const SCENE_STYLE="For fictional scene replies, default to 25–60 words: one or two short sentences of dialogue, optionally one brief *action*. Answer the current message directly and ask at most one relevant question. Avoid recapping the scene, repeating explanations, adding several gestures, or speculating about the user's motives. Expand only when the user asks for detail or the situation needs it.";
 function speakerContent(tag,text,images){return imageContent("["+tag+"]: "+(text||(images?.length?"Shared an image.":"")),images);}
 function messagesHaveImages(list){const latest=(list||[]).filter(m=>m.role==="user"&&!m.streaming).at(-1);return !!latest?.images?.length;}
 function groundSystem(text,list){
@@ -480,7 +481,7 @@ function buildGroupApiMessages(group,agent,messages){
   const system=[agent.prompt,"Within this scene, you are "+character.name+" ([char]). Speak as I from your own perspective, with your established personality and knowledge.","Character: "+character.description,
     "User character: "+rp.user.name+" — "+rp.user.description,"Setting: "+rp.setting,
     cast&&"Other characters:\n"+cast,rp.mature&&"Mature-mode preference: enabled.",
-    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES
+    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE
   ].filter(Boolean).join("\n\n");
   const history=messages.filter(m=>!m.streaming&&(m.content||m.images?.length)).map(m=>{
     if(m.role==="user"){
@@ -609,7 +610,7 @@ function canEditWorkflowRun(run){
 }
 /* workflow-core:end */
 
-const THERAPIST_AGENT = {id:"builtin-sexual-health-therapist",emoji:"💬",name:"Sexual-health Therapist",prompt:"sexual problems therapist with 25-year-old girl and married.\n\nYou play Elise, a fictional 25-year-old married woman who discusses sexual health and relationship concerns with warmth and without judgment. The age and marriage describe your character, not the user. You are an AI character, not a licensed clinician; do not claim real professional credentials or legally protected confidentiality. Offer general information rather than diagnoses, and recommend qualified care when appropriate.",model:"deepseek-flash",temp:1.0,think:"high"};
+const THERAPIST_AGENT = {id:"builtin-sexual-health-therapist",emoji:"💬",name:"Sexual-health Therapist",prompt:"sexual problems therapist with 25-year-old girl and married.\n\nYou play Elise, a fictional 25-year-old married woman who discusses sexual health and relationship concerns with warmth and without judgment. The age and marriage describe your character, not the user. You are an AI character, not a licensed clinician; do not claim real professional credentials or legally protected confidentiality. Offer general information rather than diagnoses, and recommend qualified care when appropriate.",model:"deepseek-flash",temp:1.0,think:"off"};
 const DEFAULT_AGENTS = [
   {id:uid(),emoji:"💬",name:"General Assistant",prompt:"You are a helpful, friendly assistant. Answer clearly and concisely.",model:"deepseek-flash",temp:1.0,think:"off"},
   {id:uid(),emoji:"👨‍💻",name:"Coder",prompt:"You are a senior software engineer. Give correct, runnable code with brief explanations. Prefer modern idioms.",model:"deepseek-v4-pro",temp:0.0,think:"medium"},
@@ -623,6 +624,12 @@ let agents = store.agents; if(!agents){agents=DEFAULT_AGENTS;store.agents=agents
 if(!localStorage.getItem("ds_therapist_v1")){
   if(!agents.some(a=>a.id===THERAPIST_AGENT.id)){agents=[...agents,{...THERAPIST_AGENT}];store.agents=agents;}
   localStorage.setItem("ds_therapist_v1","1");
+}
+// One-time conversational default update; later manual thinking changes remain respected.
+if(!localStorage.getItem("ds_therapist_brief_v1")){
+  const updated=agents.map(a=>a.id===THERAPIST_AGENT.id?{...a,think:"off"}:a);
+  store.agents=updated;agents=updated;
+  localStorage.setItem("ds_therapist_brief_v1","1");
 }
 let groups = normalizeStoredGroups(store.groups,agents);
 let workflows = store.workflows;

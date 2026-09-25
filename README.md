@@ -60,6 +60,7 @@ That's it — it now behaves like a native app with its own icon.
   Type any model name your key can access.
 - **Thinking mode per agent** — Off / Low / Medium / High. Reasoning streams into a
   collapsed **Reasoning** disclosure above the answer; open it only when you want to see it.
+  The built-in therapist defaults to Off, including a one-time update for existing installs; subsequent manual changes are preserved. Fictional scene replies target 25–60 words, with at most one brief action and one question unless more detail is requested.
 - **Streaming replies** with a stop button.
 - **Copy any message** — use the small bottom-right copy button on your messages or the AI's replies. Copies the original text, including `*actions*` and code, without reasoning or speaker labels. Image-only messages have no text to copy.
 - **Edit and reply versions** — in single-agent and group chats, use ✎ to edit either side and ↻ to request another AI reply (one API request). Use ‹ / › to switch saved versions. Regenerating an earlier reply starts a new branch; the old version retains its later conversation, restored when you switch back. Manual edits keep later messages and save the original version too. Versions survive reloads in browser storage. Workflow messages instead use their existing role-retry controls.
