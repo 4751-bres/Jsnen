@@ -189,6 +189,7 @@
       <div class="name" id="hAgent">DeepSeek Agents</div>
       <div class="sub" id="hSub">Tap ☰ to pick an agent</div>
     </div>
+    <button class="icon-btn" id="duplicateChatBtn" aria-label="Duplicate chat" title="Duplicate chat, including messages">⧉</button>
     <button class="icon-btn" id="clearBtn" aria-label="Clear chat">🧹</button>
     <button class="icon-btn" id="setBtn" aria-label="Settings">⚙️</button>
   </header>
@@ -884,6 +885,7 @@ function renderChat(){
   c.scrollTop=c.scrollHeight;
 }
 function renderWorkflowUi(){
+  $("#duplicateChatBtn").disabled=!!controller||(isWorkflow()&&!!currentRun&&currentRun.status!=="complete");
   const progress=$("#workflowProgress"),actions=$("#workflowActions"),composer=document.querySelector(".composer");
   if(!isWorkflow()){
     progress.style.display=actions.style.display="none";composer.style.display="flex";input.disabled=false;$("#menuBtn").disabled=false;$("#clearBtn").disabled=!!controller;return;
@@ -913,6 +915,37 @@ function loadConv(){
   if(currentRun)store.saveRun(currentId,currentRun);
   renderChat();refreshHeader();renderResponders();renderWorkflowUi();
 }
+
+/* ---------- Duplicate a conversation ---------- */
+function duplicateCurrentChat(){
+  if(controller||readingImages){toast("Wait for the current response or image upload to finish.");return;}
+  if(isWorkflow()&&currentRun&&currentRun.status!=="complete"){toast("Complete or cancel the workflow before duplicating it.");return;}
+  const kind=currentKind;
+  const list=kind==="group"?groups:kind==="workflow"?workflows:agents;
+  const original=list.find(item=>item.id===currentId);if(!original)return;
+  let id;do{id=uid();}while(agents.some(a=>a.id===id)||groups.some(g=>g.id===id)||workflows.some(w=>w.id===id)||localStorage.getItem("ds_conv_"+id)!==null);
+  const base=original.name+" copy";
+  let name=base,n=2;while(list.some(item=>item.name===name))name=base+" "+n++;
+  const copy=JSON.parse(JSON.stringify({...original,id,name}));
+  const history=JSON.parse(JSON.stringify(messages));
+  const next=[...list,copy],key="ds_conv_"+id;
+  try{
+    // Save the full transcript, including inactive versions, before exposing the copy.
+    localStorage.setItem(key,JSON.stringify(history));
+    if(kind==="group")store.groups=next;
+    else if(kind==="workflow")store.workflows=next;
+    else store.agents=next;
+  }catch(error){
+    localStorage.removeItem(key);
+    toast("Not enough browser storage to duplicate this chat. The original is unchanged.");return;
+  }
+  if(kind==="group")groups=next;else if(kind==="workflow")workflows=next;else agents=next;
+  currentId=id;
+  try{store.cur=id;store.kind=kind;}catch(error){/* The copy is saved and remains available in the drawer. */}
+  const draftImages=pendingImages;loadConv();pendingImages=draftImages;renderAttachments();
+  renderAgents();closeAll();toast("Chat duplicated");
+}
+$("#duplicateChatBtn").onclick=duplicateCurrentChat;
 
 /* ---------- Agents & groups drawer ---------- */
 function selectAgent(id){if(controller){toast("Stop the response before switching");return;}currentKind="agent";currentId=id;store.kind="agent";store.cur=id;loadConv();renderAgents();closeAll();}
