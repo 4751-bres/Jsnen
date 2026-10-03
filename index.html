@@ -418,7 +418,7 @@ const store = {
   get cur(){return localStorage.getItem("ds_cur")||""}, set cur(v){localStorage.setItem("ds_cur",v)},
   get kind(){return localStorage.getItem("ds_kind")||"agent"}, set kind(v){localStorage.setItem("ds_kind",v)},
   conv(id){try{return JSON.parse(localStorage.getItem("ds_conv_"+id))||[]}catch(e){return []}},
-  saveConv(id,m){localStorage.setItem("ds_conv_"+id,JSON.stringify(m.slice(-200)))},
+  saveConv(id,m){localStorage.setItem("ds_conv_"+id,JSON.stringify(m))},
   clearConv(id){localStorage.removeItem("ds_conv_"+id)},
 };
 
