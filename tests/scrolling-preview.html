@@ -1,0 +1,72 @@
+<!doctype html><meta charset="utf-8"><title>Long chat rendering checks</title>
+<style>body{margin:0;background:#10151d;color:#eee;font:14px system-ui}pre{white-space:pre-wrap;margin:12px}iframe{width:100%;height:75vh;border:0}</style>
+<pre id="results">Running isolated 2,000-message rendering checks…</pre>
+<iframe id="fixture" sandbox="allow-scripts" title="Isolated test chat"></iframe>
+<script>
+// The iframe has an opaque origin, in-memory storage, and a mock API. No real keys or chats are accessed.
+function seedFixture(){
+  const fixtureData=new Map();
+  const fixtureHistory=Array.from({length:2000},(_,i)=>({role:i%2?'assistant':'user',content:'Message '+i+': '+('A short paragraph for a long conversation. ').repeat(12),...(i%2?{reasoning:('Reasoning kept collapsed. ').repeat(60)}:{})}));
+  fixtureData.set('ds_agents',JSON.stringify([{id:'fixture',name:'Performance fixture',emoji:'💬',prompt:'Test',model:'deepseek-flash',temp:1,think:'off'}]));
+  fixtureData.set('ds_cur','fixture');fixtureData.set('ds_conv_fixture',JSON.stringify(fixtureHistory));
+  fixtureData.set('ds_key','fixture-only');
+  return {getItem:k=>fixtureData.get(k)??null,setItem:(k,v)=>fixtureData.set(k,String(v)),removeItem:k=>fixtureData.delete(k)};
+}
+async function fixtureApi(){
+  const wire=Array.from({length:350},()=> 'data: '+JSON.stringify({choices:[{delta:{content:'word '}}]})+'\n\n').join('')+'data: [DONE]\n\n';
+  return new Response(new ReadableStream({start(c){c.enqueue(new TextEncoder().encode(wire));c.close();}}),{status:200});
+}
+async function verifyFixture(){
+  const checks=[];const check=(name,ok)=>{checks.push({name,ok:!!ok});if(!ok)throw Error(name);};
+  const tick=ms=>new Promise(r=>setTimeout(r,ms));
+  try{
+    await tick(100);
+    const c=document.querySelector('#chat');
+    check('All 2000 messages retained',messages.length===2000);
+    check('Only 40 message rows rendered initially',c.querySelectorAll('.msg').length===40);
+    const originalRow=c.querySelector('.msg'),originalHtml=originalRow.innerHTML;
+    check('Collapsed reasoning has no large text nodes',Array.from(c.querySelectorAll('.think')).every(x=>x.textContent===''));
+    c.scrollTop=0;c.dispatchEvent(new Event('scroll'));
+    const bot=messages.at(-1);bot.streaming=true;
+    for(let i=0;i<100;i++){bot.content+=' next';scheduleStreamPaint(bot);}
+    await tick(100);
+    check('Streaming leaves old rows intact',c.querySelector('.msg')===originalRow&&originalRow.innerHTML===originalHtml);
+    check('Scrolling up stays put during streaming',c.scrollTop<5);
+    check('Latest button appears when reading above',!document.querySelector('#jumpToLatest').hidden);
+    const anchor=originalRow.getBoundingClientRect().top;
+    document.querySelector('.older-messages').click();await tick(30);
+    check('Earlier messages load in a 40-message batch',c.querySelectorAll('.msg').length===80);
+    check('Loading older messages preserves reading position',Math.abs(originalRow.getBoundingClientRect().top-anchor)<8);
+    document.querySelector('#jumpToLatest').click();await tick(30);
+    check('Latest returns to the bottom',c.scrollHeight-c.clientHeight-c.scrollTop<100);
+    const reasoning=c.querySelector('details');reasoning.open=true;await tick(30);
+    check('Opening reasoning lazily displays it',reasoning.querySelector('.think').textContent.length>0);
+    reasoning.open=false;bot.streaming=false;renderChat();
+    c.scrollTop=0;c.dispatchEvent(new Event('scroll'));
+    let heartbeat=0;const timer=setInterval(()=>heartbeat++,0);
+    const began=performance.now();
+    const result=await streamCompletion(curAgent(),buildApiMessages(curAgent()));
+    clearInterval(timer);
+    check('Buffered SSE yields so UI tasks can run',heartbeat>0);
+    check('Every streamed token is retained',result.bot.content==='word '.repeat(350));
+    check('A complete response does not force scroll to bottom',c.scrollTop<5);
+    check('All history still reaches the API context',buildApiMessages(curAgent()).length===2002);
+    check('Rendered message controls still include copy and edit',c.querySelectorAll('.msg-actions').length===81&&c.querySelector('[aria-label="Copy message"]')&&c.querySelector('[aria-label="Edit message"]'));
+    const stoppedReply=streamCompletion(curAgent(),buildApiMessages(curAgent()));
+    setTimeout(()=>controller?.abort(),0);
+    const stopped=await stoppedReply;
+    check('Stop interrupts a buffered response before all tokens render',stopped.aborted&&stopped.bot.content.length<'word '.repeat(350).length);
+    parent.postMessage({fixtureResult:{passed:checks.length,checks,streamMilliseconds:Math.round(performance.now()-began),heartbeat,retainedMessages:messages.length,renderedMessages:c.querySelectorAll('.msg').length}},'*');
+  }catch(error){parent.postMessage({fixtureResult:{checks,error:String(error)}},'*');}
+}
+window.addEventListener('message',event=>{
+  if(event.source!==document.querySelector('#fixture').contentWindow||!event.data?.fixtureResult)return;
+  document.querySelector('#results').textContent=JSON.stringify(event.data.fixtureResult,null,2);
+});
+fetch('../index.html').then(r=>r.text()).then(html=>{
+  const prelude='const localStorage=('+seedFixture.toString()+')(); const fetch='+fixtureApi.toString()+';\n';
+  html=html.replace('<script>','<script>'+prelude);
+  html=html.replace('</scr'+'ipt>','\n('+verifyFixture.toString()+')();\n</scr'+'ipt>');
+  document.querySelector('#fixture').srcdoc=html;
+}).catch(error=>document.querySelector('#results').textContent=String(error));
+</script>

@@ -11,7 +11,7 @@ test('single-agent image-only message sends real image_url blocks to fetch',asyn
   let payload;
   const ctx=context({AbortController,TextDecoder,store:{k:'test',base:'https://example.invalid',saveConv(){}},
     currentId:'a',messages:[{role:'user',content:'',images:[image]}],controller:null,
-    isGroup:()=>false,renderChat(){},renderResponders(){},setSending(){},toast(){},
+    isGroup:()=>false,renderChat(){},scheduleStreamPaint(){},cancelStreamPaint(){},renderResponders(){},setSending(){},toast(){},
     fetch:async(url,options)=>{payload=JSON.parse(options.body);return {ok:true,body:{getReader:()=>({read:async()=>({done:true})})}};}});
   const functions=source.slice(source.indexOf('function buildApiMessages('),source.indexOf('/* ---------- Stream one response from a specific agent'));
   vm.runInContext(core+'\n'+functions,ctx);
