@@ -1132,12 +1132,16 @@ function renderAgents(){
 }
 
 /* ---------- Agent editor ---------- */
+// New agents always reason at least a little; existing agents may still be set to Off.
+const NEW_AGENT_MIN_THINK="low";
+function newAgentThink(value){return !value||value==="off"?NEW_AGENT_MIN_THINK:value;}
 function openEditor(id){
   editingId=id;
-  const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:"off"};
+  const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
   $("#edModel").value=a.model;$("#edThink").value=a.think||"off";
+  const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);
   $("#delAgent").style.display=(id&&agents.length>1)?"":"none";
   $("#dupAgent").style.display=id?"":"none";
@@ -1150,7 +1154,7 @@ $("#saveAgent").onclick=()=>{
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
     model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
-  else{const a={id:uid(),...data};agents.push(a);currentId=a.id;store.cur=a.id;}
+  else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
 };
 $("#dupAgent").onclick=()=>{
@@ -1158,7 +1162,7 @@ $("#dupAgent").onclick=()=>{
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
     temp:parseFloat($("#edTemp").value),think:$("#edThink").value};
-  const a={id:uid(),...data};agents.push(a);store.agents=agents;
+  const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
 };
