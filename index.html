@@ -14,18 +14,19 @@
 </head>
 <body>
   <header>
-    <button class="icon-btn" id="menuBtn" aria-label="Agents">☰</button>
+    <button class="icon-btn" id="menuBtn" aria-label="Open chats"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <span class="h-avatar" id="hAvatar" aria-hidden="true">💬</span>
     <div class="title">
       <div class="name" id="hAgent">DeepSeek Agents</div>
-      <div class="sub" id="hSub">Tap ☰ to pick an agent</div>
+      <div class="sub" id="hSub">Open the menu to pick an agent</div>
     </div>
-    <button class="icon-btn" id="duplicateChatBtn" aria-label="Duplicate chat" title="Duplicate chat, including messages">⧉</button>
-    <button class="icon-btn" id="clearBtn" aria-label="Clear chat">🧹</button>
-    <button class="icon-btn" id="setBtn" aria-label="Settings">⚙️</button>
+    <button class="icon-btn" id="duplicateChatBtn" aria-label="Duplicate chat" title="Duplicate chat, including messages"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button>
+    <button class="icon-btn" id="clearBtn" aria-label="Clear chat" title="Clear chat"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M6.5 16.5l8-8a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L13 18H8z"/></svg></button>
+    <button class="icon-btn" id="setBtn" aria-label="Settings" title="Settings"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
   </header>
 
   <main id="chat"></main>
-  <button id="jumpToLatest" hidden>↓ Latest</button>
+  <button id="jumpToLatest" type="button" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>Latest</button>
 
   <div class="workflow-progress" id="workflowProgress"></div>
   <div class="responders" id="responders"></div>
@@ -35,8 +36,8 @@
     <div class="cost-note" id="workflowCostNote"></div>
     <textarea class="field" id="reviewGuidance" placeholder="Optional guidance for the final synthesis…"></textarea>
     <div class="workflow-action-row">
-      <button class="btn primary" id="approveSynthesis">Approve &amp; synthesize</button>
-      <button class="btn primary" id="resumeWorkflow">Resume workflow</button>
+      <button class="btn primary" id="approveSynthesis"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Approve &amp; synthesize</button>
+      <button class="btn primary" id="resumeWorkflow"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5l10 6.5-10 6.5z"/></svg>Resume workflow</button>
       <button class="btn danger" id="cancelWorkflow">Cancel run</button>
     </div>
   </div>
@@ -44,19 +45,19 @@
   <div class="attachments" id="attachments" aria-live="polite"></div>
   <input id="imageFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
   <div class="composer">
-    <button id="attachBtn" aria-label="Attach images" title="Attach images or paste a screenshot">📎</button>
+    <button id="attachBtn" aria-label="Attach images" title="Attach images or paste a screenshot"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2a3.3 3.3 0 0 1 4.7 4.7l-8.2 8.2a1.7 1.7 0 0 1-2.4-2.4l7.5-7.5"/></svg></button>
     <textarea id="input" rows="1" placeholder="Message your agent…" enterkeyhint="send"></textarea>
-    <button class="send" id="sendBtn">➤</button>
+    <button class="send" id="sendBtn" aria-label="Send message"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
   </div>
 
-  <div class="status" id="toast"></div>
+  <div class="status" id="toast" role="status" aria-live="polite"></div>
 
   <!-- Scrim -->
   <div class="scrim" id="scrim"></div>
 
   <!-- Agents drawer -->
-  <aside class="sheet drawer" id="drawer">
-    <h3>🤖 Agents, Groups &amp; Workflows</h3>
+  <aside class="sheet drawer" id="drawer" aria-label="Chats">
+    <h3><span class="grow">Chats</span><button class="icon-btn close-drawer" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
     <div class="drawer-tools">
       <input class="field" id="drawerSearch" type="search" placeholder="Search names and messages…" autocomplete="off" />
       <select class="field" id="drawerSort" aria-label="Sort">
@@ -66,23 +67,18 @@
       </select>
     </div>
     <div class="body">
-      <div class="sect-label">Workflows</div>
+      <div class="sect"><span class="sect-label">Workflows</span><button class="icon-btn" id="addWorkflow" type="button" aria-label="New workflow" title="New workflow"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
       <div id="workflowList"></div>
-      <button class="add-agent" id="addWorkflow">＋ New workflow</button>
-      <div class="sect-label" style="margin-top:18px">Group chats</div>
+      <div class="sect"><span class="sect-label">Group chats</span><button class="icon-btn" id="addGroup" type="button" aria-label="New group" title="New group"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
       <div id="groupList"></div>
-      <button class="add-agent" id="addGroup">＋ New group</button>
-      <div class="sect-label" style="margin-top:18px">Single agents</div>
+      <div class="sect"><span class="sect-label">Single agents</span><button class="icon-btn" id="addAgent" type="button" aria-label="New agent" title="New agent"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
       <div id="agentList"></div>
-    </div>
-    <div class="foot" style="display:block">
-      <button class="add-agent" id="addAgent">＋ New agent</button>
     </div>
   </aside>
 
   <!-- Settings sheet -->
   <section class="sheet bottom" id="settings">
-    <h3>⚙️ Settings <span class="pill" id="connPill">not set</span></h3>
+    <h3><span class="grow">Settings</span><span class="pill" id="connPill">not set</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
     <div class="body">
       <label>DeepSeek API key</label>
       <input class="field" id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
@@ -101,6 +97,13 @@
       </datalist>
       <div class="hint"><b>deepseek-flash</b> = V4.1 Flash with image understanding. <b>deepseek-v4-pro</b> = older text-only Pro. Type any model name your key can access.</div>
 
+      <label for="themeSelect">Theme</label>
+      <select class="field" id="themeSelect">
+        <option value="">Match this device</option>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+
       <label for="ctxLimit">History sent to the AI</label>
       <select class="field" id="ctxLimit">
         <option value="0">Unlimited — entire conversation</option>
@@ -113,29 +116,29 @@
 
       <label>Backup</label>
       <div class="row2">
-        <button class="btn" id="exportBackup" type="button">⬇ Export</button>
-        <button class="btn" id="importBackup" type="button">⬆ Import</button>
+        <button class="btn" id="exportBackup" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
+        <button class="btn" id="importBackup" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg>Import</button>
       </div>
       <input id="backupFile" type="file" accept="application/json,.json" hidden />
-      <button class="btn" id="exportChat" type="button" style="width:100%;margin-top:8px">⬇ Export current chat as Markdown</button>
+      <button class="btn ghost" id="exportChat" type="button" style="width:100%;margin-top:8px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>Export current chat as Markdown</button>
       <div class="hint">Saves agents, groups, workflows, and every conversation (with images) to a JSON file. Your API key is never included. Import replaces everything except the key.</div>
 
       <div style="margin-top:14px" class="kv"><span>Storage used</span><b id="storageInfo">…</b></div>
       <div class="kv"><span>Last backup</span><b id="lastBackup">never</b></div>
-      <button class="btn" id="checkKey" type="button" style="width:100%;margin-top:12px">Check key &amp; balance</button>
+      <button class="btn" id="checkKey" type="button" style="width:100%;margin-top:12px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L19 4M16 7l3 3"/></svg>Check key &amp; balance</button>
       <div class="hint" id="keyStatus" aria-live="polite"></div>
 
-      <div style="margin-top:14px" class="kv"><span>Account balance / usage</span><b><a href="https://platform.deepseek.com/usage" target="_blank" rel="noopener" style="color:var(--accent)">open ↗</a></b></div>
+      <div style="margin-top:14px" class="kv"><span>Account balance / usage</span><b><a href="https://platform.deepseek.com/usage" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px">Open <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg></a></b></div>
     </div>
     <div class="foot">
       <button class="btn primary" id="saveSettings">Save</button>
-      <button class="btn ghost" data-close>Close</button>
+      <button class="btn" data-close>Close</button>
     </div>
   </section>
 
   <!-- Message text editor -->
   <section class="sheet bottom" id="messageEditor">
-    <h3>Edit message</h3>
+    <h3><span class="grow">Edit message</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
     <div class="body">
       <label for="messageEditText">Message text</label>
       <textarea class="field" id="messageEditText" rows="8"></textarea>
@@ -149,7 +152,7 @@
 
   <!-- Agent editor sheet -->
   <section class="sheet bottom" id="editor">
-    <h3 id="edTitle">New agent</h3>
+    <h3><span class="grow" id="edTitle">New agent</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
     <div class="body">
       <div class="row2">
         <div style="flex:0 0 84px">
@@ -191,7 +194,7 @@
         <option value="131072">Very long — up to 128K tokens</option>
         <option value="max">Maximum — up to 384K tokens</option>
       </select>
-      <div class="hint">Only an upper bound: replies are billed for what is actually written. If a reply still stops early, ⏵ continues it.</div>
+      <div class="hint">Only an upper bound: replies are billed for what is actually written. If a reply still stops early, Continue finishes it.</div>
       <label for="edHistory">History sent to the AI</label>
       <select class="field" id="edHistory">
         <option value="">Use Settings default</option>
@@ -203,7 +206,7 @@
     </div>
     <div class="foot" style="flex-wrap:wrap">
       <button class="btn primary" id="saveAgent">Save agent</button>
-      <button class="btn" id="dupAgent" style="flex:0 0 auto">⧉ Duplicate</button>
+      <button class="btn" id="dupAgent" style="flex:0 0 auto"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Duplicate</button>
       <button class="btn danger" id="delAgent" style="flex:0 0 auto">Delete</button>
       <button class="btn ghost" data-close style="flex:0 0 auto">Close</button>
     </div>
@@ -211,7 +214,7 @@
 
   <!-- Group editor sheet -->
   <section class="sheet bottom" id="groupEditor">
-    <h3 id="grTitle">New group</h3>
+    <h3><span class="grow" id="grTitle">New group</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
     <div class="body">
       <div class="row2">
         <div style="flex:0 0 84px">
@@ -225,7 +228,7 @@
       </div>
       <label>Members — tap to add or remove; ↑ ↓ set the speaking order</label>
       <div id="grMembers"></div>
-      <label for="grRounds">Discussion rounds (💬 Discuss)</label>
+      <label for="grRounds">Discussion rounds (used by Discuss)</label>
       <input class="field" id="grRounds" type="number" min="1" max="10" step="1" value="2" />
       <label for="grHistory">History sent to the AI</label>
       <select class="field" id="grHistory">
@@ -235,7 +238,7 @@
         <option value="50">Last 50 messages</option>
         <option value="20">Last 20 messages</option>
       </select>
-      <label class="toggle-row"><input id="grRoleplay" type="checkbox" /> <span>🎭 Roleplay mode</span></label>
+      <label class="toggle-row"><input id="grRoleplay" type="checkbox" /> <span>Roleplay mode</span></label>
       <div id="grRpFields" style="display:none">
         <label>Setting / scenario</label>
         <textarea class="field" id="grRpSetting" placeholder="World, tone, premise, and important facts"></textarea>
@@ -250,7 +253,7 @@
         <div class="sect-label">AI characters</div>
         <div id="grRpCharacters"></div>
       </div>
-      <div class="hint">In a group chat, send a message then tap who replies, write @Name to pick directly, use 🎯 Auto to let a quick model call choose, or 💬 Discuss to let members reply to each other for the set number of rounds. Each agent sees the others' replies (labelled by name).</div>
+      <div class="hint">In a group chat, send a message then tap who replies, write @Name to pick directly, use Auto to let a quick model call choose, or Discuss to let members reply to each other for the set number of rounds. Each agent sees the others' replies (labelled by name).</div>
     </div>
     <div class="foot">
       <button class="btn primary" id="saveGroup">Save group</button>
@@ -261,7 +264,7 @@
 
   <!-- Workflow editor sheet -->
   <section class="sheet bottom" id="workflowEditor">
-    <h3 id="wfTitle">New workflow</h3>
+    <h3><span class="grow" id="wfTitle">New workflow</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
     <div class="body">
       <div class="row2">
         <div style="flex:0 0 84px">
@@ -291,7 +294,7 @@
       <div class="hint">For workflows this is the earlier conversation each role sees with a new task. Every role receives it, so large histories multiply cost.</div>
       <label>Roles — 2 to 5, executed from top to bottom</label>
       <div id="wfRoles"></div>
-      <button class="add-agent" id="addWfRole">＋ Add role</button>
+      <button class="add-agent" id="addWfRole"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add role</button>
       <div class="hint">Work roles create solutions. Critique roles challenge them. The final role must be the only synthesizer.</div>
     </div>
     <div class="foot" style="flex-wrap:wrap">

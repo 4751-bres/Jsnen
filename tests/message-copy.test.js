@@ -9,7 +9,7 @@ function setup(writeText,fallback=true){
   const document={activeElement:{focus(){state.focused=true;}},getSelection:()=>null,
     createElement:()=>({style:{},setAttribute(k,v){this[k]=v;},select(){},remove(){state.removed=true;}}),
     body:{appendChild(el){state.field=el;}},execCommand(cmd){assert.equal(cmd,'copy');return fallback;}};
-  const ctx=vm.createContext({document,navigator:{clipboard:writeText?{writeText}:undefined},toast:t=>state.notices.push(t),setTimeout:()=>{}});
+  const ctx=vm.createContext({icon:name=>'<svg data-icon="'+name+'"></svg>',document,navigator:{clipboard:writeText?{writeText}:undefined},toast:t=>state.notices.push(t),setTimeout:()=>{}});
   vm.runInContext(source.slice(source.indexOf('/* roleplay-core:start */'),source.indexOf('/* roleplay-core:end */'))+'\n'+helpers,ctx);return {ctx,state};
 }
 test('copy preserves exact text and markdown',async()=>{
@@ -40,7 +40,7 @@ test('buttons copy only message content for both roles, not reasoning or labels'
   for(const role of ['user','assistant']){
     const button=ctx.messageCopyButton({role,content:'*An action*',reasoning:'private reasoning',agentName:'Elise'});
     assert.equal(button['aria-label'],'Copy message');assert.equal(button.disabled,false);
-    await button.onclick();assert.equal(button.textContent,'✓');
+    await button.onclick();assert.equal(button['aria-label'],'Message copied');
   }
   assert.deepEqual(copied,['*An action*','*An action*']);assert.equal(state.notices.length,2);
   assert.equal(ctx.messageCopyButton({content:'',images:[{}]}).disabled,true);

@@ -1,5 +1,31 @@
 "use strict";
 const $ = s => document.querySelector(s);
+// Line icons (24px grid, stroke = currentColor); styled by svg.i in styles.css.
+const ICONS={
+  copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  regen:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/>',
+  play:'<path d="M8 5.5l10 6.5-10 6.5z"/>',
+  pencil:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  chevL:'<path d="M15 6l-6 6 6 6"/>',chevR:'<path d="M9 6l6 6-6 6"/>',
+  up:'<path d="M12 19V5M6 11l6-6 6 6"/>',down:'<path d="M12 5v14M6 13l6 6 6-6"/>',
+  send:'<path d="M12 19V5M6 11l6-6 6 6"/>',stop:'<rect x="7" y="7" width="10" height="10" rx="2"/>',
+  pin:'<path d="M9 4h6M10 4v6l-3 4h10l-3-4V4M12 14v6"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 20a6 6 0 0 0-2.6-5"/>',
+  target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
+  discuss:'<path d="M4 5h11v8H9l-4 3v-3H4z"/><path d="M18 9h2v8h-1v3l-4-3h-4v-1"/>',
+  book:'<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/>',
+  skip:'<path d="M5 5.5l9 6.5-9 6.5z"/><path d="M18 5v14"/>'
+};
+function icon(name){return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'+(ICONS[name]||"")+'</svg>';}
+// Theme: "" follows the device; "dark"/"light" force one. Applied before first paint of the chat.
+function applyTheme(value){
+  const root=document.documentElement;
+  if(value)root.dataset.theme=value;else delete root.dataset.theme;
+  const light=value==="light"||(!value&&matchMedia("(prefers-color-scheme: light)").matches);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content",light?"#f5f6fa":"#0b0f17");
+}
+try{applyTheme(localStorage.getItem("ds_theme")||"");}catch(e){applyTheme("");}
 const store = {
   get k(){return localStorage.getItem("ds_key")||""},        set k(v){localStorage.setItem("ds_key",v)},
   get base(){return localStorage.getItem("ds_base")||"https://api.deepseek.com"}, set base(v){localStorage.setItem("ds_base",v)},
@@ -174,9 +200,12 @@ function isWorkflow(){return currentKind==="workflow" && !!curWorkflow();}
 function conversationTokens(list){return (list||[]).reduce((n,m)=>n+(m.usage?(m.usage.prompt||0)+(m.usage.completion||0):0),0);}
 function refreshHeader(){
   const used=conversationTokens(messages),usedText=used?" · "+formatTokens(used)+" tokens":"";
+  const item=isWorkflow()?curWorkflow():isGroup()?curGroup():curAgent();
+  document.body.dataset.mood=isWorkflow()?"workflow":isGroup()?(isRoleplayGroup(curGroup())?"fiction":"social"):"work";
+  $("#hAvatar").textContent=item?.emoji||"💬";
   if(isWorkflow()){
     const w=curWorkflow();
-    $("#hAgent").textContent=w.emoji+" "+w.name;
+    $("#hAgent").textContent=w.name;
     if(currentRun&&["running","synthesizing"].includes(currentRun.status)){
       const role=w.roles[currentRun.nextRoleIndex];
       $("#hSub").textContent=(role?role.name:"Finishing")+" · "+Math.min(currentRun.nextRoleIndex+1,w.roles.length)+" of "+w.roles.length;
@@ -186,12 +215,12 @@ function refreshHeader(){
     $("#input").placeholder="Give this workflow a task…";
   }else if(isGroup()){
     const g=curGroup(),n=groupMembers(g).length,roleplay=isRoleplayGroup(g);
-    $("#hAgent").textContent=g.emoji+" "+g.name;
-    $("#hSub").textContent=(roleplay?"🎭 You are "+(g.roleplay.user.name||"your character")+" · choose who replies":n+" agent"+(n===1?"":"s")+" · tap a name below to reply")+usedText;
-    $("#input").placeholder=roleplay?"Continue the scene… @name or choose who replies":"Message the group… @name or tap who replies";
+    $("#hAgent").textContent=g.name;
+    $("#hSub").textContent=(roleplay?"Roleplay · You are "+(g.roleplay.user.name||"your character"):n+" agent"+(n===1?"":"s")+" · tap a name below to reply")+usedText;
+    $("#input").placeholder=roleplay?"Continue the scene, or @name…":"Message the group, or @name…";
   }else{
     const a=curAgent();
-    $("#hAgent").textContent=a.emoji+" "+a.name;
+    $("#hAgent").textContent=a.name;
     $("#hSub").textContent=(a.model||store.model)+" · temp "+a.temp+usedText;
     $("#input").placeholder="Message your agent…";
   }
@@ -208,25 +237,25 @@ function renderResponders(){
     // While several agents reply in turn, show progress and allow skipping just the current speaker.
     sequence.list.forEach((a,i)=>{
       if(i<sequence.index)return;
-      const b=chip('<span>'+esc(a.emoji)+'</span><span>'+esc(memberLabel(group,a))+'</span>'+(i===sequence.index?'<small>replying</small>':i===sequence.index+1?'<small>next</small>':''),i===sequence.index?"speaking":i===sequence.index+1?"next":"",null);
+      const b=chip('<span class="av">'+esc(a.emoji)+'</span><span>'+esc(memberLabel(group,a))+'</span>'+(i===sequence.index?'<small>replying</small>':i===sequence.index+1?'<small>next</small>':''),i===sequence.index?"speaking":i===sequence.index+1?"next":"",null);
       b.disabled=true;
     });
-    const skip=chip('<span>⏭</span><span>Skip</span>',"all",skipCurrentSpeaker,"Stop only the current speaker and continue");
+    const skip=chip(icon("skip")+'<span>Skip</span>',"all",skipCurrentSpeaker,"Stop only the current speaker and continue");
     skip.disabled=!controller||sequence.picking;
     return;
   }
-  mems.forEach(a=>chip('<span>'+esc(a.emoji)+'</span><span>'+esc(memberLabel(group,a))+'</span>',"",()=>groupRespond(a)));
+  mems.forEach(a=>chip('<span class="av">'+esc(a.emoji)+'</span><span>'+esc(memberLabel(group,a))+'</span>',"",()=>groupRespond(a)));
   // Roleplay groups keep deleted characters' sheets; surface them instead of silently hiding them.
   for(const id of group.members||[]){
     if(agents.some(a=>a.id===id))continue;
-    const b=chip('<span>⚠️</span><span>'+esc(group.roleplay?.characters?.[id]?.name||"Missing character")+' (deleted)</span>',"",null,"This character's agent was deleted. Edit the group to remove or replace it.");
+    const b=chip('<span class="av">⚠️</span><span>'+esc(group.roleplay?.characters?.[id]?.name||"Missing character")+' (deleted)</span>',"deleted",null,"This character's agent was deleted. Edit the group to remove or replace it.");
     b.disabled=true;
   }
   if(mems.length>1){
-    chip(isRoleplayGroup(group)?'<span>🎭</span><span>Continue scene</span>':'<span>🔁</span><span>Everyone</span>',"all",()=>everyoneRespond());
-    chip('<span>🎯</span><span>Auto</span>',"all",()=>autoRespond(),"Let a quick model call pick who should reply next (1 small extra request)");
+    chip(isRoleplayGroup(group)?icon("book")+'<span>Continue scene</span>':icon("users")+'<span>Everyone</span>',"all",()=>everyoneRespond());
+    chip(icon("target")+'<span>Auto</span>',"all",()=>autoRespond(),"Let a quick model call pick who should reply next (1 small extra request)");
     const rounds=groupRounds(group);
-    chip('<span>💬</span><span>Discuss ×'+rounds+'</span>',"all",()=>discussRespond(),"Agents reply to each other for "+rounds+" round"+(rounds===1?"":"s"));
+    chip(icon("discuss")+'<span>Discuss ×'+rounds+'</span>',"all",()=>discussRespond(),"Agents reply to each other for "+rounds+" round"+(rounds===1?"":"s"));
   }
 }
 
@@ -293,7 +322,7 @@ async function regenerateMessage(message){
   const index=messages.indexOf(message);if(index<0)return;
   const agent=isGroup()?agents.find(a=>a.id===message.agentId):curAgent();
   if(!agent){toast("The original agent is no longer available.");return;}
-  if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
+  if(!store.k){toast("Add your API key in Settings");$("#setBtn").click();return;}
   const previous=messages,branch=prepareRegeneration(messages,index);
   const meta={versions:branch.versions,versionIndex:branch.versionIndex};
   for(const key of ["agentId","agentName","agentEmoji","characterName"])if(message[key])meta[key]=message[key];
@@ -318,14 +347,14 @@ async function copyMessageText(text){
   finally{field.remove();focused?.focus({preventScroll:true});if(selection){selection.removeAllRanges();ranges.forEach(r=>selection.addRange(r));}}
 }
 function messageCopyButton(message){
-  const button=document.createElement("button");button.type="button";button.className="copy-msg";button.textContent="⧉";
+  const button=document.createElement("button");button.type="button";button.className="copy-msg";button.innerHTML=icon("copy");
   button.disabled=!message.content;
   button.title=message.content?"Copy message":"No message text to copy";
   button.setAttribute("aria-label",button.title);
   button.onclick=async()=>{
     const copied=await copyMessageText(message.role==="assistant"?cleanCharacterReply(message.content):message.content||"");
     toast(copied?"Message copied":"Could not copy. Select the text and copy manually.");
-    if(copied){button.textContent="✓";button.setAttribute("aria-label","Message copied");setTimeout(()=>{button.textContent="⧉";button.setAttribute("aria-label",button.title);},1800);}
+    if(copied){button.innerHTML=icon("check");button.setAttribute("aria-label","Message copied");setTimeout(()=>{button.innerHTML=icon("copy");button.setAttribute("aria-label",button.title);},1800);}
   };
   return button;
 }
@@ -338,7 +367,7 @@ $("#chat").addEventListener("scroll",()=>{chatFollowing=isChatNearBottom($("#cha
 $("#chat").addEventListener("click",async e=>{
   const button=e.target.closest(".code-copy");if(!button)return;
   const code=button.parentElement.querySelector("code")?.textContent||"";
-  const ok=await copyMessageText(code);button.textContent=ok?"Copied":"Failed";setTimeout(()=>{button.textContent="Copy";},1500);
+  const ok=await copyMessageText(code);button.innerHTML=icon(ok?"check":"x")+(ok?"Copied":"Failed");setTimeout(()=>{button.innerHTML=icon("copy")+"Copy";},1500);
 });
 $("#jumpToLatest").onclick=()=>{chatFollowing=true;$("#chat").scrollTop=$("#chat").scrollHeight;updateLatestButton();};
 function loadEarlierMessages(){
@@ -356,7 +385,7 @@ function createReasoning(m,d){
     if(!details.isConnected)return;
     if(details.open){expandedReasoning.add(m);text.textContent=m.reasoning||"";}else expandedReasoning.delete(m);
   });
-  d.prepend(details);d._reasoning={details,summary,text};
+  d.insertBefore(details,d._body);d._reasoning={details,summary,text};
 }
 function updateChatRow(m,d){
   if(m.reasoning&&!d._reasoning)createReasoning(m,d);
@@ -369,7 +398,7 @@ function updateChatRow(m,d){
   if(d._contentValue!==m.content||d._streaming!==!!m.streaming){
     d._text.innerHTML=md(m.role==="assistant"?cleanCharacterReply(m.content):m.content||"")+(m.streaming?'<span class="cursor"></span>':"");
     d._contentValue=m.content;d._streaming=!!m.streaming;
-    if(!m.streaming)for(const pre of d._text.querySelectorAll("pre")){const b=document.createElement("button");b.type="button";b.className="code-copy";b.textContent="Copy";pre.prepend(b);}
+    if(!m.streaming)for(const pre of d._text.querySelectorAll("pre")){const b=document.createElement("button");b.type="button";b.className="code-copy";b.innerHTML=icon("copy")+"Copy";b.setAttribute("aria-label","Copy code");pre.prepend(b);}
   }
   d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
   if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
@@ -377,6 +406,7 @@ function updateChatRow(m,d){
   const meta=[messageTime(m.at),note,m.usage&&formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+" out"].filter(Boolean).join(" · ");
   if(d._continue)d._continue.hidden=!(m.truncated&&!m.streaming&&messages.at(-1)===m);
   if(d._meta.textContent!==meta){d._meta.textContent=meta;d._meta.classList.toggle("warn",!!note);}
+  d._metaRow.hidden=!meta&&!m.edited;
   d._copy.disabled=!m.content;d._copy.title=m.content?"Copy message":"No message text to copy";
   d._copy.setAttribute("aria-label",d._copy.title);
   for(const button of d.querySelectorAll("[data-chat-action]"))button.disabled=!!controller||!!m.streaming||button.dataset.limitDisabled==="true";
@@ -402,9 +432,9 @@ function renderChat(){
   }
   if(chatVisibleStart>=messages.length)chatVisibleStart=Math.max(0,messages.length-CHAT_BATCH);
   if(!messages.length){
-    const title=isWorkflow()?(curWorkflow().emoji+" "+curWorkflow().name):isGroup()?(curGroup().emoji+" "+curGroup().name):(curAgent().emoji+" "+curAgent().name);
+    const title=!store.k?"Add your API key to start":isWorkflow()?curWorkflow().name:isGroup()?curGroup().name:curAgent().name;
     const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
-    const sub = !store.k ? "⚠️ Add your DeepSeek API key in ⚙️ Settings to begin."
+    const sub = !store.k ? "Add your DeepSeek API key in Settings to begin. It stays in this browser and is only sent to DeepSeek."
       : isWorkflow() ? "Describe a task to run its work, critique, and synthesis roles."
       : roleplay ? ((roleplay.opening?esc(roleplay.opening)+"<br><br>":"")+"<b>You play as "+esc(roleplay.user.name||"your character")+".</b>")
       : isGroup() ? "Send a message, then tap an agent below to have it reply."
@@ -417,11 +447,11 @@ function renderChat(){
   const opening=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.opening:"";
   if(opening&&chatVisibleStart===0){
     const card=c.querySelector(".scene-card")||document.createElement("div");card.className="scene-card";
-    if(card._text!==opening){card.innerHTML='<span class="who">🎬 Opening scene</span>'+md(opening);card._text=opening;}
+    if(card._text!==opening){card.innerHTML='<div class="who">'+icon("book")+'Opening scene</div>'+md(opening);card._text=opening;}
     nodes.push(card);
   }
   if(chatVisibleStart>0){
-    const older=c.querySelector(".older-messages")||document.createElement("button");older.className="older-messages";older.textContent="↑ Load earlier messages ("+chatVisibleStart+")";older.onclick=loadEarlierMessages;nodes.push(older);
+    const older=c.querySelector(".older-messages")||document.createElement("button");older.className="older-messages";older.innerHTML=icon("up")+"Load earlier messages ("+chatVisibleStart+")";older.onclick=loadEarlierMessages;nodes.push(older);
   }
   for(const m of messages.slice(chatVisibleStart)){
     if(m.role==="system")continue;
@@ -437,43 +467,57 @@ function renderChat(){
   if(chatFollowing)c.scrollTop=c.scrollHeight;
   updateLatestButton();
 }
+// Speaker line above AI replies: avatar tile, name in the mood colour, optional secondary name.
+function whoLabel(m){
+  if(m.role==="user")return null;
+  let name,sub="",cls="who";
+  if(m.workflowRoleName){name=m.workflowRoleName;sub=m.agentName||"";cls+=" role";}
+  else if(m.characterName){name=m.characterName;sub=m.agentName&&m.agentName!==m.characterName?m.agentName:"";}
+  else if(m.agentName)name=m.agentName;
+  else return null;
+  const el=document.createElement("div");el.className=cls;
+  el.innerHTML='<span class="av">'+esc(m.agentEmoji||"🤖")+'</span><span class="who-name">'+esc(name)+'</span>'+(sub?'<span class="who-sub">'+esc(sub)+'</span>':"");
+  return el;
+}
+function actionButton(name,title,onclick,extraClass){
+  const b=document.createElement("button");b.type="button";b.className="copy-msg"+(extraClass?" "+extraClass:"");
+  b.innerHTML=icon(name);b.title=title;b.setAttribute("aria-label",title);b.onclick=onclick;return b;
+}
 function createChatRow(m){
     const d=document.createElement("div");
     d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
     if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
-    let html="";
-    if(m.role!=="user"&&m.workflowRoleName)html+='<span class="who role">'+esc(m.workflowRoleName+" · "+(m.agentEmoji||"🤖")+" "+(m.agentName||"Agent"))+'</span>';
-    else if(m.role!=="user"&&m.characterName)html+='<span class="who">'+esc(m.characterName+" · "+(m.agentEmoji||"🤖")+" "+(m.agentName||"Agent"))+'</span>';
-    else if(m.role!=="user"&&m.agentName)html+='<span class="who">'+esc((m.agentEmoji||"🤖")+" "+m.agentName)+'</span>';
-    d.innerHTML=html;
-    d._text=document.createElement("div");d._text.className="message-text";d.appendChild(d._text);
+    const who=whoLabel(m);if(who)d.appendChild(who);
+    d._body=document.createElement("div");d._body.className="msg-body";
+    d._text=document.createElement("div");d._text.className="message-text";d._body.appendChild(d._text);
     for(const image of m.images||[]){
       if(!/^data:image\/(jpeg|png|webp|gif);base64,/.test(image.url||""))continue;
-      const img=document.createElement("img");img.className="chat-image";img.loading="lazy";img.decoding="async";img.src=image.url;img.alt=image.name||"Attached image";d.appendChild(img);
+      const img=document.createElement("img");img.className="chat-image";img.loading="lazy";img.decoding="async";img.src=image.url;img.alt=image.name||"Attached image";d._body.appendChild(img);
     }
+    d.appendChild(d._body);
     if(m.role!=="user"&&m.workflowRoleId&&currentRun&&["review","stopped"].includes(currentRun.status)&&m.runId===currentRun.id&&!m.streaming){
-      const retry=document.createElement("button");retry.className="retry-role";retry.textContent="↻ Retry this role";
+      const retry=document.createElement("button");retry.type="button";retry.className="retry-role";retry.innerHTML=icon("regen")+"Retry this role";
       retry.onclick=()=>retryRoleFromUi(m.workflowRoleId);d.appendChild(retry);
     }
+    d._metaRow=document.createElement("div");d._metaRow.className="msg-meta";
+    if(m.edited){const label=document.createElement("span");label.className="edited-label";label.textContent="edited";d._metaRow.appendChild(label);}
+    d._meta=document.createElement("span");d._meta.className="reply-meta";d._metaRow.appendChild(d._meta);d.appendChild(d._metaRow);
     const actions=document.createElement("div");actions.className="msg-actions";
-    if(m.edited){const label=document.createElement("span");label.className="edited-label";label.textContent="edited";actions.appendChild(label);}
     if(!isWorkflow()){
       if(m.versions?.length>1){
         const selected=m.versionIndex||0;
-        const previous=document.createElement("button");previous.type="button";previous.className="copy-msg";previous.textContent="‹";previous.title="Previous message version";previous.setAttribute("aria-label",previous.title);previous.disabled=!!controller||!!m.streaming||selected===0;previous.onclick=()=>selectMessageVersion(m,selected-1);
+        const previous=actionButton("chevL","Previous message version",()=>selectMessageVersion(m,selected-1));previous.disabled=!!controller||!!m.streaming||selected===0;
         const count=document.createElement("span");count.className="version-count";count.textContent=(selected+1)+" / "+m.versions.length;
-        const next=document.createElement("button");next.type="button";next.className="copy-msg";next.textContent="›";next.title="Next message version";next.setAttribute("aria-label",next.title);next.disabled=!!controller||!!m.streaming||selected===m.versions.length-1;next.onclick=()=>selectMessageVersion(m,selected+1);
+        const next=actionButton("chevR","Next message version",()=>selectMessageVersion(m,selected+1));next.disabled=!!controller||!!m.streaming||selected===m.versions.length-1;
         actions.append(previous,count,next);
       }
       if(m.role==="assistant"){
-        const regenerate=document.createElement("button");regenerate.type="button";regenerate.className="copy-msg";regenerate.textContent="↻";regenerate.title="Regenerate reply (uses API)";regenerate.setAttribute("aria-label",regenerate.title);regenerate.disabled=!!controller||!!m.streaming;regenerate.onclick=()=>regenerateMessage(m);actions.appendChild(regenerate);
-        const more=document.createElement("button");more.type="button";more.className="copy-msg continue-msg";more.textContent="⏵";more.title="Continue this cut-off reply (uses API)";more.setAttribute("aria-label",more.title);more.hidden=true;more.onclick=()=>continueMessage(m);actions.appendChild(more);d._continue=more;
+        const more=document.createElement("button");more.type="button";more.className="copy-msg continue-msg";more.innerHTML=icon("play")+"Continue";more.title="Continue this cut-off reply (uses API)";more.setAttribute("aria-label",more.title);more.hidden=true;more.onclick=()=>continueMessage(m);actions.appendChild(more);d._continue=more;
+        const regenerate=actionButton("regen","Regenerate reply (uses API)",()=>regenerateMessage(m));regenerate.disabled=!!controller||!!m.streaming;actions.appendChild(regenerate);
       }
-      const edit=document.createElement("button");edit.type="button";edit.className="copy-msg";edit.textContent="✎";edit.title="Edit message";edit.setAttribute("aria-label","Edit message");edit.disabled=!!controller||!!m.streaming;
-      edit.onclick=()=>openMessageEditor(m);actions.appendChild(edit);
+      const edit=actionButton("pencil","Edit message",()=>openMessageEditor(m));edit.disabled=!!controller||!!m.streaming;actions.appendChild(edit);
     }
     for(const button of actions.querySelectorAll("button")){button.dataset.chatAction="true";button.dataset.limitDisabled=String(button.title==="Previous message version"&&(m.versionIndex||0)===0||button.title==="Next message version"&&(m.versionIndex||0)===m.versions.length-1);}
-    d._meta=document.createElement("span");d._meta.className="reply-meta";actions.prepend(d._meta);
     d._copy=messageCopyButton(m);actions.appendChild(d._copy);d.appendChild(actions);
     return d;
 }
@@ -561,8 +605,8 @@ function drawerSection(listEl,kind,items,emptyHint,describe,onSelect,onEdit){
     row.className="agent-row"+(currentKind===kind&&item.id===currentId?" active":"");
     const snippet=hit?'<span class="snippet">'+esc(hit.before)+'<mark>'+esc(hit.match)+'</mark>'+esc(hit.after)+'</span>':"";
     row.innerHTML='<div class="av">'+esc(item.emoji)+'</div><div class="meta"><b>'+esc(item.name)+'</b><small>'+describe(item)+'</small>'+snippet+'</div>'+
-      '<button class="pin'+(pinned?" on":"")+'" aria-label="'+(pinned?"Unpin":"Pin")+'" title="'+(pinned?"Unpin":"Pin to top")+'">📌</button>'+
-      '<button class="edit" aria-label="Edit">✎</button>';
+      '<button class="pin'+(pinned?" on":"")+'" type="button" aria-label="'+(pinned?"Unpin":"Pin to top")+'" aria-pressed="'+pinned+'" title="'+(pinned?"Unpin":"Pin to top")+'">'+icon("pin")+'</button>'+
+      '<button class="edit" type="button" aria-label="Edit '+esc(item.name)+'" title="Edit">'+icon("pencil")+'</button>';
     row.querySelector(".meta").onclick=row.querySelector(".av").onclick=()=>{onSelect(item.id);if(hit)focusMessage(hit.index);};
     row.querySelector(".pin").onclick=e=>{e.stopPropagation();const next=pinned?pins.filter(id=>id!==item.id):[...pins,item.id];try{store.pins=next;}catch(err){}renderAgents();};
     row.querySelector(".edit").onclick=e=>{e.stopPropagation();onEdit(item.id);};
@@ -690,7 +734,7 @@ function collectRoleplayEditor(members){
 function memberRow(id,emoji,title,subtitle,selected){
   const row=document.createElement("div");row.className="mem"+(selected?" sel":"");row.dataset.id=id;
   row.innerHTML='<div class="av">'+esc(emoji)+'</div><div class="meta"><b>'+esc(title)+'</b><small>'+esc(subtitle)+'</small></div>'+
-    '<div class="order"><button type="button" data-move="-1" aria-label="Speak earlier">↑</button><button type="button" data-move="1" aria-label="Speak later">↓</button></div><span class="tick"></span>';
+    '<div class="order"><button type="button" data-move="-1" aria-label="Speak earlier">'+icon("up")+'</button><button type="button" data-move="1" aria-label="Speak later">'+icon("down")+'</button></div><span class="tick"></span>';
   row.onclick=()=>{syncRoleplayCharacterInputs();row.classList.toggle("sel");
     // Newly selected members join the end of the speaking order.
     const wrap=row.parentNode,firstUnselected=[...wrap.children].find(r=>r!==row&&!r.classList.contains("sel"));
@@ -774,7 +818,7 @@ function renderWorkflowRoles(){
     const missingAgent=!agents.some(a=>a.id===r.agentId);
     const agentOptions=(missingAgent?'<option value="'+esc(r.agentId)+'" selected>⚠ Unassigned — deleted agent</option>':'')+agents.map(a=>'<option value="'+esc(a.id)+'"'+(a.id===r.agentId?' selected':'')+'>'+esc(a.emoji+" "+a.name)+'</option>').join("");
     card.innerHTML='<div class="role-head"><b>Role '+(index+1)+'</b><span class="stage-badge">'+esc(stageLabel(r.stage))+'</span><div class="role-actions">'+
-      '<button type="button" data-action="up" aria-label="Move up">↑</button><button type="button" data-action="down" aria-label="Move down">↓</button><button type="button" data-action="remove" aria-label="Remove">×</button></div></div>'+
+      '<button type="button" data-action="up" aria-label="Move up">'+icon("up")+'</button><button type="button" data-action="down" aria-label="Move down">'+icon("down")+'</button><button type="button" data-action="remove" aria-label="Remove role">'+icon("x")+'</button></div></div>'+
       '<div class="role-grid"><div><label>Role name</label><input class="field" data-field="name" value="'+esc(r.name)+'"></div>'+
       '<div><label>Copy settings from chat agent</label><select class="field" data-field="agentId">'+agentOptions+'</select></div></div>'+
       '<label>Stage</label><select class="field" data-field="stage"><option value="work"'+(r.stage==="work"?' selected':'')+'>Work</option><option value="critique"'+(r.stage==="critique"?' selected':'')+'>Critique</option><option value="synthesis"'+(r.stage==="synthesis"?' selected':'')+'>Synthesis</option></select>'+
@@ -907,7 +951,8 @@ function downloadFile(name,text,type){
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
-$("#setBtn").onclick=()=>{refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
+$("#themeSelect").onchange=e=>{applyTheme(e.target.value);try{localStorage.setItem("ds_theme",e.target.value);}catch(err){}};
+$("#setBtn").onclick=()=>{try{$("#themeSelect").value=localStorage.getItem("ds_theme")||"";}catch(e){}refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
 $("#saveSettings").onclick=()=>{
   store.k=$("#apiKey").value.trim();
   store.base=($("#baseUrl").value.trim()||"https://api.deepseek.com").replace(/\/+$/,"");
@@ -964,7 +1009,7 @@ function renderAttachments(){
   pendingImages.forEach((image,index)=>{
     const item=document.createElement("div");item.className="attachment";
     const img=document.createElement("img");img.src=image.url;img.alt=image.name;
-    const remove=document.createElement("button");remove.textContent="×";remove.setAttribute("aria-label","Remove "+image.name);
+    const remove=document.createElement("button");remove.type="button";remove.innerHTML=icon("x");remove.setAttribute("aria-label","Remove "+image.name);
     remove.onclick=()=>{pendingImages.splice(index,1);renderAttachments();};item.append(img,remove);tray.append(item);
   });
   $("#attachBtn").disabled=readingImages||!!controller;
@@ -1028,8 +1073,8 @@ $("#sendBtn").onclick=()=>{ if(controller){controller.abort();} else {send();} }
 
 function setSending(on){
   const b=$("#sendBtn");
-  if(on){b.classList.add("stop");b.textContent="■";}
-  else{b.classList.remove("stop");b.textContent="➤";refreshHeader();}
+  if(on){b.classList.add("stop");b.innerHTML=icon("stop");b.setAttribute("aria-label","Stop generating");}
+  else{b.classList.remove("stop");b.innerHTML=icon("send");b.setAttribute("aria-label","Send message");refreshHeader();}
   renderWorkflowUi();
   renderAttachments();
 }
@@ -1048,7 +1093,7 @@ function buildApiMessages(agent,options={}){
 
 /* ---------- Stream one response ---------- */
 async function streamCompletion(agent,apiMessages,meta={}){
-  if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return false;}
+  if(!store.k){toast("Add your API key in Settings");$("#setBtn").click();return false;}
   if(!modelSeesImages(agent.model||store.model)&&apiMessages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url"))){toast("This chat contains images. Set this agent's model to deepseek-flash for vision.");return false;}
   const convId=currentId,conversationMessages=messages;
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,at:Date.now(),...meta};
@@ -1123,7 +1168,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
   }catch(err){
     bot.streaming=false;
     if(err.name==="AbortError"){aborted=true;bot.content=bot.content||"⏹ stopped.";}
-    // A dropped connection keeps everything already written; ⏵ can finish it.
+    // A dropped connection keeps everything already written; Continue can finish it.
     else if(bot.content){bot.interrupted=String(err.message||"Connection lost");bot.truncated=true;}
     else{bot.error=true;bot.content="⚠️ "+err.message;}
   }finally{
@@ -1295,7 +1340,7 @@ function workflowHistorySnapshot(){
 async function startWorkflowRun(task){
   const workflow=curWorkflow(),errors=validateWorkflow(workflow,agents);
   if(errors.length){toast(workflowErrorText[errors[0].code]||"Fix the workflow configuration");openWorkflowEditor(workflow.id);return;}
-  if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
+  if(!store.k){toast("Add your API key in Settings");$("#setBtn").click();return;}
   if(currentRun&&currentRun.status!=="complete"){toast("Finish or cancel the current run first");return;}
   const images=pendingImages.slice();
   const incompatible=workflow.roles.find(r=>!modelSeesImages(workflowAgent(r,agents)?.model||store.model));
@@ -1384,7 +1429,7 @@ function send(){
   if(controller||readingImages)return;
   const text=input.value.trim();
   if(!text&&!pendingImages.length)return;
-  if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
+  if(!store.k){toast("Add your API key in Settings");$("#setBtn").click();return;}
   if(isWorkflow()){startWorkflowRun(text);return;}
   if(!commitComposer())return;
   if(isGroup()){

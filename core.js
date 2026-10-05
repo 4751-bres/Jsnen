@@ -153,18 +153,18 @@ function friendlyApiError(status,detail){
   if(status===400&&/context|too long|maximum.*tokens|length/i.test(text))
     return "This chat is longer than the model can read at once. Set this chat's “History sent to the AI” to a limit (optionally with summaries) and try again.";
   const known={
-    401:"The API key was rejected. Check it in ⚙️ Settings.",
-    402:"Your DeepSeek balance is empty. Top up at platform.deepseek.com, then tap ↻.",
+    401:"The API key was rejected. Check it in Settings.",
+    402:"Your DeepSeek balance is empty. Top up at platform.deepseek.com, then use Regenerate.",
     422:"The request had an invalid setting (often the model name)."+(text?" Details: "+text:""),
-    429:"Too many requests right now. Wait a moment, then tap ↻.",
-    500:"DeepSeek had a server error. Tap ↻ to try again.",
-    502:"DeepSeek is temporarily unreachable. Tap ↻ to try again.",
-    503:"DeepSeek is overloaded right now. Tap ↻ to try again in a moment.",
-    504:"DeepSeek took too long to respond. Tap ↻ to try again."
+    429:"Too many requests right now. Wait a moment, then use Regenerate.",
+    500:"DeepSeek had a server error. Use Regenerate to try again.",
+    502:"DeepSeek is temporarily unreachable. Use Regenerate to try again.",
+    503:"DeepSeek is overloaded right now. Use Regenerate to try again in a moment.",
+    504:"DeepSeek took too long to respond. Use Regenerate to try again."
   };
   return known[status]||("HTTP "+status+(text?": "+text:""));
 }
-// finish_reason values that end a reply early; all but the content filter can be continued with ⏵.
+// finish_reason values that end a reply early; all but the content filter can be continued with Continue.
 const FINISH_NOTES={
   length:"cut off at length limit",
   insufficient_system_resource:"cut off — provider ran out of capacity",

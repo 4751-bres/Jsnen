@@ -105,6 +105,11 @@ That's it — it now behaves like a native app with its own icon.
 - **Settings extras** — storage used, last backup date, *Check key & balance*, export the current
   chat as Markdown, and a gentle reminder when there is no recent backup.
 - **Formatting** — headings, bullet lists, quotes, and pipe tables render in replies.
+- **Midnight Ink design** — calm dark theme with a matching light theme (⚙️ Settings → Theme:
+  match the device, dark, or light); AI replies read like a document, your turns are bubbles; speaker
+  names are blue for work, teal in groups, amber in roleplay; line icons throughout; on screens
+  ≥ 900 px the chat list becomes a permanent sidebar and sheets open as centred panels. Design
+  canvas and brief: `docs/design-brief.md`.
 - **Backup** — ⚙️ Settings → Export/Import saves or restores agents, groups, workflows, and all chats as JSON. The API key is never exported; import keeps the current key.
 - **Everything local** — your API key and settings live in your browser's `localStorage`;
   conversations live in its IndexedDB (much larger than `localStorage`; existing chats move there
