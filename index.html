@@ -632,8 +632,8 @@ function canEditWorkflowRun(run){
 const THERAPIST_AGENT = {id:"builtin-sexual-health-therapist",emoji:"💬",name:"Sexual-health Therapist",prompt:"sexual problems therapist with 25-year-old girl and married.\n\nYou play Elise, a fictional 25-year-old married woman who discusses sexual health and relationship concerns with warmth and without judgment. The age and marriage describe your character, not the user. You are an AI character, not a licensed clinician; do not claim real professional credentials or legally protected confidentiality. Offer general information rather than diagnoses, and recommend qualified care when appropriate.",model:"deepseek-flash",temp:1.0,think:"off"};
 const DEFAULT_AGENTS = [
   {id:uid(),emoji:"💬",name:"General Assistant",prompt:"You are a helpful, friendly assistant. Answer clearly and concisely.",model:"deepseek-flash",temp:1.0,think:"off"},
-  {id:uid(),emoji:"👨‍💻",name:"Coder",prompt:"You are a senior software engineer. Give correct, runnable code with brief explanations. Prefer modern idioms.",model:"deepseek-v4-pro",temp:0.0,think:"medium"},
-  {id:uid(),emoji:"🧠",name:"Deep Reasoner",prompt:"Think step by step and reason carefully before answering hard problems in math, logic, and analysis.",model:"deepseek-v4-pro",temp:0.6,think:"high"},
+  {id:uid(),emoji:"👨‍💻",name:"Coder",prompt:"You are a senior software engineer. Give correct, runnable code with brief explanations. Prefer modern idioms.",model:"deepseek-flash",temp:0.0,think:"medium"},
+  {id:uid(),emoji:"🧠",name:"Deep Reasoner",prompt:"Think step by step and reason carefully before answering hard problems in math, logic, and analysis.",model:"deepseek-flash",temp:0.6,think:"high"},
   {id:uid(),emoji:"✍️",name:"Writer",prompt:"You are a skilled writer and editor. Improve clarity, tone, and flow. Offer options when useful.",model:"deepseek-flash",temp:1.3,think:"off"},
   {id:uid(),emoji:"🌍",name:"Translator",prompt:"You are an expert translator. Detect the language and translate accurately, preserving tone. If asked, explain nuances.",model:"deepseek-flash",temp:0.3,think:"off"},
   {...THERAPIST_AGENT},
@@ -654,6 +654,22 @@ let groups = normalizeStoredGroups(store.groups,agents);
 let workflows = store.workflows;
 workflows.forEach(w=>separateWorkflowAgents(w,agents));
 try{store.workflows=workflows;}catch(e){/* Keep migrated settings in memory if storage is full. */}
+// User-requested one-time model switch, including independent workflow copies.
+/* flash-migration:start */
+function migrateAllAgentsToFlash(storage,agentList,workflowList){
+  const marker="ds_all_agents_flash_v1";
+  if(storage.getItem(marker))return {agents:agentList,workflows:workflowList};
+  const nextAgents=agentList.map(a=>({...a,model:"deepseek-flash"}));
+  const nextWorkflows=workflowList.map(w=>({...w,roles:w.roles.map(r=>({...r,...(r.agent?{agent:{...r.agent,model:"deepseek-flash"}}:{})}))}));
+  // Mark complete only after every write succeeds; quota failures can retry on reload.
+  storage.setItem("ds_agents",JSON.stringify(nextAgents));
+  storage.setItem("ds_workflows",JSON.stringify(nextWorkflows));
+  storage.setItem("ds_model","deepseek-flash");
+  storage.setItem(marker,"1");
+  return {agents:nextAgents,workflows:nextWorkflows};
+}
+/* flash-migration:end */
+try{const migrated=migrateAllAgentsToFlash(localStorage,agents,workflows);agents=migrated.agents;workflows=migrated.workflows;}catch(e){console.warn("Model update could not be saved; free browser storage and reload.");}
 let currentKind = store.kind;               // "agent" | "group" | "workflow"
 let currentId = store.cur || agents[0].id;
 if(currentKind==="group"){ if(!groups.find(g=>g.id===currentId)){currentKind="agent";currentId=agents[0].id;} }
