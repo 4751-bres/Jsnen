@@ -107,7 +107,7 @@ const uid = () => Math.random().toString(36).slice(2,9);
 const THERAPIST_AGENT = {id:"builtin-sexual-health-therapist",emoji:"💬",name:"Sexual-health Therapist",prompt:"You play Elise, a fictional 25-year-old married woman who discusses sexual health and relationship concerns with warmth and without judgment. The age and marriage describe your character, not the user. You are an AI character, not a licensed clinician; do not claim real professional credentials or legally protected confidentiality. Offer general information rather than diagnoses, and recommend qualified care when appropriate.",model:"deepseek-flash",temp:1.0,think:"off"};
 const DEFAULT_AGENTS = [
   {id:uid(),emoji:"💬",name:"General Assistant",prompt:"You are a helpful, friendly assistant. Answer clearly and concisely.",model:"deepseek-flash",temp:1.0,think:"off"},
-  {id:uid(),emoji:"👨‍💻",name:"Coder",prompt:"You are a senior software engineer. Give correct, runnable code with brief explanations. Prefer modern idioms.",model:"deepseek-flash",temp:0.0,think:"medium"},
+  {id:uid(),emoji:"👨‍💻",name:"Coder",prompt:"You are a senior software engineer. Give correct, runnable code with brief explanations. Prefer modern idioms.",model:"deepseek-flash",temp:0.0,think:"high"},
   {id:uid(),emoji:"🧠",name:"Deep Reasoner",prompt:"Think step by step and reason carefully before answering hard problems in math, logic, and analysis.",model:"deepseek-flash",temp:0.6,think:"high"},
   {id:uid(),emoji:"✍️",name:"Writer",prompt:"You are a skilled writer and editor. Improve clarity, tone, and flow. Offer options when useful.",model:"deepseek-flash",temp:1.3,think:"off"},
   {id:uid(),emoji:"🌍",name:"Translator",prompt:"You are an expert translator. Detect the language and translate accurately, preserving tone. If asked, explain nuances.",model:"deepseek-flash",temp:0.3,think:"off"},
@@ -138,6 +138,8 @@ let workflows = store.workflows;
 workflows.forEach(w=>separateWorkflowAgents(w,agents));
 try{store.workflows=workflows;}catch(e){/* Keep migrated settings in memory if storage is full. */}
 // User-requested one-time model switch, including independent workflow copies.
+// DeepSeek's effort levels are low, high and max; "medium" was always sent as high, so store it as high.
+try{const migrated=migrateEffortLevels(localStorage,agents,workflows);agents=migrated.agents;workflows=migrated.workflows;}catch(e){/* Retried on next load; medium still behaves as high. */}
 try{const migrated=migrateAllAgentsToFlash(localStorage,agents,workflows);agents=migrated.agents;workflows=migrated.workflows;}catch(e){console.warn("Model update could not be saved; free browser storage and reload.");}
 let currentKind = store.kind;               // "agent" | "group" | "workflow"
 let currentId = store.cur || agents[0].id;
@@ -852,7 +854,7 @@ function renderWorkflowRoles(){
       '<label>System prompt</label><textarea class="field" data-agent="prompt">'+esc(a.prompt||"")+'</textarea>'+
       '<label>Model (use deepseek-flash for images)</label><input class="field" data-agent="model" value="'+esc(a.model)+'">'+
       '<label>Temperature (0–2)</label><input class="field" type="number" min="0" max="2" step="0.1" data-agent="temp" value="'+a.temp+'">'+
-      '<label>Thinking</label><select class="field" data-agent="think">'+["off","low","medium","high","max"].map(v=>'<option'+(a.think===v?' selected':'')+'>'+v+'</option>').join("")+'</select></details>';
+      '<label>Thinking</label><select class="field" data-agent="think">'+THINK_LEVELS.map(v=>'<option'+(a.think===v?' selected':'')+'>'+v+'</option>').join("")+'</select></details>';
     card.querySelectorAll("[data-agent]").forEach(el=>el.oninput=()=>{r.agent=r.agent||{...a};r.agent[el.dataset.agent]=el.dataset.agent==="temp"?Number(el.value):el.value;workflowDraftDirty=true;});
     card.querySelectorAll("[data-field]").forEach(el=>el.oninput=()=>{r[el.dataset.field]=el.value;workflowDraftDirty=true;card.classList.remove("invalid");card.querySelector(".stage-badge").textContent=stageLabel(r.stage);});
     card.querySelector('[data-field="agentId"]').onchange=e=>{r.agentId=e.target.value;delete r.agent;separateWorkflowAgents(workflowDraft,agents);workflowDraftDirty=true;renderWorkflowRoles();};

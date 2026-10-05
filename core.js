@@ -393,6 +393,22 @@ function migrateAllAgentsToFlash(storage,agentList,workflowList){
 }
 /* flash-migration:end */
 
+/* effort-migration:start */
+// DeepSeek's official thinking modes: off (non-thinking) plus reasoning_effort low, high, or max.
+const THINK_LEVELS=["off","low","high","max"];
+function officialThink(value){return value==="medium"?"high":THINK_LEVELS.includes(value)?value:"off";}
+function migrateEffortLevels(storage,agentList,workflowList){
+  const marker="ds_effort_levels_v1";
+  if(storage.getItem(marker))return {agents:agentList,workflows:workflowList};
+  const nextAgents=agentList.map(a=>a.think==="medium"?{...a,think:"high"}:a);
+  const nextWorkflows=workflowList.map(w=>({...w,roles:w.roles.map(r=>r.agent?.think==="medium"?{...r,agent:{...r.agent,think:"high"}}:r)}));
+  storage.setItem("ds_agents",JSON.stringify(nextAgents));
+  storage.setItem("ds_workflows",JSON.stringify(nextWorkflows));
+  storage.setItem(marker,"1");
+  return {agents:nextAgents,workflows:nextWorkflows};
+}
+/* effort-migration:end */
+
 /* backup-core:start */
 const BACKUP_APP="deepseek-agents";
 // The API key stays on the device; everything else under the app prefix is portable.

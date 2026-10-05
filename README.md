@@ -92,7 +92,8 @@ That's it — it now behaves like a native app with its own icon.
 - **Undo clear** — 🧹 clears immediately and offers **Undo** for a few seconds.
 - **Reply length per agent** — Provider default (DeepSeek: 8K tokens, 64K with thinking), Long
   (32K), Very long (128K), or Maximum (384K). Only an upper bound; you pay for what is written.
-- **Thinking levels** — Off, Low, Medium (DeepSeek treats it as High), High, and Max. Temperature is
+- **Thinking levels** — exactly DeepSeek's official modes: Off (non-thinking), Low, High (DeepSeek's
+  default), and Max. Agents previously set to Medium were already running as High and are now shown as High. Temperature is
   only sent with thinking off, since DeepSeek's thinking mode does not support it.
 - **Safer replies** — busy/overloaded errors (429/5xx) retry twice automatically; if the connection
   drops mid-reply, the text written so far is kept and ⏵ finishes it; provider stops (content filter,
