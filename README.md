@@ -68,6 +68,9 @@ That's it — it now behaves like a native app with its own icon.
 - **Duplicate agents** to create quick prompt/model variants.
 - **Duplicate chats** — the header's ⧉ button creates and opens an independent copy of the current chat, including attachments and reply versions. Single-agent copies also copy the agent settings; group copies keep the same member agents with separate group settings and history. Completed workflow transcripts can be copied into a fresh workflow. Copies remain in this browser and use additional storage.
 - **Full conversations saved** per agent, group, and workflow (in your browser), without a message-count cutoff. Single-agent and group requests include the entire active conversation, including attached images; inactive reply versions remain saved but are not sent. The provider's context limit and browser storage quota still apply. History is never silently shortened to fit either limit. Previously discarded messages cannot be recovered from storage.
+- **Clean context** — failed, stopped-before-output, and empty replies stay visible but are never sent back to the model.
+- **Token usage** — each reply shows input/output tokens; replies cut off by the length limit are flagged.
+- **Backup** — ⚙️ Settings → Export/Import saves or restores agents, groups, workflows, and all chats as JSON. The API key is never exported; import keeps the current key.
 - **Everything local** — your API key and chats live only in your browser's
   `localStorage`; nothing is sent anywhere except the configured DeepSeek-compatible API.
 

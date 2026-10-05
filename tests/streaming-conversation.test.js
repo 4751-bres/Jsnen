@@ -32,6 +32,7 @@ test("an in-flight response stays bound to its originating conversation", async 
       saveConv(id, value) { saved.set(id, structuredClone(value)); },
     },
     renderChat() {},
+    modelSeesImages: () => true,
     scheduleStreamPaint() {},
     cancelStreamPaint() {},
     renderResponders() {},

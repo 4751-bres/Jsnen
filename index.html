@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0b0f17" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -59,6 +59,9 @@
   .msg-actions{align-items:center;gap:2px;flex-wrap:wrap}
   .version-count,.edited-label{font-size:11px;color:var(--muted)}
   .edited-label{margin-right:auto}
+  .reply-meta{font-size:11px;color:var(--muted);margin-right:auto}
+  .reply-meta:empty{display:none}
+  .reply-meta.warn{color:#fbbf24}
   .msg .think{color:var(--muted);font-style:italic;font-size:14px;border-left:2px solid var(--line);padding-left:10px;margin-bottom:8px;display:block;white-space:pre-wrap}
   .reasoning{margin-bottom:8px;color:var(--muted);font-size:13px}
   .reasoning summary{cursor:pointer;padding:5px 0;user-select:none}
@@ -66,6 +69,8 @@
   .msg code{background:#0008;padding:1px 5px;border-radius:6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em}
   .msg pre{background:#0009;border:1px solid var(--line);padding:12px;border-radius:10px;overflow-x:auto;margin:8px 0}
   .msg pre code{background:none;padding:0}
+  .msg .md-h{font-size:1.05em}
+  .msg .md-quote{display:inline-block;border-left:3px solid var(--line);padding-left:10px;color:var(--muted)}
   .empty{color:var(--muted);text-align:center;margin-top:14vh;padding:0 24px}
   .empty h2{color:var(--text);font-size:18px;margin:0 0 6px}
   .cursor{display:inline-block;width:8px;height:16px;background:var(--accent);vertical-align:text-bottom;animation:blink 1s steps(2) infinite;border-radius:2px}
@@ -267,6 +272,14 @@
       </datalist>
       <div class="hint"><b>deepseek-flash</b> = V4.1 Flash with image understanding. <b>deepseek-v4-pro</b> = older text-only Pro. Type any model name your key can access.</div>
 
+      <label>Backup</label>
+      <div class="row2">
+        <button class="btn" id="exportBackup" type="button">⬇ Export</button>
+        <button class="btn" id="importBackup" type="button">⬆ Import</button>
+      </div>
+      <input id="backupFile" type="file" accept="application/json,.json" hidden />
+      <div class="hint">Saves agents, groups, workflows, and every conversation (with images) to a JSON file. Your API key is never included. Import replaces everything except the key.</div>
+
       <div style="margin-top:14px" class="kv"><span>Account balance / usage</span><b><a href="https://platform.deepseek.com/usage" target="_blank" rel="noopener" style="color:var(--accent)">open ↗</a></b></div>
     </div>
     <div class="foot">
@@ -438,6 +451,11 @@ function agentInstructions(agent){
   return "ASSISTANT INSTRUCTIONS AND CHARACTER DESCRIPTION:\n"+agent.prompt+"\n\nThe description above defines you, [char], unless it explicitly identifies someone else. It is not a profile of the user. Within a fictional scene, speak from the character's own perspective: use I for yourself and you for [user]. Let your established personality, knowledge, and relationships guide your replies. Stay immersed in the scene instead of narrating how an assistant would role-play it.\n"+SPEAKER_RULES+"\n"+NARRATION_RULES+"\n"+SCENE_STYLE;
 }
 const SCENE_STYLE="For fictional scene replies, aim for 80–120 words of natural dialogue, optionally including one brief *action*. Text inside *asterisks* describes events or actions; it is not spoken aloud. React to that behavior without saying the user said those words or quoting the narration as dialogue. Only treat narration as spoken when it explicitly describes speech or contains a direct quotation. Answer the current message directly and ask at most one relevant question. Avoid recapping the scene, repeating explanations, adding several gestures, or speculating about the user's motives. Do not pad a simple response just to reach the target. Expand only when the user asks for detail or the situation needs it.";
+const REPLY_PLACEHOLDERS=new Set(["⏹ stopped.","(empty response)"]);
+// Failed, stopped-before-output, and empty replies stay visible but never enter API context.
+function isContextMessage(m){return !!m&&!m.streaming&&!m.error&&!(m.role==="assistant"&&REPLY_PLACEHOLDERS.has(m.content))&&!!(m.content||m.images?.length);}
+// DeepSeek only accepts images on Flash models; other OpenAI-compatible providers decide for themselves.
+function modelSeesImages(model){const name=String(model||"").toLowerCase();return !name.includes("deepseek")||name.includes("flash");}
 function cleanCharacterReply(text){return (text||"").replace(/^(?:\s*\[char\]\s*:\s*)+/i,"");}
 function speakerContent(tag,text,images){return imageContent("["+tag+"]: "+((tag==="char"?cleanCharacterReply(text):text)||(images?.length?"Shared an image.":"")),images);}
 function messagesHaveImages(list){const latest=(list||[]).filter(m=>m.role==="user"&&!m.streaming).at(-1);return !!latest?.images?.length;}
@@ -477,7 +495,7 @@ function buildGroupApiMessages(group,agent,messages){
   if(!isRoleplayGroup(group)){
     const base=agent.prompt?agent.prompt+"\n\n":"";
     const system=base+"You are \""+agent.name+"\" in a group chat with a human user and other AI agents. Messages from other participants are prefixed with their name in square brackets, e.g. \"[Coder]: ...\". Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name.";
-    const history=messages.filter(m=>!m.streaming&&(m.content||m.images?.length)).map(m=>m.role==="user"
+    const history=messages.filter(isContextMessage).map(m=>m.role==="user"
       ?{role:"user",content:imageContent(m.content,m.images)}
       :m.agentId===agent.id?{role:"assistant",content:m.content}
       :{role:"user",content:"["+(m.agentName||"Agent")+"]: "+m.content});
@@ -490,7 +508,7 @@ function buildGroupApiMessages(group,agent,messages){
     cast&&"Other characters:\n"+cast,rp.mature&&"Mature-mode preference: enabled.",
     "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE
   ].filter(Boolean).join("\n\n");
-  const history=messages.filter(m=>!m.streaming&&(m.content||m.images?.length)).map(m=>{
+  const history=messages.filter(isContextMessage).map(m=>{
     if(m.role==="user"){
       return {role:"user",content:speakerContent("user",m.content,m.images)};
     }
@@ -701,6 +719,10 @@ function md(t){
   t=t.replace(/```([\s\S]*?)```/g,(m,c)=>keep("<pre><code>"+c.replace(/^\n/,"")+"</code></pre>"));
   t=t.replace(/`([^`\n]+)`/g,(m,c)=>keep("<code>"+c+"</code>"));
   t=t.replace(/\\\*/g,()=>keep("*"));
+  // Block markers become plain glyphs/spans; line breaks stay visible through pre-wrap.
+  t=t.replace(/^#{1,6} +(.+)$/gm,'<b class="md-h">$1</b>');
+  t=t.replace(/^( *)[-*] +(?=\S)/gm,"$1• ");
+  t=t.replace(/^&gt; ?(.*)$/gm,'<span class="md-quote">$1</span>');
   t=t.replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,(m,label,url)=>keep('<a href="'+url.replace(/"/g,"&quot;")+'" target="_blank" rel="noopener" style="color:var(--accent)">'+label+'</a>'));
   t=t.replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>");
   t=t.replace(/\*([^*\n]+)\*/g,"<em>$1</em>");
@@ -751,6 +773,14 @@ function renderResponders(){
     b.onclick=()=>groupRespond(a);
     bar.appendChild(b);
   });
+  // Roleplay groups keep deleted characters' sheets; surface them instead of silently hiding them.
+  for(const id of curGroup().members||[]){
+    if(agents.some(a=>a.id===id))continue;
+    const b=document.createElement("button");b.className="chip-btn";b.disabled=true;
+    b.title="This character's agent was deleted. Edit the group to remove or replace it.";
+    b.innerHTML='<span>⚠️</span><span>'+esc(curGroup().roleplay?.characters?.[id]?.name||"Missing character")+' (deleted)</span>';
+    bar.appendChild(b);
+  }
   if(mems.length>1){
     const all=document.createElement("button");
     all.className="chip-btn all";all.disabled=busy;
@@ -764,9 +794,9 @@ function renderResponders(){
 /* message-edit-core:start */
 function editedMessage(message,text){
   if(!text.trim()&&!message.images?.length)throw new Error("A message needs text or an image.");
-  return {...message,content:text,reasoning:"",error:false,edited:true};
+  return {...message,content:text,reasoning:"",error:false,edited:true,usage:null,truncated:false};
 }
-function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",error:!!message.error,edited:!!message.edited};}
+function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",error:!!message.error,edited:!!message.edited,usage:message.usage||null,truncated:!!message.truncated};}
 function captureMessageVersions(list,index){
   const message=list[index];
   if(!message)throw new Error("Message not found.");
@@ -895,10 +925,13 @@ function updateChatRow(m,d){
   }
   d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
   if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
+  const meta=[m.truncated&&"⚠ cut off at length limit",m.usage&&formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+" out"].filter(Boolean).join(" · ");
+  if(d._meta.textContent!==meta){d._meta.textContent=meta;d._meta.classList.toggle("warn",!!m.truncated);}
   d._copy.disabled=!m.content;d._copy.title=m.content?"Copy message":"No message text to copy";
   d._copy.setAttribute("aria-label",d._copy.title);
   for(const button of d.querySelectorAll("[data-chat-action]"))button.disabled=!!controller||!!m.streaming||button.dataset.limitDisabled==="true";
 }
+function formatTokens(n){return n>=1000?(n/1000).toFixed(n>=10000?0:1)+"k":String(n);}
 function scheduleStreamPaint(message){
   streamPaintTarget=message;
   if(streamPaintTimer!==null)return;
@@ -983,6 +1016,7 @@ function createChatRow(m){
       edit.onclick=()=>openMessageEditor(m);actions.appendChild(edit);
     }
     for(const button of actions.querySelectorAll("button")){button.dataset.chatAction="true";button.dataset.limitDisabled=String(button.title==="Previous message version"&&(m.versionIndex||0)===0||button.title==="Next message version"&&(m.versionIndex||0)===m.versions.length-1);}
+    d._meta=document.createElement("span");d._meta.className="reply-meta";actions.prepend(d._meta);
     d._copy=messageCopyButton(m);actions.appendChild(d._copy);d.appendChild(actions);
     return d;
 }
@@ -1254,7 +1288,7 @@ function renderWorkflowRoles(){
       '<label>System prompt</label><textarea class="field" data-agent="prompt">'+esc(a.prompt||"")+'</textarea>'+
       '<label>Model (use deepseek-flash for images)</label><input class="field" data-agent="model" value="'+esc(a.model)+'">'+
       '<label>Temperature (0–2)</label><input class="field" type="number" min="0" max="2" step="0.1" data-agent="temp" value="'+a.temp+'">'+
-      '<label>Thinking</label><select class="field" data-agent="think">'+["off","medium","high"].map(v=>'<option'+(a.think===v?' selected':'')+'>'+v+'</option>').join("")+'</select></details>';
+      '<label>Thinking</label><select class="field" data-agent="think">'+["off","low","medium","high"].map(v=>'<option'+(a.think===v?' selected':'')+'>'+v+'</option>').join("")+'</select></details>';
     card.querySelectorAll("[data-agent]").forEach(el=>el.oninput=()=>{r.agent=r.agent||{...a};r.agent[el.dataset.agent]=el.dataset.agent==="temp"?Number(el.value):el.value;workflowDraftDirty=true;});
     card.querySelectorAll("[data-field]").forEach(el=>el.oninput=()=>{r[el.dataset.field]=el.value;workflowDraftDirty=true;card.classList.remove("invalid");card.querySelector(".stage-badge").textContent=stageLabel(r.stage);});
     card.querySelector('[data-field="agentId"]').onchange=e=>{r.agentId=e.target.value;delete r.agent;separateWorkflowAgents(workflowDraft,agents);workflowDraftDirty=true;renderWorkflowRoles();};
@@ -1345,6 +1379,41 @@ $("#saveSettings").onclick=()=>{
   store.model=$("#defModel").value.trim()||"deepseek-flash";
   refreshConnPill();renderChat();closeAll();toast("Saved");
 };
+/* backup-core:start */
+const BACKUP_APP="deepseek-agents";
+// The API key stays on the device; everything else under the app prefix is portable.
+function isBackupKey(key){return key.startsWith("ds_")&&key!=="ds_key";}
+function makeBackup(storage){
+  const data={};
+  for(let i=0;i<storage.length;i++){const key=storage.key(i);if(isBackupKey(key))data[key]=storage.getItem(key);}
+  return {app:BACKUP_APP,version:1,exportedAt:new Date().toISOString(),data};
+}
+function restoreBackup(storage,backup){
+  if(backup?.app!==BACKUP_APP||!backup.data||typeof backup.data!=="object")throw new Error("This is not a DeepSeek Agents backup.");
+  const entries=Object.entries(backup.data).filter(([k,v])=>isBackupKey(k)&&typeof v==="string");
+  const previous=makeBackup(storage).data;
+  const clear=()=>{for(const key of Object.keys(makeBackup(storage).data))storage.removeItem(key);};
+  clear();
+  try{for(const [k,v] of entries)storage.setItem(k,v);}
+  catch(error){clear();for(const [k,v] of Object.entries(previous))storage.setItem(k,v);throw new Error("Not enough browser storage for this backup. Nothing was changed.");}
+  return entries.length;
+}
+/* backup-core:end */
+$("#exportBackup").onclick=()=>{
+  const blob=new Blob([JSON.stringify(makeBackup(localStorage))],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="deepseek-agents-"+new Date().toISOString().slice(0,10)+".json";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast("Backup exported");
+};
+$("#importBackup").onclick=()=>{if(controller){toast("Stop the current response first");return;}$("#backupFile").click();};
+$("#backupFile").onchange=async e=>{
+  const file=e.target.files[0];e.target.value="";if(!file)return;
+  let backup;try{backup=JSON.parse(await file.text());}catch(error){toast("Could not read this file.");return;}
+  if(!confirm("Replace all agents, groups, workflows, and chats with this backup? Your API key is kept."))return;
+  try{restoreBackup(localStorage,backup);}catch(error){toast(error.message);return;}
+  location.reload();
+};
 $("#menuBtn").onclick=()=>{renderAgents();closeAll();openSheet("#drawer");};
 $("#clearBtn").onclick=()=>{if(controller){toast("Stop the current response before clearing");return;}
   if(confirm("Clear this conversation?")){
@@ -1413,7 +1482,8 @@ function commitComposer(){
 function autoGrow(){input.style.height="auto";input.style.height=Math.min(input.scrollHeight,window.innerHeight*0.38)+"px";}
 input.addEventListener("input",autoGrow);
 input.addEventListener("keydown",e=>{
-  if(e.key==="Enter"&&!e.shiftKey&&!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){
+  // Touch-first devices keep Enter for new lines; a hardware keyboard with a fine pointer sends.
+  if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing&&!matchMedia("(pointer:coarse)").matches){
     e.preventDefault();send();
   }
 });
@@ -1435,14 +1505,14 @@ function buildApiMessages(agent){
   }
   const grounded=groundSystem(agentInstructions(agent),messages);
   if(grounded) sys.push({role:"system",content:grounded});
-  const hist=messages.filter(m=>!m.streaming&&(m.role==="user"||m.role==="assistant")&&(m.content||m.images?.length)).map(m=>({role:m.role,content:speakerContent(m.role==="user"?"user":"char",m.content,m.role==="user"?m.images:undefined)}));
+  const hist=messages.filter(m=>(m.role==="user"||m.role==="assistant")&&isContextMessage(m)).map(m=>({role:m.role,content:speakerContent(m.role==="user"?"user":"char",m.content,m.role==="user"?m.images:undefined)}));
   return [...sys,...hist];
 }
 
 /* ---------- Stream one response ---------- */
 async function streamCompletion(agent,apiMessages,meta={}){
   if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return false;}
-  if((agent.model||store.model)==="deepseek-v4-pro"&&apiMessages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url"))){toast("This chat contains images. Set this agent's model to deepseek-flash for vision.");return false;}
+  if(!modelSeesImages(agent.model||store.model)&&apiMessages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url"))){toast("This chat contains images. Set this agent's model to deepseek-flash for vision.");return false;}
   const convId=currentId,conversationMessages=messages;
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,...meta};
   messages.push(bot);
@@ -1453,6 +1523,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     messages:apiMessages,
     temperature:agent.temp,
     stream:true,
+    stream_options:{include_usage:true},
   };
   // DeepSeek V4 thinking mode (reasoning_content). "off" => cheaper non-thinking path.
   if(agent.think && agent.think!=="off"){payload.thinking={type:"enabled"};payload.reasoning_effort=agent.think;}
@@ -1488,6 +1559,8 @@ async function streamCompletion(agent,apiMessages,meta={}){
         try{
           const j=JSON.parse(data);
           const d=j.choices?.[0]?.delta||{};
+          if(j.choices?.[0]?.finish_reason==="length")bot.truncated=true;
+          if(j.usage)bot.usage={prompt:j.usage.prompt_tokens||0,completion:j.usage.completion_tokens||0};
           if(d.reasoning_content) bot.reasoning+=d.reasoning_content;
           if(d.content) bot.content+=d.content;
           scheduleStreamPaint(bot);
@@ -1527,18 +1600,18 @@ function saveCurrentRun(){if(isWorkflow()&&currentRun)store.saveRun(currentId,cu
 function workflowMessageMeta(workflow,run,role,agent){
   return {agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,workflowRoleId:role.id,workflowRoleName:role.name,workflowStage:role.stage,runId:run.id};
 }
+function workflowHistorySnapshot(){
+  return messages.filter(m=>(m.role==="user"||m.role==="assistant")&&isContextMessage(m)&&m.content)
+    .slice(-12).map(m=>({role:m.role,content:m.content}));
+}
 async function startWorkflowRun(task){
   const workflow=curWorkflow(),errors=validateWorkflow(workflow,agents);
   if(errors.length){toast(workflowErrorText[errors[0].code]||"Fix the workflow configuration");openWorkflowEditor(workflow.id);return;}
   if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
   if(currentRun&&currentRun.status!=="complete"){toast("Finish or cancel the current run first");return;}
   const images=pendingImages.slice();
-  const incompatible=workflow.roles.find(r=>workflowAgent(r,agents)?.model==="deepseek-v4-pro");
+  const incompatible=workflow.roles.find(r=>!modelSeesImages(workflowAgent(r,agents)?.model||store.model));
   if(images.length&&incompatible){toast("Set "+incompatible.name+" to deepseek-flash in its independent agent settings to use images.");openWorkflowEditor(workflow.id);return;}
-function workflowHistorySnapshot(){
-  return messages.filter(m=>!m.streaming&&!m.error&&m.content&&(m.role==="user"||m.role==="assistant"))
-    .slice(-12).map(m=>({role:m.role,content:m.content}));
-}
   $("#reviewGuidance").value="";
   const nextRun=newRun(workflow,task,Date.now(),uid);
   nextRun.images=images;
