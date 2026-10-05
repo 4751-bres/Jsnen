@@ -15,7 +15,8 @@ const ICONS={
   target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
   discuss:'<path d="M4 5h11v8H9l-4 3v-3H4z"/><path d="M18 9h2v8h-1v3l-4-3h-4v-1"/>',
   book:'<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/>',
-  skip:'<path d="M5 5.5l9 6.5-9 6.5z"/><path d="M18 5v14"/>'
+  skip:'<path d="M5 5.5l9 6.5-9 6.5z"/><path d="M18 5v14"/>',
+  heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'
 };
 function icon(name){return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'+(ICONS[name]||"")+'</svg>';}
 // Theme: "" follows the device; "dark"/"light" force one. Applied before first paint of the chat.
@@ -202,6 +203,7 @@ function refreshHeader(){
   const used=conversationTokens(messages),usedText=used?" · "+formatTokens(used)+" tokens":"";
   const item=isWorkflow()?curWorkflow():isGroup()?curGroup():curAgent();
   document.body.dataset.mood=isWorkflow()?"workflow":isGroup()?(isRoleplayGroup(curGroup())?"fiction":"social"):"work";
+  $("#moodBtn").hidden=!(!isWorkflow()&&!isGroup()&&curAgent()?.moods);
   $("#hAvatar").textContent=item?.emoji||"💬";
   if(isWorkflow()){
     const w=curWorkflow();
@@ -254,6 +256,7 @@ function renderResponders(){
   if(mems.length>1){
     chip(isRoleplayGroup(group)?icon("book")+'<span>Continue scene</span>':icon("users")+'<span>Everyone</span>',"all",()=>everyoneRespond());
     chip(icon("target")+'<span>Auto</span>',"all",()=>autoRespond(),"Let a quick model call pick who should reply next (1 small extra request)");
+    if(isRoleplayGroup(group)&&group.moods!==false)chip(icon("heart")+'<span>Moods</span>',"all",openMoodSheet,"See and set each character's mood");
     const rounds=groupRounds(group);
     chip(icon("discuss")+'<span>Discuss ×'+rounds+'</span>',"all",()=>discussRespond(),"Agents reply to each other for "+rounds+" round"+(rounds===1?"":"s"));
   }
@@ -327,8 +330,9 @@ async function regenerateMessage(message){
   const meta={versions:branch.versions,versionIndex:branch.versionIndex};
   for(const key of ["agentId","agentName","agentEmoji","characterName"])if(message[key])meta[key]=message[key];
   messages=branch.prefix;
+  const mood=moodOptions(agent);if(mood)meta.moodTracked=true;
   try{
-    const context=await prepareContext(buildApiMessages(agent));
+    const context=await prepareContext(buildApiMessages(agent,{mood}));
     if(!context){messages=previous;renderChat();return;}
     const result=await streamCompletion(agent,context,meta);
     if(result===false){messages=previous;renderChat();}
@@ -396,7 +400,8 @@ function updateChatRow(m,d){
     if(details.open&&text.textContent!==m.reasoning)text.textContent=m.reasoning||"";
   }
   if(d._contentValue!==m.content||d._streaming!==!!m.streaming){
-    d._text.innerHTML=md(m.role==="assistant"?cleanCharacterReply(m.content):m.content||"")+(m.streaming?'<span class="cursor"></span>':"");
+    const shown=m.role==="assistant"?cleanCharacterReply(m.moodTracked&&m.streaming?stripPartialMoodTag(m.content):m.content):m.content||"";
+    d._text.innerHTML=md(shown)+(m.streaming?'<span class="cursor"></span>':"");
     d._contentValue=m.content;d._streaming=!!m.streaming;
     if(!m.streaming)for(const pre of d._text.querySelectorAll("pre")){const b=document.createElement("button");b.type="button";b.className="code-copy";b.innerHTML=icon("copy")+"Copy";b.setAttribute("aria-label","Copy code");pre.prepend(b);}
   }
@@ -407,7 +412,12 @@ function updateChatRow(m,d){
   const meta=[messageTime(m.at,m.at),note,m.usage&&formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+" out"].filter(Boolean).join(" · ");
   if(d._continue)d._continue.hidden=!(m.truncated&&!m.streaming&&messages.at(-1)===m);
   if(d._meta.textContent!==meta){d._meta.textContent=meta;d._meta.classList.toggle("warn",!!note);}
-  d._metaRow.hidden=!meta&&!m.edited;
+  if(m.mood){
+    const key=m.mood.mood+":"+m.mood.level;
+    if(d._moodKey!==key){d._mood.className="mood mood-"+m.mood.mood;d._mood.style.setProperty("--lvl",(m.mood.level*10)+"%");d._mood.innerHTML="<i></i>"+esc(moodLabel(m.mood));d._mood.setAttribute("aria-label","Mood: "+moodLabel(m.mood)+" of 10. Open moods");d._moodKey=key;}
+    d._mood.hidden=false;
+  }else d._mood.hidden=true;
+  d._metaRow.hidden=!meta&&!m.edited&&!m.mood;
   d._copy.disabled=!m.content;d._copy.title=m.content?"Copy message":"No message text to copy";
   d._copy.setAttribute("aria-label",d._copy.title);
   for(const button of d.querySelectorAll("[data-chat-action]"))button.disabled=!!controller||!!m.streaming||button.dataset.limitDisabled==="true";
@@ -513,6 +523,7 @@ function createChatRow(m){
     }
     d._metaRow=document.createElement("div");d._metaRow.className="msg-meta";
     if(m.edited){const label=document.createElement("span");label.className="edited-label";label.textContent="edited";d._metaRow.appendChild(label);}
+    d._mood=document.createElement("button");d._mood.type="button";d._mood.hidden=true;d._mood.onclick=openMoodSheet;d._metaRow.appendChild(d._mood);
     d._meta=document.createElement("span");d._meta.className="reply-meta";d._metaRow.appendChild(d._meta);d.appendChild(d._metaRow);
     const actions=document.createElement("div");actions.className="msg-actions";
     if(!isWorkflow()){
@@ -657,7 +668,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";$("#edMoods").checked=!!a.moods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);
   $("#delAgent").style.display=(id&&agents.length>1)?"":"none";
@@ -669,7 +680,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -678,7 +689,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -789,7 +800,7 @@ function openGroupEditor(id){
   $("#grRoleplay").checked=groupRoleplayDraft.enabled;$("#grRpSetting").value=groupRoleplayDraft.setting;
   $("#grRpOpening").value=groupRoleplayDraft.opening;$("#grRpUserName").value=groupRoleplayDraft.user.name;
   $("#grRpUserDescription").value=groupRoleplayDraft.user.description;$("#grRpMature").checked=groupRoleplayDraft.mature;
-  $("#grRpAdult").checked=groupRoleplayDraft.mature;
+  $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;
   $("#grRoleplay").onchange=renderRoleplayEditor;
   $("#grRpMature").onchange=()=>{$("#grRpAdultRow").style.display=$("#grRpMature").checked?"flex":"none";if(!$("#grRpMature").checked)$("#grRpAdult").checked=false;};
   renderRoleplayEditor();$("#delGroup").style.display=id?"":"none";
@@ -805,7 +816,7 @@ $("#saveGroup").onclick=()=>{
   const roleplay=collectRoleplayEditor(members),errors=validateRoleplay(roleplay,members,$("#grRpAdult").checked);
   if(errors.includes("adult-confirmation")){toast("Confirm that you are an adult");return;}
   if(errors.length){toast("Complete the roleplay character details");return;}
-  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),historyLimit:$("#grHistory").value};
+  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked};
   if(editingGroupId){Object.assign(groups.find(g=>g.id===editingGroupId),data);}
   else{const g={id:uid(),...data};groups.push(g);currentKind="group";currentId=g.id;store.kind="group";store.cur=g.id;}
   store.groups=groups;renderAgents();loadConv();closeAll();toast("Group saved");
@@ -998,6 +1009,7 @@ $("#backupFile").onchange=async e=>{
   }catch(error){toast(error.message);return;}
   location.reload();
 };
+$("#moodBtn").onclick=openMoodSheet;
 $("#menuBtn").onclick=()=>{$("#drawerSort").value=store.sort;renderAgents();closeAll();openSheet("#drawer");};
 $("#clearBtn").onclick=()=>{if(controller){toast("Stop the current response before clearing");return;}
   if(!messages.length)return;
@@ -1097,7 +1109,8 @@ function buildApiMessages(agent,options={}){
   if(isGroup()){
     return buildGroupApiMessages(curGroup(),agent,messages,options);
   }
-  const grounded=groundSystem(agentInstructions(agent),messages);
+  const instructions=agentInstructions(agent)+(options.mood?.track?"\n"+moodInstruction(options.mood.current):"");
+  const grounded=groundSystem(instructions,messages);
   if(grounded) sys.push({role:"system",content:grounded});
   const hist=messages.filter(m=>(m.role==="user"||m.role==="assistant")&&isContextMessage(m)).map(m=>({role:m.role,content:speakerContent(m.role==="user"?"user":"char",m.content,m.role==="user"?m.images:undefined)}));
   return [...sys,...hist];
@@ -1184,6 +1197,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     else if(bot.content){bot.interrupted=String(err.message||"Connection lost");bot.truncated=true;}
     else{bot.error=true;bot.content="⚠️ "+err.message;}
   }finally{
+    if(bot.moodTracked&&!bot.error)applyMoodTag(bot);
     cancelStreamPaint();releaseWakeLock();
     controller=null;setSending(false);
     renderChat();try{store.saveConv(convId,conversationMessages);}catch(error){toast("Response received, but browser storage is full. This reply is not saved.");}renderResponders();
@@ -1222,11 +1236,71 @@ async function runAgent(agent,options={}){
 }
 async function runAgentResult(agent,options={}){
   const character=isGroup()&&isRoleplayGroup(curGroup())?roleplayCharacter(curGroup(),agent):null;
-  const meta=isGroup()?{agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,...(character?{characterName:character.name}:{})}:{};
-  const context=await prepareContext(buildApiMessages(agent,options));
+  const mood=moodOptions(agent);
+  const meta={...(isGroup()?{agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,...(character?{characterName:character.name}:{})}:{}),...(mood?{moodTracked:true}:{})};
+  const context=await prepareContext(buildApiMessages(agent,{...options,mood}));
   if(!context)return {ok:false,aborted:true};
-  return streamCompletion(agent,context,meta);
+  const result=await streamCompletion(agent,context,meta);
+  afterMoodReply(agent,result);
+  return result;
 }
+
+/* ---------- Emotion tracking (roleplay groups, and single agents that opt in) ---------- */
+function moodSettings(agent){
+  if(isWorkflow())return null;
+  if(isGroup()){const g=curGroup();return isRoleplayGroup(g)&&g.moods!==false?{owner:g,key:agent.id,save:()=>{store.groups=groups;}}:null;}
+  const a=curAgent();return a?.moods?{owner:a,key:a.id,save:()=>{store.agents=agents;}}:null;
+}
+function moodHistory(agentId){
+  return messages.filter(m=>m.role==="assistant"&&m.mood&&(!isGroup()||m.agentId===agentId)).map(m=>m.mood);
+}
+// The user's steer wins for the next reply; otherwise the character's latest reported mood carries on.
+function currentMood(agent){
+  const s=moodSettings(agent);if(!s)return null;
+  const steer=s.owner.moodSteer?.[s.key];
+  if(steer)return {...steer,steered:true};
+  const last=moodHistory(agent.id).at(-1);return last?{...last}:null;
+}
+function moodOptions(agent){return moodSettings(agent)?{track:true,current:currentMood(agent)}:null;}
+function afterMoodReply(agent,result){
+  const s=moodSettings(agent);
+  if(!s||!result?.bot?.mood||!s.owner.moodSteer?.[s.key])return;
+  delete s.owner.moodSteer[s.key];try{s.save();}catch(e){/* The steer simply stays for one more reply. */}
+}
+function moodLabel(m){return m.mood.charAt(0).toUpperCase()+m.mood.slice(1)+" "+m.level;}
+function moodChip(m,tag="span"){
+  return "<"+tag+' class="mood mood-'+esc(m.mood)+'" style="--lvl:'+(m.level*10)+'%"><i></i>'+esc(moodLabel(m))+"</"+tag+">";
+}
+function moodCharacters(){
+  if(isGroup())return groupMembers(curGroup()).map(a=>({agent:a,name:memberLabel(curGroup(),a)}));
+  const a=curAgent();return a?[{agent:a,name:a.name}]:[];
+}
+function renderMoodSheet(){
+  const list=$("#moodList");list.innerHTML="";
+  for(const {agent,name} of moodCharacters()){
+    const s=moodSettings(agent);if(!s)continue;
+    const history=moodHistory(agent.id),now=history.at(-1),steer=s.owner.moodSteer?.[s.key];
+    const card=document.createElement("div");card.className="mood-card";
+    card.innerHTML='<div class="mood-head"><span class="av">'+esc(agent.emoji)+'</span><b>'+esc(name)+'</b>'+(now?moodChip(now):'<span class="hint" style="margin:0">No mood yet</span>')+'</div>'+
+      (history.length>1?'<div class="mood-trail" aria-label="Recent moods, oldest first">'+history.slice(-8).map(m=>moodChip(m)).join('<span aria-hidden="true">›</span>')+'</div>':"")+
+      '<label>'+(steer?"Set for the next reply: "+esc(moodLabel(steer)):"Set a mood for the next reply")+'</label>'+
+      '<div class="mood-steer"><select class="field" aria-label="Mood">'+MOOD_NAMES.map(n=>'<option value="'+n+'"'+((steer||now)?.mood===n?" selected":"")+'>'+n.charAt(0).toUpperCase()+n.slice(1)+'</option>').join("")+'</select>'+
+      '<input type="range" min="1" max="10" step="1" aria-label="Intensity" value="'+((steer||now)?.level||5)+'"><output>'+((steer||now)?.level||5)+'</output></div>'+
+      '<div class="mood-actions"><button type="button" class="btn primary" data-set>'+icon("heart")+'Set mood</button>'+(steer?'<button type="button" class="btn ghost" data-clear>Clear</button>':"")+'</div>';
+    const range=card.querySelector('input[type="range"]'),out=card.querySelector("output");
+    range.oninput=()=>{out.textContent=range.value;};
+    card.querySelector("[data-set]").onclick=()=>{
+      s.owner.moodSteer={...(s.owner.moodSteer||{}),[s.key]:normalizeMood(card.querySelector("select").value,range.value)};
+      try{s.save();}catch(e){toast("Could not save the mood. Browser storage may be full.");return;}
+      renderMoodSheet();toast(name+" will feel "+moodLabel(s.owner.moodSteer[s.key]).toLowerCase()+" in the next reply");
+    };
+    const clear=card.querySelector("[data-clear]");
+    if(clear)clear.onclick=()=>{delete s.owner.moodSteer[s.key];try{s.save();}catch(e){}renderMoodSheet();};
+    list.appendChild(card);
+  }
+  if(!list.children.length)list.innerHTML='<div class="hint">Mood tracking is off for this chat. Turn it on in the agent or group editor.</div>';
+}
+function openMoodSheet(){if(controller){toast("Wait for the reply to finish.");return;}renderMoodSheet();closeAll();openSheet("#moodSheet");}
 
 /* ---------- Small helper requests (summaries, speaker picking) ---------- */
 // Runs a short task with the same Stop button and busy state as a streamed reply.
@@ -1322,9 +1396,11 @@ async function continueMessage(message){
   if(controller||isWorkflow()||messages.at(-1)!==message)return;
   const agent=isGroup()?agents.find(a=>a.id===message.agentId):curAgent();
   if(!agent){toast("The original agent is no longer available.");return;}
-  const base=await prepareContext(buildApiMessages(agent));if(!base)return;
+  const mood=moodOptions(agent);
+  const base=await prepareContext(buildApiMessages(agent,{mood}));if(!base)return;
   const payload=[...base,{role:"user",content:"Continue your previous reply exactly where it stopped. Do not repeat anything already written and do not add a preamble."}];
   const meta={};for(const key of ["agentId","agentName","agentEmoji","characterName"])if(message[key])meta[key]=message[key];
+  if(mood)meta.moodTracked=true;
   const result=await streamCompletion(agent,payload,meta);
   if(!result)return;
   const bot=result.bot,i=messages.indexOf(bot);if(i>=0)messages.splice(i,1);
@@ -1333,6 +1409,7 @@ async function continueMessage(message){
     message.content+=bot.content;
     if(bot.reasoning)message.reasoning=(message.reasoning?message.reasoning+"\n\n":"")+bot.reasoning;
     message.truncated=!!bot.truncated;message.interrupted=bot.interrupted||null;message.finish=bot.finish||null;
+    if(bot.mood){message.mood=bot.mood;message.moodTracked=true;}
     if(bot.usage)message.usage={prompt:(message.usage?.prompt||0)+bot.usage.prompt,completion:(message.usage?.completion||0)+bot.usage.completion};
   }
   try{store.saveConv(currentId,messages);}catch(e){toast("Browser storage is full. The continuation is not saved.");}

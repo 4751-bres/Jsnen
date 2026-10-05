@@ -52,6 +52,7 @@ body[data-mood="fiction"]{--mood:var(--mood-fiction)}
 body[data-mood="workflow"]{--mood:var(--violet)}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
 html,body{height:100%;margin:0}
 body{
   background:var(--bg);color:var(--text);font:16px/1.5 var(--font);
@@ -192,6 +193,36 @@ body:has(.responders[style*="flex"]) #jumpToLatest,body:has(.workflow-actions[st
 .empty h2{color:var(--text);font-size:24px;line-height:1.2;margin:0 0 10px;font-weight:750}
 .cursor{display:inline-block;width:2px;height:1.1em;vertical-align:-.15em;margin-left:2px;background:var(--accent);animation:blink 1s steps(2) infinite}
 @keyframes blink{50%{opacity:0}}
+
+/* Moods */
+.mood{
+  --m:var(--text-3);display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border:1px solid var(--m);
+  border-radius:var(--radius-pill);background:transparent;color:var(--m);font-size:12px;font-weight:650;white-space:nowrap
+}
+button.mood{cursor:pointer}
+.mood[hidden]{display:none}
+.mood i{width:26px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--m) var(--lvl,50%),var(--line-strong) var(--lvl,50%))}
+.mood-calm{--m:#6fd3c2}.mood-happy{--m:#fbbf24}.mood-playful{--m:#f472b6}.mood-affectionate{--m:#fb7185}
+.mood-sad{--m:#60a5fa}.mood-anxious{--m:#c4b5fd}.mood-angry{--m:#f87171}.mood-cold{--m:#9aa8bd}
+:root[data-theme="light"] .mood-calm{--m:#0f766e}:root[data-theme="light"] .mood-happy{--m:#a16207}:root[data-theme="light"] .mood-playful{--m:#be185d}
+:root[data-theme="light"] .mood-affectionate{--m:#be123c}:root[data-theme="light"] .mood-sad{--m:#1d4ed8}:root[data-theme="light"] .mood-anxious{--m:#6d28d9}
+:root[data-theme="light"] .mood-angry{--m:#b91c1c}:root[data-theme="light"] .mood-cold{--m:#475569}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]) .mood-calm{--m:#0f766e}:root:not([data-theme="dark"]) .mood-happy{--m:#a16207}:root:not([data-theme="dark"]) .mood-playful{--m:#be185d}
+  :root:not([data-theme="dark"]) .mood-affectionate{--m:#be123c}:root:not([data-theme="dark"]) .mood-sad{--m:#1d4ed8}:root:not([data-theme="dark"]) .mood-anxious{--m:#6d28d9}
+  :root:not([data-theme="dark"]) .mood-angry{--m:#b91c1c}:root:not([data-theme="dark"]) .mood-cold{--m:#475569}
+}
+.mood-card{border:1px solid var(--line);background:var(--surface-2);border-radius:16px;padding:14px;margin:12px 0}
+.mood-head{display:flex;align-items:center;gap:10px}
+.mood-head .av{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:12px;background:var(--surface-1);border:1px solid var(--line);font-size:19px}
+.mood-head b{flex:1;min-width:0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mood-trail{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:12px;color:var(--text-3);font-size:12px}
+.mood-steer{display:flex;align-items:center;gap:12px}
+.mood-steer select{flex:1;min-width:0}
+.mood-steer input{flex:1;min-width:0}
+.mood-steer output{width:24px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.mood-actions{display:flex;gap:10px;margin-top:12px}
+@media (max-width:400px){header .icon-btn{width:40px}}
 
 /* Composer */
 .composer{

@@ -97,6 +97,11 @@ That's it — it now behaves like a native app with its own icon.
 - **Safer replies** — busy/overloaded errors (429/5xx) retry twice automatically; if the connection
   drops mid-reply, the text written so far is kept and ⏵ finishes it; provider stops (content filter,
   capacity) are labelled; errors say what to do (wrong key, empty balance, chat too long).
+- **Character moods** — in roleplay groups (on by default) and single agents that opt in, each reply
+  ends with a hidden `[mood: name N]` tag that the app removes and shows as a coloured chip with an
+  intensity bar (calm, happy, playful, affectionate, sad, anxious, angry, cold; 1–10). **Moods** (the
+  reply bar in roleplay, the heart in a single agent's header) shows each character's recent moods and
+  lets you set a mood for their next reply. No extra requests; the mood is the model's own reading.
 - **Message times** on every new message, and **Copy** buttons on code blocks.
 - **Per-chat drafts** — unsent text stays with its own chat and survives reloads.
 - **Roleplay opening scene** is sent to the characters and stays pinned at the top of the chat.

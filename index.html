@@ -20,6 +20,7 @@
       <div class="name" id="hAgent">DeepSeek Agents</div>
       <div class="sub" id="hSub">Open the menu to pick an agent</div>
     </div>
+    <button class="icon-btn" id="moodBtn" type="button" aria-label="Moods" title="Moods" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></button>
     <button class="icon-btn" id="duplicateChatBtn" aria-label="Duplicate chat" title="Duplicate chat, including messages"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button>
     <button class="icon-btn" id="clearBtn" aria-label="Clear chat" title="Clear chat"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M6.5 16.5l8-8a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L13 18H8z"/></svg></button>
     <button class="icon-btn" id="setBtn" aria-label="Settings" title="Settings"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
@@ -150,6 +151,13 @@
     </div>
   </section>
 
+  <!-- Moods sheet -->
+  <section class="sheet bottom" id="moodSheet">
+    <h3><span class="grow">Moods</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body" id="moodList"></div>
+    <div class="foot"><button class="btn" data-close>Close</button></div>
+  </section>
+
   <!-- Agent editor sheet -->
   <section class="sheet bottom" id="editor">
     <h3><span class="grow" id="edTitle">New agent</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
@@ -195,6 +203,8 @@
         <option value="max">Maximum — up to 384K tokens</option>
       </select>
       <div class="hint">Only an upper bound: replies are billed for what is actually written. If a reply still stops early, Continue finishes it.</div>
+      <label class="toggle-row"><input id="edMoods" type="checkbox" /> <span>Track mood (for character agents)</span></label>
+      <div class="hint" style="margin-top:-6px">The agent reports its mood after each reply; the heart button in the header shows the history and sets its mood for the next reply.</div>
       <label for="edHistory">History sent to the AI</label>
       <select class="field" id="edHistory">
         <option value="">Use Settings default</option>
@@ -250,6 +260,8 @@
         <textarea class="field" id="grRpUserDescription" placeholder="Identity, personality, appearance, goals, and boundaries"></textarea>
         <label class="toggle-row"><input id="grRpMature" type="checkbox" /> <span>Mature roleplay</span></label>
         <label class="toggle-row" id="grRpAdultRow" style="display:none"><input id="grRpAdult" type="checkbox" /> <span>I confirm I am an adult</span></label>
+        <label class="toggle-row"><input id="grRpMoods" type="checkbox" checked /> <span>Track character moods</span></label>
+        <div class="hint" style="margin-top:-6px">Each reply ends with a hidden mood tag the app reads; set a character's mood from the Moods button in the chat.</div>
         <div class="sect-label">AI characters</div>
         <div id="grRpCharacters"></div>
       </div>

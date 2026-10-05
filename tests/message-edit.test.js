@@ -62,7 +62,7 @@ function uiContext(options={}){
   const c=vm.createContext({$,messages:original,currentId:'chat-a',controller:null,isWorkflow:()=>false,isGroup:()=>true,
     agents:[{id:'agent-a'}],curAgent:()=>({id:'single'}),closeAll(){},openSheet(){},renderChat(){},renderResponders(){},toast:t=>state.toasts.push(t),
     store:{k:'test-only',saveConv(id,list){if(options.full)throw Error('quota');state.saved.push({id,list});}},
-    buildApiMessages:()=>c.messages.map(m=>({role:m.role,content:m.content})),prepareContext:async list=>list,
+    buildApiMessages:()=>c.messages.map(m=>({role:m.role,content:m.content})),prepareContext:async list=>list,moodOptions:()=>null,
     streamCompletion:async(agent,payload,meta)=>{state.requests.push({agent,payload,meta});if(options.preflightFailure)return false;c.messages.push({role:'assistant',content:'New',...meta});return {ok:true};}
   });
   vm.runInContext(source.slice(source.indexOf('/* message-edit-core:start */'),source.indexOf('async function copyMessageText')),c);

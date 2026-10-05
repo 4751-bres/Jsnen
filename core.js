@@ -67,7 +67,8 @@ function buildGroupApiMessages(group,agent,messages,options={}){
   const system=[agent.prompt,"Within this scene, you are "+character.name+" ([char]). Speak as I from your own perspective, with your established personality and knowledge.","Character: "+character.description,
     "User character: "+rp.user.name+" — "+rp.user.description,"Setting: "+rp.setting,
     cast&&"Other characters:\n"+cast,rp.opening&&"Opening scene (already shown to the user before the conversation began):\n"+rp.opening,rp.mature&&"Mature-mode preference: enabled.",
-    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE
+    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE,
+    options.mood?.track&&moodInstruction(options.mood.current)
   ].filter(Boolean).join("\n\n");
   const history=messages.filter(isContextMessage).map(m=>{
     if(m.role==="user"){
@@ -139,6 +140,49 @@ function withSummary(apiMessages,summary){
     return [{...apiMessages[0],content:apiMessages[0].content+"\n\n"+note},...apiMessages.slice(1)];
   return [{role:"system",content:note},...apiMessages];
 }
+/* mood-core:start */
+// Emotion tracking: characters end each reply with a hidden "[mood: name N]" line that the app reads and removes.
+const MOOD_NAMES=["calm","happy","playful","affectionate","sad","anxious","angry","cold"];
+const MOOD_SYNONYMS={content:"calm",relaxed:"calm",peaceful:"calm",neutral:"calm",serene:"calm",
+  joyful:"happy",excited:"happy",cheerful:"happy",delighted:"happy",amused:"playful",teasing:"playful",flirty:"playful",mischievous:"playful",
+  loving:"affectionate",tender:"affectionate",warm:"affectionate",fond:"affectionate",
+  melancholy:"sad",hurt:"sad",lonely:"sad",grieving:"sad",upset:"sad",
+  nervous:"anxious",worried:"anxious",afraid:"anxious",scared:"anxious",tense:"anxious",uneasy:"anxious",
+  furious:"angry",irritated:"angry",annoyed:"angry",frustrated:"angry",resentful:"angry",
+  distant:"cold",detached:"cold",guarded:"cold",indifferent:"cold",dismissive:"cold"};
+function moodInstruction(current){
+  let text="EMOTION TRACKING: End every reply with one final line in exactly this form: [mood: NAME N]. NAME is the closest of "+MOOD_NAMES.join(", ")+
+    " for your character's feelings at the end of this reply, and N is the intensity from 1 (faint) to 10 (overwhelming). The app reads and hides this line; never mention it in the story.";
+  if(current?.mood){
+    text+=" Your character currently feels "+current.mood+" at "+current.level+"/10"+(current.steered
+      ?". The user set this mood for this reply: let it clearly shape your tone, words and actions."
+      :". Carry it into your tone, and let it change only when events in the scene justify it.");
+  }
+  return text;
+}
+function normalizeMood(name,level){
+  const key=String(name||"").toLowerCase().trim(),mood=MOOD_NAMES.includes(key)?key:MOOD_SYNONYMS[key];
+  if(!mood)return null;
+  const n=Math.round(Number(level));
+  return {mood,level:Number.isFinite(n)?Math.min(10,Math.max(1,n)):5};
+}
+// Finds the trailing mood tag (tolerating "7/10" and missing numbers) and returns the reply without it.
+function parseMoodTag(text){
+  const source=String(text||""),match=source.match(/\s*\[\s*mood\s*:\s*([a-z][a-z -]*?)\s*(\d{1,2})?\s*(?:\/\s*10)?\s*\]\s*$/i);
+  if(!match)return {text:source,mood:null};
+  return {text:source.slice(0,match.index).replace(/\s+$/,""),mood:normalizeMood(match[1],match[2])};
+}
+// While streaming, hide a tag that is still arriving ("[", "[mo", "[mood: ang") at the very end.
+function stripPartialMoodTag(text){
+  return String(text||"").replace(/\s*\[(?:m(?:o(?:o(?:d(?:\s*:[^\]\n]*)?)?)?)?)?\]?\s*$/i,"");
+}
+function applyMoodTag(bot){
+  const parsed=parseMoodTag(bot.content);
+  if(parsed.text!==bot.content)bot.content=parsed.text||bot.content;
+  if(parsed.mood)bot.mood=parsed.mood;
+  return bot;
+}
+/* mood-core:end */
 /* api-core:start */
 // Reply length per agent: "" = provider default (DeepSeek: 8K tokens, 64K with thinking), a number, or "max" (384K).
 const MAX_REPLY_TOKENS=393216;
