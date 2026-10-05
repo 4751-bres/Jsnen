@@ -35,3 +35,21 @@ test('roleplay prompts ask for the tag and carry the current or steered mood',()
   assert.match(core.moodInstruction(null),/\[mood: NAME N\]/);
   assert.ok(!core.moodInstruction(null).includes('currently feels'));
 });
+
+test('new general moods and their synonyms are recognised',()=>{
+  for(const [word,mood] of [['shy','shy'],['flustered','shy'],['curious','curious'],['intrigued','curious'],['confident','confident'],['proud','confident'],['jealous','jealous'],['possessive','jealous']])
+    assert.equal(core.parseMoodTag('Hm. [mood: '+word+' 5]').mood.mood,mood,word);
+});
+test('mature moods appear only in mature mode; otherwise they fall back to general moods',()=>{
+  assert.deepEqual({...core.parseMoodTag('Come here. [mood: horny 8]',true).mood},{mood:'horny',level:8});
+  assert.deepEqual({...core.parseMoodTag('Come here. [mood: aroused 8]',true).mood},{mood:'horny',level:8});
+  assert.deepEqual({...core.parseMoodTag('Oh? [mood: seductive 6]',true).mood},{mood:'flirty',level:6});
+  assert.deepEqual({...core.parseMoodTag('Come here. [mood: horny 8]').mood},{mood:'affectionate',level:8});
+  assert.deepEqual({...core.parseMoodTag('Oh? [mood: flirty 6]').mood},{mood:'playful',level:6});
+  assert.match(core.moodInstruction(null,true),/flirty, horny/);
+  assert.ok(!core.moodInstruction(null,false).includes('horny'));
+  const bot={content:'Closer. [mood: lustful 9]',moodMature:true};core.applyMoodTag(bot);
+  assert.equal(bot.content,'Closer.');assert.equal(bot.mood.mood,'horny');
+  const group={members:['a'],roleplay:{enabled:true,mature:true,opening:'',setting:'',user:{name:'Rin',description:''},characters:{a:{name:'Elise',description:''}}}};
+  assert.match(core.buildGroupApiMessages(group,{id:'a',name:'A'},[],{mood:{track:true,mature:true}})[0].content,/flirty, horny/);
+});

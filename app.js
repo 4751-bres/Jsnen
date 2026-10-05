@@ -332,7 +332,7 @@ async function regenerateMessage(message){
   const meta={versions:branch.versions,versionIndex:branch.versionIndex};
   for(const key of ["agentId","agentName","agentEmoji","characterName"])if(message[key])meta[key]=message[key];
   messages=branch.prefix;
-  const mood=moodOptions(agent);if(mood)meta.moodTracked=true;
+  const mood=moodOptions(agent);Object.assign(meta,moodMeta(mood));
   try{
     const context=await prepareContext(buildApiMessages(agent,{mood}));
     if(!context){messages=previous;renderChat();return;}
@@ -670,7 +670,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";$("#edMoods").checked=!!a.moods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";$("#edMoods").checked=!!a.moods;$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);
   $("#delAgent").style.display=(id&&agents.length>1)?"":"none";
@@ -682,7 +682,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -691,7 +691,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -1111,7 +1111,7 @@ function buildApiMessages(agent,options={}){
   if(isGroup()){
     return buildGroupApiMessages(curGroup(),agent,messages,options);
   }
-  const instructions=agentInstructions(agent)+(options.mood?.track?"\n"+moodInstruction(options.mood.current):"");
+  const instructions=agentInstructions(agent)+(options.mood?.track?"\n"+moodInstruction(options.mood.current,options.mood.mature):"");
   const grounded=groundSystem(instructions,messages);
   if(grounded) sys.push({role:"system",content:grounded});
   const hist=messages.filter(m=>(m.role==="user"||m.role==="assistant")&&isContextMessage(m)).map(m=>({role:m.role,content:speakerContent(m.role==="user"?"user":"char",m.content,m.role==="user"?m.images:undefined)}));
@@ -1239,7 +1239,7 @@ async function runAgent(agent,options={}){
 async function runAgentResult(agent,options={}){
   const character=isGroup()&&isRoleplayGroup(curGroup())?roleplayCharacter(curGroup(),agent):null;
   const mood=moodOptions(agent);
-  const meta={...(isGroup()?{agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,...(character?{characterName:character.name}:{})}:{}),...(mood?{moodTracked:true}:{})};
+  const meta={...(isGroup()?{agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,...(character?{characterName:character.name}:{})}:{}),...moodMeta(mood)};
   const context=await prepareContext(buildApiMessages(agent,{...options,mood}));
   if(!context)return {ok:false,aborted:true};
   const result=await streamCompletion(agent,context,meta);
@@ -1250,8 +1250,8 @@ async function runAgentResult(agent,options={}){
 /* ---------- Emotion tracking (roleplay groups, and single agents that opt in) ---------- */
 function moodSettings(agent){
   if(isWorkflow())return null;
-  if(isGroup()){const g=curGroup();return isRoleplayGroup(g)&&g.moods!==false?{owner:g,key:agent.id,save:()=>{store.groups=groups;}}:null;}
-  const a=curAgent();return a?.moods?{owner:a,key:a.id,save:()=>{store.agents=agents;}}:null;
+  if(isGroup()){const g=curGroup();return isRoleplayGroup(g)&&g.moods!==false?{owner:g,key:agent.id,mature:g.roleplay.mature===true,save:()=>{store.groups=groups;}}:null;}
+  const a=curAgent();return a?.moods?{owner:a,key:a.id,mature:a.matureMoods===true,save:()=>{store.agents=agents;}}:null;
 }
 function moodHistory(agentId){
   return messages.filter(m=>m.role==="assistant"&&m.mood&&(!isGroup()||m.agentId===agentId)).map(m=>m.mood);
@@ -1263,7 +1263,9 @@ function currentMood(agent){
   if(steer)return {...steer,steered:true};
   const last=moodHistory(agent.id).at(-1);return last?{...last}:null;
 }
-function moodOptions(agent){return moodSettings(agent)?{track:true,current:currentMood(agent)}:null;}
+function moodOptions(agent){const s=moodSettings(agent);return s?{track:true,mature:s.mature,current:currentMood(agent)}:null;}
+// Flags copied onto a reply so its tag is parsed with the same vocabulary it was asked for.
+function moodMeta(mood){return mood?{moodTracked:true,...(mood.mature?{moodMature:true}:{})}:{};}
 function afterMoodReply(agent,result){
   const s=moodSettings(agent);
   if(!s||!result?.bot?.mood||!s.owner.moodSteer?.[s.key])return;
@@ -1286,13 +1288,13 @@ function renderMoodSheet(){
     card.innerHTML='<div class="mood-head"><span class="av">'+esc(agent.emoji)+'</span><b>'+esc(name)+'</b>'+(now?moodChip(now):'<span class="hint" style="margin:0">No mood yet</span>')+'</div>'+
       (history.length>1?'<div class="mood-trail" aria-label="Recent moods, oldest first">'+history.slice(-8).map(m=>moodChip(m)).join('<span aria-hidden="true">›</span>')+'</div>':"")+
       '<label>'+(steer?"Set for the next reply: "+esc(moodLabel(steer)):"Set a mood for the next reply")+'</label>'+
-      '<div class="mood-steer"><select class="field" aria-label="Mood">'+MOOD_NAMES.map(n=>'<option value="'+n+'"'+((steer||now)?.mood===n?" selected":"")+'>'+n.charAt(0).toUpperCase()+n.slice(1)+'</option>').join("")+'</select>'+
+      '<div class="mood-steer"><select class="field" aria-label="Mood">'+moodNames(s.mature).map(n=>'<option value="'+n+'"'+((steer||now)?.mood===n?" selected":"")+'>'+n.charAt(0).toUpperCase()+n.slice(1)+'</option>').join("")+'</select>'+
       '<input type="range" min="1" max="10" step="1" aria-label="Intensity" value="'+((steer||now)?.level||5)+'"><output>'+((steer||now)?.level||5)+'</output></div>'+
       '<div class="mood-actions"><button type="button" class="btn primary" data-set>'+icon("heart")+'Set mood</button>'+(steer?'<button type="button" class="btn ghost" data-clear>Clear</button>':"")+'</div>';
     const range=card.querySelector('input[type="range"]'),out=card.querySelector("output");
     range.oninput=()=>{out.textContent=range.value;};
     card.querySelector("[data-set]").onclick=()=>{
-      s.owner.moodSteer={...(s.owner.moodSteer||{}),[s.key]:normalizeMood(card.querySelector("select").value,range.value)};
+      s.owner.moodSteer={...(s.owner.moodSteer||{}),[s.key]:normalizeMood(card.querySelector("select").value,range.value,s.mature)};
       try{s.save();}catch(e){toast("Could not save the mood. Browser storage may be full.");return;}
       renderMoodSheet();toast(name+" will feel "+moodLabel(s.owner.moodSteer[s.key]).toLowerCase()+" in the next reply");
     };
@@ -1402,7 +1404,7 @@ async function continueMessage(message){
   const base=await prepareContext(buildApiMessages(agent,{mood}));if(!base)return;
   const payload=[...base,{role:"user",content:"Continue your previous reply exactly where it stopped. Do not repeat anything already written and do not add a preamble."}];
   const meta={};for(const key of ["agentId","agentName","agentEmoji","characterName"])if(message[key])meta[key]=message[key];
-  if(mood)meta.moodTracked=true;
+  Object.assign(meta,moodMeta(mood));
   const result=await streamCompletion(agent,payload,meta);
   if(!result)return;
   const bot=result.bot,i=messages.indexOf(bot);if(i>=0)messages.splice(i,1);

@@ -100,7 +100,10 @@ That's it — it now behaves like a native app with its own icon.
   capacity) are labelled; errors say what to do (wrong key, empty balance, chat too long).
 - **Character moods** — in roleplay groups (on by default) and single agents that opt in, each reply
   ends with a hidden `[mood: name N]` tag that the app removes and shows as a coloured chip with an
-  intensity bar (calm, happy, playful, affectionate, sad, anxious, angry, cold; 1–10). **Moods** (the
+  intensity bar (calm, happy, playful, affectionate, shy, curious, confident, jealous, sad, anxious,
+  angry, cold; 1–10). Mature moods (flirty, horny) are added only for roleplay groups with Mature roleplay
+  on (adult-confirmed) or single agents with "Include mature moods"; elsewhere they show as playful or
+  affectionate. **Moods** (the
   reply bar in roleplay, the heart in a single agent's header) shows each character's recent moods and
   lets you set a mood for their next reply. No extra requests; the mood is the model's own reading.
 - **Message times** on every new message, and **Copy** buttons on code blocks.

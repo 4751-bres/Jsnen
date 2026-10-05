@@ -68,7 +68,7 @@ function buildGroupApiMessages(group,agent,messages,options={}){
     "User character: "+rp.user.name+" — "+rp.user.description,"Setting: "+rp.setting,
     cast&&"Other characters:\n"+cast,rp.opening&&"Opening scene (already shown to the user before the conversation began):\n"+rp.opening,rp.mature&&"Mature-mode preference: enabled.",
     "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE,
-    options.mood?.track&&moodInstruction(options.mood.current)
+    options.mood?.track&&moodInstruction(options.mood.current,options.mood.mature)
   ].filter(Boolean).join("\n\n");
   const history=messages.filter(isContextMessage).map(m=>{
     if(m.role==="user"){
@@ -142,16 +142,24 @@ function withSummary(apiMessages,summary){
 }
 /* mood-core:start */
 // Emotion tracking: characters end each reply with a hidden "[mood: name N]" line that the app reads and removes.
-const MOOD_NAMES=["calm","happy","playful","affectionate","sad","anxious","angry","cold"];
+const MOOD_NAMES=["calm","happy","playful","affectionate","shy","curious","confident","jealous","sad","anxious","angry","cold"];
+// Only offered when mature roleplay is on (adult-confirmed groups, or single agents that opt in).
+const MATURE_MOODS=["flirty","horny"];
+const MATURE_SYNONYMS={seductive:"flirty",teasing:"flirty",coy:"flirty",aroused:"horny",lustful:"horny",lusty:"horny","turned on":"horny",needy:"horny",desirous:"horny"};
+// Without mature mode, mature words still get a chip, using the nearest general mood.
+const MATURE_FALLBACK={flirty:"playful",horny:"affectionate"};
 const MOOD_SYNONYMS={content:"calm",relaxed:"calm",peaceful:"calm",neutral:"calm",serene:"calm",
-  joyful:"happy",excited:"happy",cheerful:"happy",delighted:"happy",amused:"playful",teasing:"playful",flirty:"playful",mischievous:"playful",
+  joyful:"happy",excited:"happy",cheerful:"happy",delighted:"happy",amused:"playful",mischievous:"playful",
+  embarrassed:"shy",bashful:"shy",flustered:"shy",timid:"shy",intrigued:"curious",interested:"curious",fascinated:"curious",
+  proud:"confident",bold:"confident",determined:"confident",assertive:"confident",envious:"jealous",possessive:"jealous",
   loving:"affectionate",tender:"affectionate",warm:"affectionate",fond:"affectionate",
   melancholy:"sad",hurt:"sad",lonely:"sad",grieving:"sad",upset:"sad",
   nervous:"anxious",worried:"anxious",afraid:"anxious",scared:"anxious",tense:"anxious",uneasy:"anxious",
   furious:"angry",irritated:"angry",annoyed:"angry",frustrated:"angry",resentful:"angry",
   distant:"cold",detached:"cold",guarded:"cold",indifferent:"cold",dismissive:"cold"};
-function moodInstruction(current){
-  let text="EMOTION TRACKING: End every reply with one final line in exactly this form: [mood: NAME N]. NAME is the closest of "+MOOD_NAMES.join(", ")+
+function moodNames(mature){return mature?[...MOOD_NAMES,...MATURE_MOODS]:MOOD_NAMES;}
+function moodInstruction(current,mature){
+  let text="EMOTION TRACKING: End every reply with one final line in exactly this form: [mood: NAME N]. NAME is the closest of "+moodNames(mature).join(", ")+
     " for your character's feelings at the end of this reply, and N is the intensity from 1 (faint) to 10 (overwhelming). The app reads and hides this line; never mention it in the story.";
   if(current?.mood){
     text+=" Your character currently feels "+current.mood+" at "+current.level+"/10"+(current.steered
@@ -160,24 +168,26 @@ function moodInstruction(current){
   }
   return text;
 }
-function normalizeMood(name,level){
-  const key=String(name||"").toLowerCase().trim(),mood=MOOD_NAMES.includes(key)?key:MOOD_SYNONYMS[key];
+function normalizeMood(name,level,mature){
+  const key=String(name||"").toLowerCase().trim();
+  const matureMood=MATURE_MOODS.includes(key)?key:MATURE_SYNONYMS[key];
+  const mood=MOOD_NAMES.includes(key)?key:matureMood?(mature?matureMood:MATURE_FALLBACK[matureMood]):MOOD_SYNONYMS[key];
   if(!mood)return null;
   const n=Math.round(Number(level));
   return {mood,level:Number.isFinite(n)?Math.min(10,Math.max(1,n)):5};
 }
 // Finds the trailing mood tag (tolerating "7/10" and missing numbers) and returns the reply without it.
-function parseMoodTag(text){
+function parseMoodTag(text,mature){
   const source=String(text||""),match=source.match(/\s*\[\s*mood\s*:\s*([a-z][a-z -]*?)\s*(\d{1,2})?\s*(?:\/\s*10)?\s*\]\s*$/i);
   if(!match)return {text:source,mood:null};
-  return {text:source.slice(0,match.index).replace(/\s+$/,""),mood:normalizeMood(match[1],match[2])};
+  return {text:source.slice(0,match.index).replace(/\s+$/,""),mood:normalizeMood(match[1],match[2],mature)};
 }
 // While streaming, hide a tag that is still arriving ("[", "[mo", "[mood: ang") at the very end.
 function stripPartialMoodTag(text){
   return String(text||"").replace(/\s*\[(?:m(?:o(?:o(?:d(?:\s*:[^\]\n]*)?)?)?)?)?\]?\s*$/i,"");
 }
 function applyMoodTag(bot){
-  const parsed=parseMoodTag(bot.content);
+  const parsed=parseMoodTag(bot.content,bot.moodMature);
   if(parsed.text!==bot.content)bot.content=parsed.text||bot.content;
   if(parsed.mood)bot.mood=parsed.mood;
   return bot;
