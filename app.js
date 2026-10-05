@@ -584,7 +584,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);
   $("#delAgent").style.display=(id&&agents.length>1)?"":"none";
@@ -596,7 +596,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -605,7 +605,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -691,7 +691,7 @@ function openGroupEditor(id){
   const g=id?groups.find(x=>x.id===id):{emoji:"👥",name:"",members:agents.slice(0,Math.min(3,agents.length)).map(a=>a.id)};
   groupRoleplayDraft=normalizeRoleplay(g.roleplay,g.members||[],agents);
   $("#grTitle").textContent=id?"Edit group":"New group";
-  $("#grEmoji").value=g.emoji;$("#grName").value=g.name;$("#grRounds").value=groupRounds(g);
+  $("#grEmoji").value=g.emoji;$("#grName").value=g.name;$("#grRounds").value=groupRounds(g);$("#grHistory").value=g.historyLimit??"";
   const wrap=$("#grMembers");wrap.innerHTML="";
   const members=g.members||[];
   // Selected members first, in speaking order (deleted agents included so they can be removed), then the rest.
@@ -723,7 +723,7 @@ $("#saveGroup").onclick=()=>{
   const roleplay=collectRoleplayEditor(members),errors=validateRoleplay(roleplay,members,$("#grRpAdult").checked);
   if(errors.includes("adult-confirmation")){toast("Confirm that you are an adult");return;}
   if(errors.length){toast("Complete the roleplay character details");return;}
-  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value})};
+  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),historyLimit:$("#grHistory").value};
   if(editingGroupId){Object.assign(groups.find(g=>g.id===editingGroupId),data);}
   else{const g={id:uid(),...data};groups.push(g);currentKind="group";currentId=g.id;store.kind="group";store.cur=g.id;}
   store.groups=groups;renderAgents();loadConv();closeAll();toast("Group saved");
@@ -783,6 +783,7 @@ function syncWorkflowDraftHeader(){
   workflowDraft.emoji=$("#wfEmoji").value.trim()||"⚙️";
   workflowDraft.name=$("#wfName").value.trim()||"Workflow";
   workflowDraft.template=$("#wfTemplate").value;
+  workflowDraft.historyLimit=$("#wfHistory").value;
 }
 function openWorkflowEditor(id){
   editingWorkflowId=id;
@@ -791,7 +792,7 @@ function openWorkflowEditor(id){
   const activeRun=id?store.run(id):null;
   if(!canEditWorkflowRun(activeRun)){toast("Finish or cancel the active run before editing");return;}
   $("#wfTitle").textContent=id?"Edit workflow":"New workflow";
-  $("#wfEmoji").value=workflowDraft.emoji;$("#wfName").value=workflowDraft.name;$("#wfTemplate").value=workflowDraft.template||"custom";
+  $("#wfEmoji").value=workflowDraft.emoji;$("#wfName").value=workflowDraft.name;$("#wfTemplate").value=workflowDraft.template||"custom";$("#wfHistory").value=workflowDraft.historyLimit??"";
   $("#delWorkflow").style.display=id?"":"none";
   renderWorkflowRoles();closeAll();openSheet("#workflowEditor");
 }
@@ -1085,9 +1086,13 @@ async function quickCompletion(apiMessages,signal,maxTokens){
   return String(data.choices?.[0]?.message?.content||"");
 }
 const SUMMARY_STEP=10;
+function currentHistoryLimit(){
+  const item=isWorkflow()?curWorkflow():isGroup()?curGroup():curAgent();
+  return effectiveHistoryLimit(item?.historyLimit,store.ctxLimit);
+}
 // Applies the "history sent to AI" setting. Returns null when the user stopped a summary request.
 async function prepareContext(apiMessages){
-  const {kept,dropped}=limitApiHistory(apiMessages,store.ctxLimit);
+  const {kept,dropped}=limitApiHistory(apiMessages,currentHistoryLimit());
   if(!dropped.length||!store.ctxSummary)return kept;
   const convId=currentId;let summary=store.summary(convId);
   if(summary&&summary.covered>dropped.length)summary=null; // history was cleared or rewound; rebuild
@@ -1181,9 +1186,10 @@ function saveCurrentRun(){if(isWorkflow()&&currentRun)store.saveRun(currentId,cu
 function workflowMessageMeta(workflow,run,role,agent){
   return {agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,workflowRoleId:role.id,workflowRoleName:role.name,workflowStage:role.stage,runId:run.id};
 }
+// Earlier conversation given to a new workflow task; follows the workflow's history setting (0 = all of it).
 function workflowHistorySnapshot(){
-  return messages.filter(m=>(m.role==="user"||m.role==="assistant")&&isContextMessage(m)&&m.content)
-    .slice(-12).map(m=>({role:m.role,content:m.content}));
+  const list=messages.filter(m=>(m.role==="user"||m.role==="assistant")&&isContextMessage(m)&&m.content),limit=currentHistoryLimit();
+  return (limit?list.slice(-limit):list).map(m=>({role:m.role,content:m.content}));
 }
 async function startWorkflowRun(task){
   const workflow=curWorkflow(),errors=validateWorkflow(workflow,agents);

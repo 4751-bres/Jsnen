@@ -81,9 +81,12 @@ That's it — it now behaves like a native app with its own icon.
 - **Clean context** — failed, stopped-before-output, and empty replies stay visible but are never sent back to the model.
 - **Token usage** — each reply shows input/output tokens and the header shows the chat's running
   total. Replies cut off by the length limit are flagged; ⏵ continues the latest one in place.
-- **History limits** — ⚙️ Settings → *History sent to the AI* can send only the last 20/50/100
-  messages, optionally with a running summary of older ones (one short extra request about every
-  10 messages). Saved chats are never shortened, and the default still sends everything.
+- **History limits** — ⚙️ Settings → *History sent to the AI* sets the default: **Unlimited —
+  entire conversation** (the default) or the last 20/50/100 messages, optionally with a running
+  summary of older ones (one short extra request about every 10 messages). Each agent, group, and
+  workflow editor can override it, so a big chat can stay Unlimited while others send less.
+  Workflows give each role the earlier conversation under the same setting. Saved chats are never
+  shortened; the model's context window still applies.
 - **Search, pins, and sorting** — the ☰ drawer searches names and message text (tap a result to jump
   to the message), 📌 pins items to the top, and sorts by Manual, Recent, or A–Z.
 - **Undo clear** — 🧹 clears immediately and offers **Undo** for a few seconds.

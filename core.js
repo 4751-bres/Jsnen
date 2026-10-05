@@ -120,6 +120,11 @@ function messageText(content){
   if(typeof content==="string")return content;
   return (content||[]).filter(p=>p.type==="text").map(p=>p.text).join(" ")+((content||[]).some(p=>p.type==="image_url")?" [image]":"");
 }
+// A chat's own setting wins: "" or missing = use the global default, "0" = unlimited, "N" = last N messages.
+function effectiveHistoryLimit(chatSetting,globalLimit){
+  if(chatSetting===undefined||chatSetting===null||chatSetting==="")return Math.max(0,Number(globalLimit)||0);
+  return Math.max(0,Number(chatSetting)||0);
+}
 // Keep leading system messages plus the newest `limit` history entries; report what was dropped.
 function limitApiHistory(apiMessages,limit){
   let lead=0;while(lead<apiMessages.length&&apiMessages[lead].role==="system")lead++;
