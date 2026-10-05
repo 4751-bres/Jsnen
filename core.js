@@ -179,6 +179,19 @@ function messageTime(at,now){
   const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return months[d.getMonth()]+" "+d.getDate()+(d.getFullYear()!==n.getFullYear()?" "+d.getFullYear():"")+", "+time;
 }
+// Day dividers: a stable key per local calendar day, and its label relative to now.
+function dayKey(at){const d=new Date(at);return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();}
+function dayLabel(at,now){
+  const d=new Date(at),n=new Date(now||Date.now());
+  const start=x=>new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime();
+  const days=Math.round((start(n)-start(d))/864e5);
+  if(days===0)return "Today";
+  if(days===1)return "Yesterday";
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const weekdays=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  if(days>1&&days<7)return weekdays[d.getDay()]+", "+months[d.getMonth()]+" "+d.getDate();
+  return months[d.getMonth()]+" "+d.getDate()+(d.getFullYear()!==n.getFullYear()?", "+d.getFullYear():"");
+}
 // Plain Markdown transcript of the active conversation (inactive versions and reasoning are left out).
 function chatToMarkdown(title,list,userName){
   const lines=["# "+title,""];

@@ -88,3 +88,14 @@ test('roleplay prompt includes the opening scene; escaping covers quotes; code f
   assert.equal(ctx.md('```js\nconst a = 1;\n```'),'<pre><code>const a = 1;\n</code></pre>');
   assert.equal(ctx.md('```\nplain\n```'),'<pre><code>plain\n</code></pre>');
 });
+
+test('day dividers label today, yesterday, this week, and older dates',()=>{
+  const now=new Date(2026,9,5,15,0).getTime();
+  assert.equal(core.dayLabel(new Date(2026,9,5,0,5).getTime(),now),'Today');
+  assert.equal(core.dayLabel(new Date(2026,9,4,23,59).getTime(),now),'Yesterday');
+  assert.equal(core.dayLabel(new Date(2026,9,1,12,0).getTime(),now),'Thu, Oct 1');
+  assert.equal(core.dayLabel(new Date(2026,8,20,12,0).getTime(),now),'Sep 20');
+  assert.equal(core.dayLabel(new Date(2025,11,31,12,0).getTime(),now),'Dec 31, 2025');
+  assert.equal(core.dayKey(new Date(2026,9,5,0,1).getTime()),core.dayKey(new Date(2026,9,5,23,59).getTime()));
+  assert.notEqual(core.dayKey(new Date(2026,9,5,0,1).getTime()),core.dayKey(new Date(2026,9,4,23,59).getTime()));
+});

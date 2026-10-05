@@ -360,7 +360,7 @@ function messageCopyButton(message){
 }
 const expandedReasoning=new WeakSet();
 const CHAT_BATCH=40;
-let chatRows=new WeakMap(),chatViewId=null,chatVisibleStart=0,chatFollowing=true,streamPaintTimer=null,streamPaintTarget=null;
+let chatDividers=new Map(),chatRows=new WeakMap(),chatViewId=null,chatVisibleStart=0,chatFollowing=true,streamPaintTimer=null,streamPaintTarget=null;
 function isChatNearBottom(c){return c.scrollHeight-c.clientHeight-c.scrollTop<100;}
 function updateLatestButton(){$("#jumpToLatest").hidden=chatFollowing;}
 $("#chat").addEventListener("scroll",()=>{chatFollowing=isChatNearBottom($("#chat"));updateLatestButton();},{passive:true});
@@ -403,7 +403,8 @@ function updateChatRow(m,d){
   d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
   if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
   const note=m.interrupted?"⚠ connection lost — reply incomplete":m.finish?"⚠ "+(FINISH_NOTES[m.finish]||m.finish):m.truncated?"⚠ "+FINISH_NOTES.length:"";
-  const meta=[messageTime(m.at),note,m.usage&&formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+" out"].filter(Boolean).join(" · ");
+  // Time only: the day divider above already shows the date.
+  const meta=[messageTime(m.at,m.at),note,m.usage&&formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+" out"].filter(Boolean).join(" · ");
   if(d._continue)d._continue.hidden=!(m.truncated&&!m.streaming&&messages.at(-1)===m);
   if(d._meta.textContent!==meta){d._meta.textContent=meta;d._meta.classList.toggle("warn",!!note);}
   d._metaRow.hidden=!meta&&!m.edited;
@@ -428,7 +429,7 @@ function cancelStreamPaint(){if(streamPaintTimer!==null)clearTimeout(streamPaint
 function renderChat(){
   const c=$("#chat"),viewId=currentKind+":"+currentId;
   if(chatViewId!==viewId){
-    cancelStreamPaint();chatViewId=viewId;chatRows=new WeakMap();chatVisibleStart=Math.max(0,messages.length-CHAT_BATCH);chatFollowing=true;c.replaceChildren();
+    cancelStreamPaint();chatViewId=viewId;chatRows=new WeakMap();chatDividers=new Map();chatVisibleStart=Math.max(0,messages.length-CHAT_BATCH);chatFollowing=true;c.replaceChildren();
   }
   if(chatVisibleStart>=messages.length)chatVisibleStart=Math.max(0,messages.length-CHAT_BATCH);
   if(!messages.length){
@@ -453,8 +454,19 @@ function renderChat(){
   if(chatVisibleStart>0){
     const older=c.querySelector(".older-messages")||document.createElement("button");older.className="older-messages";older.innerHTML=icon("up")+"Load earlier messages ("+chatVisibleStart+")";older.onclick=loadEarlierMessages;nodes.push(older);
   }
+  // A divider goes before the first visible message of each calendar day (messages without a time are skipped).
+  let lastDay=null;const now=Date.now();
   for(const m of messages.slice(chatVisibleStart)){
     if(m.role==="system")continue;
+    if(m.at){
+      const key=dayKey(m.at);
+      if(key!==lastDay){
+        let divider=chatDividers.get(key);
+        if(!divider){divider=document.createElement("div");divider.className="day-divider";divider.setAttribute("role","separator");chatDividers.set(key,divider);}
+        const label=dayLabel(m.at,now);if(divider.textContent!==label)divider.textContent=label;
+        nodes.push(divider);lastDay=key;
+      }
+    }
     let d=chatRows.get(m);
     const retryKey=isWorkflow()?[currentRun?.id,currentRun?.status].join(":"):"";
     if(!d||d._retryKey!==retryKey){d=createChatRow(m);d._retryKey=retryKey;chatRows.set(m,d);}
