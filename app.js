@@ -18,15 +18,16 @@ const store = {
   // Conversations, runs, and summaries are large: IndexedDB holds them when available (records mirrors it in memory
   // as JSON strings so reads stay synchronous); otherwise they fall back to localStorage.
   records:null,db:null,onWriteError:null,
+  channel:typeof BroadcastChannel!=="undefined"?new BroadcastChannel("ds-agents"):null,
   isBigKey(k){return /^ds_(conv|run|sum)_/.test(k);},
   raw(k){return this.records?(this.records.has(k)?this.records.get(k):null):localStorage.getItem(k);},
   setRaw(k,v){
     if(!this.records){localStorage.setItem(k,v);return;}
-    this.records.set(k,v);this.persist(tx=>tx.objectStore("kv").put(v,k));
+    this.records.set(k,v);this.persist(tx=>tx.objectStore("kv").put(v,k));this.channel?.postMessage({k,v});
   },
   removeRaw(k){
     if(!this.records){localStorage.removeItem(k);return;}
-    this.records.delete(k);this.persist(tx=>tx.objectStore("kv").delete(k));
+    this.records.delete(k);this.persist(tx=>tx.objectStore("kv").delete(k));this.channel?.postMessage({k,v:null});
   },
   bigKeys(){
     if(this.records)return [...this.records.keys()];
@@ -41,7 +42,7 @@ const store = {
     if(!this.records){for(const k of this.bigKeys())localStorage.removeItem(k);for(const [k,v] of entries)localStorage.setItem(k,v);return Promise.resolve();}
     return new Promise((resolve,reject)=>{
       const tx=this.db.transaction("kv","readwrite"),kv=tx.objectStore("kv");kv.clear();for(const [k,v] of entries)kv.put(v,k);
-      tx.oncomplete=()=>{this.records=new Map(entries);resolve();};tx.onerror=tx.onabort=()=>reject(tx.error||new Error("Storage error"));
+      tx.oncomplete=()=>{this.records=new Map(entries);this.channel?.postMessage({reload:true});resolve();};tx.onerror=tx.onabort=()=>reject(tx.error||new Error("Storage error"));
     });
   },
   init(){
@@ -137,13 +138,13 @@ function closeAll(){$("#scrim").classList.remove("on");document.querySelectorAll
 $("#scrim").onclick=closeAll;
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeAll);
 
-function esc(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 // Protect code and link attributes before formatting narration and emphasis.
 function md(t){
   const tokens=[];
   const keep=html=>"\u0000"+(tokens.push(html)-1)+"\u0000";
   t=esc(t.replace(/\u0000/g,""));
-  t=t.replace(/```([\s\S]*?)```/g,(m,c)=>keep("<pre><code>"+c.replace(/^\n/,"")+"</code></pre>"));
+  t=t.replace(/```([\s\S]*?)```/g,(m,c)=>keep("<pre><code>"+c.replace(/^[\w#+.-]*\n/,"")+"</code></pre>"));
   t=t.replace(/`([^`\n]+)`/g,(m,c)=>keep("<code>"+c+"</code>"));
   t=t.replace(/\\\*/g,()=>keep("*"));
   // Pipe tables (header row + |---| separator) become one-line HTML so pre-wrap adds no stray gaps.
@@ -233,9 +234,9 @@ function renderResponders(){
 /* message-edit-core:start */
 function editedMessage(message,text){
   if(!text.trim()&&!message.images?.length)throw new Error("A message needs text or an image.");
-  return {...message,content:text,reasoning:"",error:false,edited:true,usage:null,truncated:false};
+  return {...message,content:text,reasoning:"",error:false,edited:true,usage:null,truncated:false,interrupted:null,finish:null};
 }
-function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",error:!!message.error,edited:!!message.edited,usage:message.usage||null,truncated:!!message.truncated};}
+function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",error:!!message.error,edited:!!message.edited,usage:message.usage||null,truncated:!!message.truncated,interrupted:message.interrupted||null,finish:message.finish||null};}
 function captureMessageVersions(list,index){
   const message=list[index];
   if(!message)throw new Error("Message not found.");
@@ -334,6 +335,11 @@ let chatRows=new WeakMap(),chatViewId=null,chatVisibleStart=0,chatFollowing=true
 function isChatNearBottom(c){return c.scrollHeight-c.clientHeight-c.scrollTop<100;}
 function updateLatestButton(){$("#jumpToLatest").hidden=chatFollowing;}
 $("#chat").addEventListener("scroll",()=>{chatFollowing=isChatNearBottom($("#chat"));updateLatestButton();},{passive:true});
+$("#chat").addEventListener("click",async e=>{
+  const button=e.target.closest(".code-copy");if(!button)return;
+  const code=button.parentElement.querySelector("code")?.textContent||"";
+  const ok=await copyMessageText(code);button.textContent=ok?"Copied":"Failed";setTimeout(()=>{button.textContent="Copy";},1500);
+});
 $("#jumpToLatest").onclick=()=>{chatFollowing=true;$("#chat").scrollTop=$("#chat").scrollHeight;updateLatestButton();};
 function loadEarlierMessages(){
   if(chatVisibleStart===0)return;
@@ -363,12 +369,14 @@ function updateChatRow(m,d){
   if(d._contentValue!==m.content||d._streaming!==!!m.streaming){
     d._text.innerHTML=md(m.role==="assistant"?cleanCharacterReply(m.content):m.content||"")+(m.streaming?'<span class="cursor"></span>':"");
     d._contentValue=m.content;d._streaming=!!m.streaming;
+    if(!m.streaming)for(const pre of d._text.querySelectorAll("pre")){const b=document.createElement("button");b.type="button";b.className="code-copy";b.textContent="Copy";pre.prepend(b);}
   }
   d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
   if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
-  const meta=[m.truncated&&"⚠ cut off at length limit",m.usage&&formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+" out"].filter(Boolean).join(" · ");
+  const note=m.interrupted?"⚠ connection lost — reply incomplete":m.finish?"⚠ "+(FINISH_NOTES[m.finish]||m.finish):m.truncated?"⚠ "+FINISH_NOTES.length:"";
+  const meta=[messageTime(m.at),note,m.usage&&formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+" out"].filter(Boolean).join(" · ");
   if(d._continue)d._continue.hidden=!(m.truncated&&!m.streaming&&messages.at(-1)===m);
-  if(d._meta.textContent!==meta){d._meta.textContent=meta;d._meta.classList.toggle("warn",!!m.truncated);}
+  if(d._meta.textContent!==meta){d._meta.textContent=meta;d._meta.classList.toggle("warn",!!note);}
   d._copy.disabled=!m.content;d._copy.title=m.content?"Copy message":"No message text to copy";
   d._copy.setAttribute("aria-label",d._copy.title);
   for(const button of d.querySelectorAll("[data-chat-action]"))button.disabled=!!controller||!!m.streaming||button.dataset.limitDisabled==="true";
@@ -406,6 +414,12 @@ function renderChat(){
     return;
   }
   const nodes=[];
+  const opening=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.opening:"";
+  if(opening&&chatVisibleStart===0){
+    const card=c.querySelector(".scene-card")||document.createElement("div");card.className="scene-card";
+    if(card._text!==opening){card.innerHTML='<span class="who">🎬 Opening scene</span>'+md(opening);card._text=opening;}
+    nodes.push(card);
+  }
   if(chatVisibleStart>0){
     const older=c.querySelector(".older-messages")||document.createElement("button");older.className="older-messages";older.textContent="↑ Load earlier messages ("+chatVisibleStart+")";older.onclick=loadEarlierMessages;nodes.push(older);
   }
@@ -491,6 +505,7 @@ function renderWorkflowUi(){
 function loadConv(){
   pendingImages=[];renderAttachments();
   messages=store.conv(currentId);currentRun=isWorkflow()?store.run(currentId):null;
+  try{input.value=localStorage.getItem(draftKey())||"";}catch(e){input.value="";}autoGrow();
   if(currentRun)store.saveRun(currentId,currentRun);
   renderChat();refreshHeader();renderResponders();renderWorkflowUi();
 }
@@ -537,7 +552,9 @@ function drawerSection(listEl,kind,items,emptyHint,describe,onSelect,onEdit){
   let shown=0;
   for(const item of orderDrawerItems(items,{pins,sort:store.sort,activity:store.activity})){
     const nameHit=!q||String(item.name).toLowerCase().includes(q);
-    const hit=q&&!nameHit?searchConversation(store.conv(item.id),q):null;
+    // Cheap raw-text check first so big chats are only parsed when they might match.
+    const raw=q&&!nameHit?store.raw("ds_conv_"+item.id):null;
+    const hit=raw&&(/["\\]/.test(q)||raw.toLowerCase().includes(q))?searchConversation(store.conv(item.id),q):null;
     if(q&&!nameHit&&!hit)continue;
     shown++;
     const row=document.createElement("div"),pinned=pins.includes(item.id);
@@ -584,7 +601,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);
   $("#delAgent").style.display=(id&&agents.length>1)?"":"none";
@@ -596,7 +613,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -605,13 +622,22 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
 };
+function forgetItem(id){
+  try{store.pins=store.pins.filter(p=>p!==id);const a=store.activity;delete a[id];localStorage.setItem("ds_activity",JSON.stringify(a));
+    for(const kind of ["agent","group","workflow"])localStorage.removeItem("ds_draft_"+kind+":"+id);}catch(e){/* Cosmetic leftovers only. */}
+}
+function confirmDelete(name,count){
+  return confirm("Delete “"+name+"”"+(count?" and its conversation ("+count+" message"+(count===1?"":"s")+")":"")+"? This cannot be undone — export a backup first if unsure.");
+}
 $("#delAgent").onclick=()=>{
   if(!editingId)return;
+  const doomed=agents.find(a=>a.id===editingId);if(!confirmDelete(doomed?.name||"this agent",store.conv(editingId).length))return;
+  forgetItem(editingId);
   agents=agents.filter(a=>a.id!==editingId);store.agents=agents;store.clearConv(editingId);
   // drop the deleted agent from any group memberships
   groups=groups.map(g=>groupAfterAgentDelete(g,editingId));store.groups=groups;
@@ -730,6 +756,8 @@ $("#saveGroup").onclick=()=>{
 };
 $("#delGroup").onclick=()=>{
   if(!editingGroupId)return;
+  const doomed=groups.find(g=>g.id===editingGroupId);if(!confirmDelete(doomed?.name||"this group",store.conv(editingGroupId).length))return;
+  forgetItem(editingGroupId);
   groups=groups.filter(g=>g.id!==editingGroupId);store.groups=groups;store.clearConv(editingGroupId);
   if(currentKind==="group"&&currentId===editingGroupId){currentKind="agent";currentId=agents[0].id;store.kind="agent";store.cur=currentId;}
   renderAgents();loadConv();closeAll();toast("Group deleted");
@@ -757,7 +785,7 @@ function renderWorkflowRoles(){
       '<label>System prompt</label><textarea class="field" data-agent="prompt">'+esc(a.prompt||"")+'</textarea>'+
       '<label>Model (use deepseek-flash for images)</label><input class="field" data-agent="model" value="'+esc(a.model)+'">'+
       '<label>Temperature (0–2)</label><input class="field" type="number" min="0" max="2" step="0.1" data-agent="temp" value="'+a.temp+'">'+
-      '<label>Thinking</label><select class="field" data-agent="think">'+["off","low","medium","high"].map(v=>'<option'+(a.think===v?' selected':'')+'>'+v+'</option>').join("")+'</select></details>';
+      '<label>Thinking</label><select class="field" data-agent="think">'+["off","low","medium","high","max"].map(v=>'<option'+(a.think===v?' selected':'')+'>'+v+'</option>').join("")+'</select></details>';
     card.querySelectorAll("[data-agent]").forEach(el=>el.oninput=()=>{r.agent=r.agent||{...a};r.agent[el.dataset.agent]=el.dataset.agent==="temp"?Number(el.value):el.value;workflowDraftDirty=true;});
     card.querySelectorAll("[data-field]").forEach(el=>el.oninput=()=>{r[el.dataset.field]=el.value;workflowDraftDirty=true;card.classList.remove("invalid");card.querySelector(".stage-badge").textContent=stageLabel(r.stage);});
     card.querySelector('[data-field="agentId"]').onchange=e=>{r.agentId=e.target.value;delete r.agent;separateWorkflowAgents(workflowDraft,agents);workflowDraftDirty=true;renderWorkflowRoles();};
@@ -834,7 +862,9 @@ $("#saveWorkflow").onclick=()=>{
   store.workflows=workflows;renderAgents();loadConv();closeAll();toast("Workflow saved");
 };
 $("#delWorkflow").onclick=()=>{
-  if(!editingWorkflowId||!confirm("Delete this workflow and its conversation?"))return;
+  if(!editingWorkflowId)return;
+  const doomed=workflows.find(w=>w.id===editingWorkflowId);if(!confirmDelete(doomed?.name||"this workflow",store.conv(editingWorkflowId).length))return;
+  forgetItem(editingWorkflowId);
   workflows=workflows.filter(w=>w.id!==editingWorkflowId);store.workflows=workflows;store.clearConv(editingWorkflowId);store.clearRun(editingWorkflowId);
   if(currentKind==="workflow"&&currentId===editingWorkflowId){currentKind="agent";currentId=agents[0].id;store.kind="agent";store.cur=currentId;}
   renderAgents();loadConv();closeAll();toast("Workflow deleted");
@@ -842,7 +872,42 @@ $("#delWorkflow").onclick=()=>{
 
 /* ---------- Settings ---------- */
 function refreshConnPill(){const p=$("#connPill");if(store.k){p.textContent="key saved";p.style.color="var(--ok)";}else{p.textContent="not set";p.style.color="var(--muted)";}}
-$("#setBtn").onclick=()=>{$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
+async function refreshStorageInfo(){
+  const el=$("#storageInfo");
+  try{const {usage,quota}=await navigator.storage.estimate();el.textContent=formatBytes(usage)+" of "+formatBytes(quota)+(store.records?" · IndexedDB":" · localStorage");}
+  catch(e){el.textContent=store.records?"IndexedDB":"localStorage";}
+  const last=Number(localStorage.getItem("ds_last_backup"))||0;
+  $("#lastBackup").textContent=last?messageTime(last):"never";
+}
+function formatBytes(n){if(!Number.isFinite(n))return "?";const u=["B","KB","MB","GB","TB"];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return (i?n.toFixed(n>=100?0:1):n)+" "+u[i];}
+$("#checkKey").onclick=async()=>{
+  const key=$("#apiKey").value.trim(),base=($("#baseUrl").value.trim()||"https://api.deepseek.com").replace(/\/+$/,""),out=$("#keyStatus");
+  if(!key){out.textContent="Enter a key first.";return;}
+  out.textContent="Checking…";
+  const get=path=>fetch(base+path,{headers:{"Authorization":"Bearer "+key}});
+  try{
+    let res=await get("/user/balance");
+    if(res.ok){
+      const data=await res.json(),info=(data.balance_infos||[]).map(b=>b.total_balance+" "+b.currency).join(" · ");
+      out.textContent="✓ Key works"+(info?" · Balance: "+info:"")+(data.is_available===false?" · balance too low to send requests":"");return;
+    }
+    if(res.status===404){res=await get("/models");if(res.ok){out.textContent="✓ Key works (this provider does not report a balance).";return;}}
+    let detail="";try{detail=(await res.json()).error?.message||"";}catch(e){}
+    out.textContent="✗ "+friendlyApiError(res.status,detail);
+  }catch(e){out.textContent="✗ Could not reach "+base+". Check the base URL and your connection.";}
+};
+$("#exportChat").onclick=()=>{
+  if(!messages.length){toast("This chat is empty.");return;}
+  const item=isWorkflow()?curWorkflow():isGroup()?curGroup():curAgent();
+  const userName=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user.name:"";
+  downloadFile((item.name||"chat").replace(/[^\w\- ]+/g,"").trim()+".md",chatToMarkdown(item.emoji+" "+item.name,messages,userName),"text/markdown");
+  toast("Chat exported");
+};
+function downloadFile(name,text,type){
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+$("#setBtn").onclick=()=>{refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
 $("#saveSettings").onclick=()=>{
   store.k=$("#apiKey").value.trim();
   store.base=($("#baseUrl").value.trim()||"https://api.deepseek.com").replace(/\/+$/,"");
@@ -852,11 +917,9 @@ $("#saveSettings").onclick=()=>{
 };
 $("#exportBackup").onclick=()=>{
   const records=Object.fromEntries(store.bigKeys().map(k=>[k,store.raw(k)]));
-  const blob=new Blob([JSON.stringify(makeBackup(localStorage,records))],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download="deepseek-agents-"+new Date().toISOString().slice(0,10)+".json";
-  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-  toast("Backup exported");
+  downloadFile("deepseek-agents-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify(makeBackup(localStorage,records)),"application/json");
+  try{localStorage.setItem("ds_last_backup",String(Date.now()));}catch(e){}
+  refreshStorageInfo();toast("Backup exported");
 };
 $("#importBackup").onclick=()=>{if(controller){toast("Stop the current response first");return;}$("#backupFile").click();};
 $("#backupFile").onchange=async e=>{
@@ -945,13 +1008,16 @@ function commitComposer(){
   if(readingImages){toast("Wait for the images to finish loading");return false;}
   const text=input.value.trim();
   if(!text&&!pendingImages.length)return false;
-  const message={role:"user",content:text,...(pendingImages.length?{images:pendingImages.slice()}:{})};
+  const message={role:"user",content:text,at:Date.now(),...(pendingImages.length?{images:pendingImages.slice()}:{})};
   try{store.saveConv(currentId,[...messages,message]);}
   catch(error){toast("Browser storage is full. Remove an attachment or clear an old chat first.");return false;}
-  messages.push(message);pendingImages=[];input.value="";autoGrow();renderAttachments();renderChat();return true;
+  messages.push(message);pendingImages=[];input.value="";clearDraft();autoGrow();renderAttachments();renderChat();return true;
 }
+// Unsent text is kept per chat, so switching chats never carries a draft into the wrong conversation.
+function draftKey(){return "ds_draft_"+currentKind+":"+currentId;}
+function clearDraft(){try{localStorage.removeItem(draftKey());}catch(e){}}
 function autoGrow(){input.style.height="auto";input.style.height=Math.min(input.scrollHeight,window.innerHeight*0.38)+"px";}
-input.addEventListener("input",autoGrow);
+input.addEventListener("input",()=>{autoGrow();try{if(input.value)localStorage.setItem(draftKey(),input.value);else clearDraft();}catch(e){/* Draft is still in the box. */}});
 input.addEventListener("keydown",e=>{
   // Touch-first devices keep Enter for new lines; a hardware keyboard with a fine pointer sends.
   if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing&&!matchMedia("(pointer:coarse)").matches){
@@ -985,77 +1051,112 @@ async function streamCompletion(agent,apiMessages,meta={}){
   if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return false;}
   if(!modelSeesImages(agent.model||store.model)&&apiMessages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url"))){toast("This chat contains images. Set this agent's model to deepseek-flash for vision.");return false;}
   const convId=currentId,conversationMessages=messages;
-  const bot={role:"assistant",content:"",reasoning:"",streaming:true,...meta};
+  const bot={role:"assistant",content:"",reasoning:"",streaming:true,at:Date.now(),...meta};
   messages.push(bot);
   renderChat();
 
   const payload={
     model:agent.model||store.model,
     messages:apiMessages,
-    temperature:agent.temp,
     stream:true,
     stream_options:{include_usage:true},
   };
   // DeepSeek V4 thinking mode (reasoning_content). "off" => cheaper non-thinking path.
+  // Thinking mode does not support temperature, so it is only sent when thinking is off.
   if(agent.think && agent.think!=="off"){payload.thinking={type:"enabled"};payload.reasoning_effort=agent.think;}
-  else{payload.thinking={type:"disabled"};}
+  else{payload.thinking={type:"disabled"};payload.temperature=agent.temp;}
+  const maxTokens=replyTokenLimit(agent.maxTokens);if(maxTokens)payload.max_tokens=maxTokens;
 
   controller=new AbortController();
-  setSending(true);renderResponders();renderChat();
+  const signal=controller.signal;
+  setSending(true);renderResponders();renderChat();acquireWakeLock();
   let aborted=false;
   try{
-    const res=await fetch(store.base+"/chat/completions",{
+    const res=await fetchWithRetry(()=>fetch(store.base+"/chat/completions",{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":"Bearer "+store.k},
       body:JSON.stringify(payload),
-      signal:controller.signal,
-    });
+      signal,
+    }),signal);
     if(!res.ok){
       let detail="";try{const j=await res.json();detail=j.error?.message||JSON.stringify(j);}catch(e){detail=await res.text().catch(()=>"");}
-      throw new Error("HTTP "+res.status+(detail?": "+detail:""));
+      throw new Error(friendlyApiError(res.status,detail));
     }
     const reader=res.body.getReader();
     const dec=new TextDecoder();
     let buf="",parsedEvents=0;
+    const handleLine=raw=>{
+      const line=raw.trim();
+      if(!line.startsWith("data:"))return;
+      const data=line.slice(5).trim();
+      if(data==="[DONE]")return;
+      let j;try{j=JSON.parse(data);}catch(e){return;/* ignore keep-alive/partial */}
+      if(j.error)throw new Error(j.error.message||"The provider reported an error mid-reply.");
+      const choice=j.choices?.[0],d=choice?.delta||{},finish=choice?.finish_reason;
+      if(finish&&finish!=="stop"&&finish!=="tool_calls"){
+        if(finish!=="length")bot.finish=finish;
+        if(finish!=="content_filter")bot.truncated=true;
+      }
+      if(j.usage)bot.usage={prompt:j.usage.prompt_tokens||0,completion:j.usage.completion_tokens||0};
+      if(d.reasoning_content) bot.reasoning+=d.reasoning_content;
+      if(d.content) bot.content+=d.content;
+      scheduleStreamPaint(bot);
+    };
     while(true){
       const {value,done}=await reader.read();
       if(done)break;
       buf+=dec.decode(value,{stream:true});
       let idx;
       while((idx=buf.indexOf("\n"))>=0){
-        let line=buf.slice(0,idx).trim();buf=buf.slice(idx+1);
-        if(!line.startsWith("data:"))continue;
-        const data=line.slice(5).trim();
-        if(data==="[DONE]"){continue;}
-        try{
-          const j=JSON.parse(data);
-          const d=j.choices?.[0]?.delta||{};
-          if(j.choices?.[0]?.finish_reason==="length")bot.truncated=true;
-          if(j.usage)bot.usage={prompt:j.usage.prompt_tokens||0,completion:j.usage.completion_tokens||0};
-          if(d.reasoning_content) bot.reasoning+=d.reasoning_content;
-          if(d.content) bot.content+=d.content;
-          scheduleStreamPaint(bot);
-        }catch(e){/* ignore keep-alive/partial */}
+        const line=buf.slice(0,idx);buf=buf.slice(idx+1);
+        handleLine(line);
         // Cached/buffered SSE data can otherwise monopolize the microtask queue.
         if(++parsedEvents%100===0){
           await new Promise(resolve=>setTimeout(resolve,0));
-          if(controller.signal.aborted){const stopped=new Error("Stopped");stopped.name="AbortError";throw stopped;}
+          if(signal.aborted){const stopped=new Error("Stopped");stopped.name="AbortError";throw stopped;}
         }
       }
     }
+    handleLine(buf+dec.decode()); // a final event without a trailing newline
     bot.streaming=false;
     if(!bot.content&&!bot.reasoning){bot.content="(empty response)";}
   }catch(err){
     bot.streaming=false;
     if(err.name==="AbortError"){aborted=true;bot.content=bot.content||"⏹ stopped.";}
+    // A dropped connection keeps everything already written; ⏵ can finish it.
+    else if(bot.content){bot.interrupted=String(err.message||"Connection lost");bot.truncated=true;}
     else{bot.error=true;bot.content="⚠️ "+err.message;}
   }finally{
-    cancelStreamPaint();
+    cancelStreamPaint();releaseWakeLock();
     controller=null;setSending(false);
     renderChat();try{store.saveConv(convId,conversationMessages);}catch(error){toast("Response received, but browser storage is full. This reply is not saved.");}renderResponders();
   }
-  return {ok:!aborted&&!bot.error,aborted,bot};
+  return {ok:!aborted&&!bot.error&&!bot.interrupted,aborted,bot};
 }
+// Retries busy/overloaded responses and network failures before any text arrives (2 retries, backing off).
+async function fetchWithRetry(request,signal){
+  for(let attempt=0;;attempt++){
+    let res;
+    try{res=await request();}
+    catch(error){if(error.name==="AbortError"||attempt>=2)throw error;}
+    if(res&&(res.ok||!isRetryableStatus(res.status)||attempt>=2))return res;
+    toast("DeepSeek is busy — retrying ("+(attempt+1)+"/2)…");
+    await new Promise((resolve,reject)=>{
+      const timer=setTimeout(resolve,attempt?4000:1500);
+      signal.addEventListener("abort",()=>{clearTimeout(timer);const e=new Error("Stopped");e.name="AbortError";reject(e);},{once:true});
+    });
+  }
+}
+// Keeps a phone screen awake while a reply streams, so long replies are not cut off by auto-lock.
+let wakeLock=null;
+async function acquireWakeLock(){
+  try{
+    if(wakeLock||!globalThis.navigator?.wakeLock||document.visibilityState!=="visible")return;
+    const lock=await navigator.wakeLock.request("screen");
+    if(controller)wakeLock=lock;else lock.release();
+  }catch(e){/* Not supported or not allowed; streaming works without it. */}
+}
+function releaseWakeLock(){try{wakeLock?.release();}catch(e){}wakeLock=null;}
 
 /* ---------- Stream one response from a specific agent ---------- */
 // returns true if it completed normally, false if aborted
@@ -1174,7 +1275,7 @@ async function continueMessage(message){
   else if(bot.content&&!REPLY_PLACEHOLDERS.has(bot.content)){
     message.content+=bot.content;
     if(bot.reasoning)message.reasoning=(message.reasoning?message.reasoning+"\n\n":"")+bot.reasoning;
-    message.truncated=!!bot.truncated;
+    message.truncated=!!bot.truncated;message.interrupted=bot.interrupted||null;message.finish=bot.finish||null;
     if(bot.usage)message.usage={prompt:(message.usage?.prompt||0)+bot.usage.prompt,completion:(message.usage?.completion||0)+bot.usage.completion};
   }
   try{store.saveConv(currentId,messages);}catch(e){toast("Browser storage is full. The continuation is not saved.");}
@@ -1203,7 +1304,7 @@ async function startWorkflowRun(task){
   const nextRun=newRun(workflow,task,Date.now(),uid);
   nextRun.images=images;
   nextRun.history=workflowHistorySnapshot();
-  const nextMessages=[...messages,{role:"user",content:task,images,runId:nextRun.id}];
+  const nextMessages=[...messages,{role:"user",content:task,images,runId:nextRun.id,at:Date.now()}];
   const previousRun=store.raw("ds_run_"+currentId);
   try{store.saveRun(currentId,nextRun);store.saveConv(currentId,nextMessages);}
   catch(e){
@@ -1211,7 +1312,7 @@ async function startWorkflowRun(task){
     toast("Browser storage is full. Remove an attachment or clear an old chat first.");return;
   }
   currentRun=nextRun;messages=nextMessages;
-  pendingImages=[];input.value="";autoGrow();renderAttachments();
+  pendingImages=[];input.value="";clearDraft();autoGrow();renderAttachments();
   renderChat();renderWorkflowUi();
   await continueWorkflowRun();
 }
@@ -1235,7 +1336,7 @@ async function continueWorkflowRun(){
     const result=await streamCompletion(agent,buildWorkflowMessages(workflow,currentRun,role,agent),workflowMessageMeta(workflow,currentRun,role,agent));
     if(!currentRun||currentRun.id!==runId)return;
     if(result===false){currentRun={...currentRun,status:"stopped"};saveCurrentRun();renderWorkflowUi();return;}
-    if(result.aborted||result.bot.error){
+    if(result.aborted||result.bot.error||result.bot.interrupted){
       currentRun=recordRoleFailure(currentRun,role,result.bot,Date.now());
       saveCurrentRun();renderChat();renderWorkflowUi();refreshHeader();return;
     }
@@ -1334,5 +1435,32 @@ store.onWriteError=()=>toast("Browser storage refused the last save. Free space 
 store.init().finally(()=>{
   renderAgents();loadConv();refreshConnPill();
   if(!store.k){setTimeout(()=>{$("#setBtn").click();},400);}
+  else remindBackup();
 });
+// Another open tab (or the installed app) saved something: mirror it instead of later overwriting it.
+if(store.channel)store.channel.onmessage=e=>{
+  const {k,v,reload}=e.data||{};
+  if(reload){location.reload();return;}
+  if(!store.records||typeof k!=="string")return;
+  if(v===null)store.records.delete(k);else store.records.set(k,v);
+  if(!controller&&!sequence&&(k==="ds_conv_"+currentId||k==="ds_run_"+currentId)){
+    const images=pendingImages,draft=input.value;loadConv();pendingImages=images;input.value=draft;renderAttachments();
+  }
+};
+addEventListener("storage",e=>{
+  if(controller||sequence||!["ds_agents","ds_groups","ds_workflows"].includes(e.key))return;
+  agents=store.agents||agents;groups=normalizeStoredGroups(store.groups,agents);workflows=store.workflows;
+  const list=currentKind==="group"?groups:currentKind==="workflow"?workflows:agents;
+  if(!list.some(item=>item.id===currentId)){currentKind="agent";currentId=agents[0].id;loadConv();}
+  renderAgents();refreshHeader();renderResponders();
+});
+// Everything lives only in this browser, so nudge (at most every 3 days) when there is no recent backup.
+function remindBackup(){
+  try{
+    const now=Date.now(),last=Number(localStorage.getItem("ds_last_backup"))||0,nagged=Number(localStorage.getItem("ds_backup_nag"))||0;
+    if(now-last<14*864e5||now-nagged<3*864e5||!store.bigKeys().some(k=>k.startsWith("ds_conv_")))return;
+    localStorage.setItem("ds_backup_nag",String(now));
+    setTimeout(()=>toast(last?"No backup in over 2 weeks.":"Your chats exist only in this browser.",{label:"Back up",run:()=>$("#exportBackup").click()}),1500);
+  }catch(e){/* Reminder only. */}
+}
 if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("sw.js").catch(()=>{});

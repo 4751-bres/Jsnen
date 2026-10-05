@@ -90,6 +90,20 @@ That's it — it now behaves like a native app with its own icon.
 - **Search, pins, and sorting** — the ☰ drawer searches names and message text (tap a result to jump
   to the message), 📌 pins items to the top, and sorts by Manual, Recent, or A–Z.
 - **Undo clear** — 🧹 clears immediately and offers **Undo** for a few seconds.
+- **Reply length per agent** — Provider default (DeepSeek: 8K tokens, 64K with thinking), Long
+  (32K), Very long (128K), or Maximum (384K). Only an upper bound; you pay for what is written.
+- **Thinking levels** — Off, Low, Medium (DeepSeek treats it as High), High, and Max. Temperature is
+  only sent with thinking off, since DeepSeek's thinking mode does not support it.
+- **Safer replies** — busy/overloaded errors (429/5xx) retry twice automatically; if the connection
+  drops mid-reply, the text written so far is kept and ⏵ finishes it; provider stops (content filter,
+  capacity) are labelled; errors say what to do (wrong key, empty balance, chat too long).
+- **Message times** on every new message, and **Copy** buttons on code blocks.
+- **Per-chat drafts** — unsent text stays with its own chat and survives reloads.
+- **Roleplay opening scene** is sent to the characters and stays pinned at the top of the chat.
+- **Delete confirmations** show how many messages would be lost.
+- **Multiple tabs** — the installed app and a browser tab stay in sync instead of overwriting each other.
+- **Settings extras** — storage used, last backup date, *Check key & balance*, export the current
+  chat as Markdown, and a gentle reminder when there is no recent backup.
 - **Formatting** — headings, bullet lists, quotes, and pipe tables render in replies.
 - **Backup** — ⚙️ Settings → Export/Import saves or restores agents, groups, workflows, and all chats as JSON. The API key is never exported; import keeps the current key.
 - **Everything local** — your API key and settings live in your browser's `localStorage`;

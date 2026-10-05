@@ -66,7 +66,7 @@ function buildGroupApiMessages(group,agent,messages,options={}){
   const cast=(group.members||[]).filter(id=>id!==agent.id).map(id=>rp.characters[id]).filter(Boolean).map(c=>c.name+": "+c.description).join("\n");
   const system=[agent.prompt,"Within this scene, you are "+character.name+" ([char]). Speak as I from your own perspective, with your established personality and knowledge.","Character: "+character.description,
     "User character: "+rp.user.name+" — "+rp.user.description,"Setting: "+rp.setting,
-    cast&&"Other characters:\n"+cast,rp.mature&&"Mature-mode preference: enabled.",
+    cast&&"Other characters:\n"+cast,rp.opening&&"Opening scene (already shown to the user before the conversation began):\n"+rp.opening,rp.mature&&"Mature-mode preference: enabled.",
     "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE
   ].filter(Boolean).join("\n\n");
   const history=messages.filter(isContextMessage).map(m=>{
@@ -139,6 +139,58 @@ function withSummary(apiMessages,summary){
     return [{...apiMessages[0],content:apiMessages[0].content+"\n\n"+note},...apiMessages.slice(1)];
   return [{role:"system",content:note},...apiMessages];
 }
+/* api-core:start */
+// Reply length per agent: "" = provider default (DeepSeek: 8K tokens, 64K with thinking), a number, or "max" (384K).
+const MAX_REPLY_TOKENS=393216;
+function replyTokenLimit(setting){
+  if(setting==="max")return MAX_REPLY_TOKENS;
+  const n=Number(setting);return Number.isFinite(n)&&n>0?Math.min(Math.round(n),MAX_REPLY_TOKENS):undefined;
+}
+function isRetryableStatus(status){return [429,500,502,503,504].includes(status);}
+// Turn provider errors into something actionable; the raw detail is kept for anything unrecognized.
+function friendlyApiError(status,detail){
+  const text=String(detail||"");
+  if(status===400&&/context|too long|maximum.*tokens|length/i.test(text))
+    return "This chat is longer than the model can read at once. Set this chat's “History sent to the AI” to a limit (optionally with summaries) and try again.";
+  const known={
+    401:"The API key was rejected. Check it in ⚙️ Settings.",
+    402:"Your DeepSeek balance is empty. Top up at platform.deepseek.com, then tap ↻.",
+    422:"The request had an invalid setting (often the model name)."+(text?" Details: "+text:""),
+    429:"Too many requests right now. Wait a moment, then tap ↻.",
+    500:"DeepSeek had a server error. Tap ↻ to try again.",
+    502:"DeepSeek is temporarily unreachable. Tap ↻ to try again.",
+    503:"DeepSeek is overloaded right now. Tap ↻ to try again in a moment.",
+    504:"DeepSeek took too long to respond. Tap ↻ to try again."
+  };
+  return known[status]||("HTTP "+status+(text?": "+text:""));
+}
+// finish_reason values that end a reply early; all but the content filter can be continued with ⏵.
+const FINISH_NOTES={
+  length:"cut off at length limit",
+  insufficient_system_resource:"cut off — provider ran out of capacity",
+  aborted:"cut off — interrupted by the provider",
+  content_filter:"stopped by the provider's content filter"
+};
+function messageTime(at,now){
+  if(!at)return "";
+  const d=new Date(at),n=new Date(now||Date.now());
+  const time=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  if(d.toDateString()===n.toDateString())return time;
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return months[d.getMonth()]+" "+d.getDate()+(d.getFullYear()!==n.getFullYear()?" "+d.getFullYear():"")+", "+time;
+}
+// Plain Markdown transcript of the active conversation (inactive versions and reasoning are left out).
+function chatToMarkdown(title,list,userName){
+  const lines=["# "+title,""];
+  for(const m of list||[]){
+    if(m.role!=="user"&&m.role!=="assistant")continue;
+    const who=m.role==="user"?(userName||"You"):(m.characterName||m.agentName||m.workflowRoleName||"Assistant");
+    const when=m.at?" · "+new Date(m.at).toISOString().slice(0,16).replace("T"," "):"";
+    lines.push("**"+who+"**"+when,"",String(m.content||"")+(m.images?.length?"\n\n_["+m.images.length+" image"+(m.images.length===1?"":"s")+"]_":""),"");
+  }
+  return lines.join("\n");
+}
+/* api-core:end */
 function didResponseComplete(result){return result!==false&&result?.ok===true;}
 function groupAfterAgentDelete(group,agentId){
   return isRoleplayGroup(group)?group:{...group,members:(group.members||[]).filter(id=>id!==agentId)};

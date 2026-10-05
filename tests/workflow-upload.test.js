@@ -10,7 +10,7 @@ function setup(fail=false){
     store:{k:'test',raw:k=>data.get(k)??null,setRaw:(k,v)=>data.set(k,v),removeRaw:k=>data.delete(k),saveRun:(id,r)=>data.set('ds_run_'+id,JSON.stringify(r)),saveConv:(id,m)=>{if(fail)throw Error('quota');data.set('ds_conv_'+id,JSON.stringify(m));}},
     localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},
     newRun:()=>({id:'run',status:'running'}),uid:()=> 'run',Date,
-    $:()=>({value:''}),toast:()=>{},autoGrow(){},renderAttachments(){},renderChat(){},renderWorkflowUi(){},continueWorkflowRun:async()=>{},workflowAgent:()=>null,modelSeesImages:()=>true,isContextMessage:m=>!!m.content,currentHistoryLimit:()=>0};
+    $:()=>({value:''}),toast:()=>{},autoGrow(){},renderAttachments(){},renderChat(){},renderWorkflowUi(){},continueWorkflowRun:async()=>{},workflowAgent:()=>null,modelSeesImages:()=>true,isContextMessage:m=>!!m.content,currentHistoryLimit:()=>0,clearDraft(){}};
   vm.createContext(c);
   vm.runInContext(html.match(/function workflowHistorySnapshot\(\)\{[\s\S]*?(?=async function continueWorkflowRun)/)[0],c);
   return {c,data,image,input};

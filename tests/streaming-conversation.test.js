@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
+const core = require("./source").loadCore();
 
 function inlineScript() {
   const html = require('./source')();
@@ -33,6 +34,9 @@ test("an in-flight response stays bound to its originating conversation", async 
     },
     renderChat() {},
     modelSeesImages: () => true,
+    replyTokenLimit: core.replyTokenLimit,
+    friendlyApiError: core.friendlyApiError,
+    isRetryableStatus: core.isRetryableStatus,
     scheduleStreamPaint() {},
     cancelStreamPaint() {},
     renderResponders() {},
