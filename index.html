@@ -536,12 +536,23 @@ function makeWorkflowPreset(template,agents,idFactory){
   return {id:idFactory(),emoji:p.emoji,name:p.name,template:selected,
     roles:p.roles.map((r,i)=>({id:idFactory(),name:r[0],instruction:r[1],stage:r[2],agentId:agents[i%Math.max(agents.length,1)]?.id||""}))};
 }
+function workflowAgent(role,agents){
+  const source=role.agent||agents.find(a=>a.id===role.agentId);
+  return source?{...source,id:role.id}:null;
+}
+function separateWorkflowAgents(workflow,agents){
+  for(const role of workflow.roles){
+    if(!role.agent){const source=agents.find(a=>a.id===role.agentId);if(source)role.agent={...source,model:source.model||"deepseek-flash",temp:source.temp??0.7,think:source.think||"off"};}
+  }
+  return workflow;
+}
 function validateWorkflow(wf,agents){
   const errors=[],roles=Array.isArray(wf?.roles)?wf.roles:[],known=new Set(agents.map(a=>a.id));
   if(roles.length<2||roles.length>5)errors.push({code:"role-count",roleId:null});
   for(const r of roles){
     if(!String(r.name||"").trim())errors.push({code:"role-name",roleId:r.id});
-    if(!known.has(r.agentId))errors.push({code:"missing-agent",roleId:r.id});
+    if(!r.agent&&!known.has(r.agentId))errors.push({code:"missing-agent",roleId:r.id});
+    if(r.agent&&(!String(r.agent.model||"").trim()||!Number.isFinite(r.agent.temp)||r.agent.temp<0||r.agent.temp>2))errors.push({code:"agent-settings",roleId:r.id});
     if(!["work","critique","synthesis"].includes(r.stage))errors.push({code:"invalid-stage",roleId:r.id});
   }
   if(!roles.some(r=>r.stage==="work"))errors.push({code:"missing-work",roleId:null});
@@ -582,7 +593,8 @@ function buildWorkflowMessages(workflow,run,role,agent){
     role.stage==="critique"&&"Return the critique with concrete errors and corrections.",
     role.stage==="synthesis"&&"Return the self-contained final answer now."
   ].filter(Boolean).join("\n\n");
-  return [{role:"system",content:system},{role:"user",content:body}];
+  const content=run.images?.length?[{type:"text",text:body},...run.images.map(image=>({type:"image_url",image_url:{url:image.url}}))]:body;
+  return [{role:"system",content:system},{role:"user",content}];
 }
 function recordRoleOutput(run,role,output,now){
   const outputs=(run.outputs||[]).filter(o=>o.roleId!==role.id).concat({roleId:role.id,content:output.content||"",reasoning:output.reasoning||"",error:false,completedAt:now});
@@ -640,6 +652,8 @@ if(!localStorage.getItem("ds_therapist_brief_v1")){
 }
 let groups = normalizeStoredGroups(store.groups,agents);
 let workflows = store.workflows;
+workflows.forEach(w=>separateWorkflowAgents(w,agents));
+try{store.workflows=workflows;}catch(e){/* Keep migrated settings in memory if storage is full. */}
 let currentKind = store.kind;               // "agent" | "group" | "workflow"
 let currentId = store.cur || agents[0].id;
 if(currentKind==="group"){ if(!groups.find(g=>g.id===currentId)){currentKind="agent";currentId=agents[0].id;} }
@@ -1206,6 +1220,7 @@ $("#delGroup").onclick=()=>{
 function cloneWorkflow(w){return JSON.parse(JSON.stringify(w));}
 function stageLabel(stage){return stage==="synthesis"?"final":stage;}
 function renderWorkflowRoles(){
+  separateWorkflowAgents(workflowDraft,agents);
   const wrap=$("#wfRoles");wrap.innerHTML="";
   workflowDraft.roles.forEach((r,index)=>{
     const card=document.createElement("div");card.className="role-card";card.dataset.roleId=r.id;
@@ -1214,10 +1229,19 @@ function renderWorkflowRoles(){
     card.innerHTML='<div class="role-head"><b>Role '+(index+1)+'</b><span class="stage-badge">'+esc(stageLabel(r.stage))+'</span><div class="role-actions">'+
       '<button type="button" data-action="up" aria-label="Move up">↑</button><button type="button" data-action="down" aria-label="Move down">↓</button><button type="button" data-action="remove" aria-label="Remove">×</button></div></div>'+
       '<div class="role-grid"><div><label>Role name</label><input class="field" data-field="name" value="'+esc(r.name)+'"></div>'+
-      '<div><label>Agent</label><select class="field" data-field="agentId">'+agentOptions+'</select></div></div>'+
+      '<div><label>Copy settings from chat agent</label><select class="field" data-field="agentId">'+agentOptions+'</select></div></div>'+
       '<label>Stage</label><select class="field" data-field="stage"><option value="work"'+(r.stage==="work"?' selected':'')+'>Work</option><option value="critique"'+(r.stage==="critique"?' selected':'')+'>Critique</option><option value="synthesis"'+(r.stage==="synthesis"?' selected':'')+'>Synthesis</option></select>'+
       '<label>Instructions</label><textarea class="field" data-field="instruction">'+esc(r.instruction||"")+'</textarea>';
+    const a=r.agent||{name:"",prompt:"",model:"deepseek-flash",temp:0.7,think:"off"};
+    card.innerHTML+='<details><summary>Independent agent settings</summary><div class="hint">Saved only for this workflow role. Regular chat agents are unchanged.</div>'+
+      '<label>Agent name</label><input class="field" data-agent="name" value="'+esc(a.name)+'">'+
+      '<label>System prompt</label><textarea class="field" data-agent="prompt">'+esc(a.prompt||"")+'</textarea>'+
+      '<label>Model (use deepseek-flash for images)</label><input class="field" data-agent="model" value="'+esc(a.model)+'">'+
+      '<label>Temperature (0–2)</label><input class="field" type="number" min="0" max="2" step="0.1" data-agent="temp" value="'+a.temp+'">'+
+      '<label>Thinking</label><select class="field" data-agent="think">'+["off","medium","high"].map(v=>'<option'+(a.think===v?' selected':'')+'>'+v+'</option>').join("")+'</select></details>';
+    card.querySelectorAll("[data-agent]").forEach(el=>el.oninput=()=>{r.agent=r.agent||{...a};r.agent[el.dataset.agent]=el.dataset.agent==="temp"?Number(el.value):el.value;workflowDraftDirty=true;});
     card.querySelectorAll("[data-field]").forEach(el=>el.oninput=()=>{r[el.dataset.field]=el.value;workflowDraftDirty=true;card.classList.remove("invalid");card.querySelector(".stage-badge").textContent=stageLabel(r.stage);});
+    card.querySelector('[data-field="agentId"]').onchange=e=>{r.agentId=e.target.value;delete r.agent;separateWorkflowAgents(workflowDraft,agents);workflowDraftDirty=true;renderWorkflowRoles();};
     card.querySelector('[data-action="up"]').disabled=index===0;
     card.querySelector('[data-action="down"]').disabled=index===workflowDraft.roles.length-1;
     card.querySelector('[data-action="remove"]').disabled=workflowDraft.roles.length<=2;
@@ -1270,6 +1294,7 @@ $("#addWfRole").onclick=()=>{
   workflowDraft.template="custom";workflowDraftDirty=true;$("#wfTemplate").value="custom";renderWorkflowRoles();
 };
 const workflowErrorText={
+  "agent-settings":"Enter a model and a temperature between 0 and 2 in independent agent settings",
   "role-count":"Use between 2 and 5 roles","role-name":"Every role needs a name","missing-agent":"Assign an existing agent to every role",
   "invalid-stage":"Choose a valid stage","missing-work":"Add at least one work role","missing-critique":"Add at least one critique role",
   "synthesis-count":"The final role must be the only synthesizer","stage-order":"Place all work roles before critique roles"
@@ -1323,8 +1348,8 @@ function renderAttachments(){
     const remove=document.createElement("button");remove.textContent="×";remove.setAttribute("aria-label","Remove "+image.name);
     remove.onclick=()=>{pendingImages.splice(index,1);renderAttachments();};item.append(img,remove);tray.append(item);
   });
-  $("#attachBtn").disabled=readingImages||!!controller||isWorkflow();
-  $("#attachBtn").title=isWorkflow()?"Image attachments are available in agent and group chats":"Attach images or paste a screenshot";
+  $("#attachBtn").disabled=readingImages||!!controller;
+  $("#attachBtn").title="Attach images or paste a screenshot";
 }
 async function prepareImage(file){
   if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type))throw new Error("Choose a JPEG, PNG, WebP, or GIF image.");
@@ -1342,7 +1367,7 @@ async function prepareImage(file){
   }finally{URL.revokeObjectURL(url);}
 }
 async function addImages(files){
-  if(readingImages||controller||isWorkflow())return;
+  if(readingImages||controller)return;
   const conversation=currentId;readingImages=true;renderAttachments();
   try{
     for(const file of files){
@@ -1358,7 +1383,7 @@ $("#attachBtn").onclick=()=>$("#imageFiles").click();
 $("#imageFiles").onchange=e=>addImages(Array.from(e.target.files));
 input.addEventListener("paste",e=>{
   const files=Array.from(e.clipboardData?.files||[]).filter(f=>f.type.startsWith("image/"));
-  if(files.length&&!isWorkflow()){e.preventDefault();addImages(files);}
+  if(files.length){e.preventDefault();addImages(files);}
 });
 function commitComposer(){
   if(readingImages){toast("Wait for the images to finish loading");return false;}
@@ -1490,15 +1515,28 @@ async function startWorkflowRun(task){
   const workflow=curWorkflow(),errors=validateWorkflow(workflow,agents);
   if(errors.length){toast(workflowErrorText[errors[0].code]||"Fix the workflow configuration");openWorkflowEditor(workflow.id);return;}
   if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
+  if(currentRun&&currentRun.status!=="complete"){toast("Finish or cancel the current run first");return;}
+  const images=pendingImages.slice();
+  const incompatible=workflow.roles.find(r=>workflowAgent(r,agents)?.model==="deepseek-v4-pro");
+  if(images.length&&incompatible){toast("Set "+incompatible.name+" to deepseek-flash in its independent agent settings to use images.");openWorkflowEditor(workflow.id);return;}
 function workflowHistorySnapshot(){
   return messages.filter(m=>!m.streaming&&!m.error&&m.content&&(m.role==="user"||m.role==="assistant"))
     .slice(-12).map(m=>({role:m.role,content:m.content}));
 }
   $("#reviewGuidance").value="";
-  currentRun=newRun(workflow,task,Date.now(),uid);
-  currentRun.history=workflowHistorySnapshot();
-  messages.push({role:"user",content:task,runId:currentRun.id});
-  store.saveConv(currentId,messages);saveCurrentRun();renderChat();renderWorkflowUi();
+  const nextRun=newRun(workflow,task,Date.now(),uid);
+  nextRun.images=images;
+  nextRun.history=workflowHistorySnapshot();
+  const nextMessages=[...messages,{role:"user",content:task,images,runId:nextRun.id}];
+  const previousRun=localStorage.getItem("ds_run_"+currentId);
+  try{store.saveRun(currentId,nextRun);store.saveConv(currentId,nextMessages);}
+  catch(e){
+    if(previousRun===null)localStorage.removeItem("ds_run_"+currentId);else localStorage.setItem("ds_run_"+currentId,previousRun);
+    toast("Browser storage is full. Remove an attachment or clear an old chat first.");return;
+  }
+  currentRun=nextRun;messages=nextMessages;
+  pendingImages=[];input.value="";autoGrow();renderAttachments();
+  renderChat();renderWorkflowUi();
   await continueWorkflowRun();
 }
 async function continueWorkflowRun(){
@@ -1512,7 +1550,7 @@ async function continueWorkflowRun(){
     if(action.type==="review"||action.type==="complete"){
       renderChat();return;
     }
-    const role=action.role,agent=agents.find(a=>a.id===role.agentId);
+    const role=action.role,agent=workflowAgent(role,agents);
     if(!agent){
       currentRun=recordRoleFailure(currentRun,role,{content:"Assigned agent no longer exists.",reasoning:""},Date.now());
       saveCurrentRun();renderChat();renderWorkflowUi();return;
@@ -1520,7 +1558,7 @@ async function continueWorkflowRun(){
     const runId=currentRun.id;
     const result=await streamCompletion(agent,buildWorkflowMessages(workflow,currentRun,role,agent),workflowMessageMeta(workflow,currentRun,role,agent));
     if(!currentRun||currentRun.id!==runId)return;
-    if(result===false)return;
+    if(result===false){currentRun={...currentRun,status:"stopped"};saveCurrentRun();renderWorkflowUi();return;}
     if(result.aborted||result.bot.error){
       currentRun=recordRoleFailure(currentRun,role,result.bot,Date.now());
       saveCurrentRun();renderChat();renderWorkflowUi();refreshHeader();return;
@@ -1570,7 +1608,7 @@ function send(){
   const text=input.value.trim();
   if(!text&&!pendingImages.length)return;
   if(!store.k){toast("Add your API key in ⚙️ Settings");$("#setBtn").click();return;}
-  if(isWorkflow()){input.value="";autoGrow();startWorkflowRun(text);return;}
+  if(isWorkflow()){startWorkflowRun(text);return;}
   if(!commitComposer())return;
   if(isGroup()){renderResponders();return;} // in a group you choose who replies
   runAgent(curAgent());

@@ -112,6 +112,10 @@ key server-side and point **Settings → API base URL** at it — the app speaks
 OpenAI-compatible `/chat/completions` protocol.
 
 ## Local preview (optional)
+Workflow tasks support uploaded or pasted images, including image-only tasks. Images travel to every role and survive retry/resume. Choose an image-capable model (such as `deepseek-flash`) for every role before attaching images; the existing Pro guard remains in place.
+
+In the workflow editor, expand **Independent agent settings** on a role to edit its name, system prompt, model, temperature, and thinking. Existing workflows snapshot their assigned agents; subsequent changes to ordinary chat agents do not alter those snapshots. **Copy settings from chat agent** explicitly replaces a role's snapshot. Settings remain browser-local, like conversations.
+
 ```bash
 python3 -m http.server 8080
 # then open http://localhost:8080

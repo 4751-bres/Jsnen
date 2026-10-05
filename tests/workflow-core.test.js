@@ -10,7 +10,7 @@ function loadCore() {
   const context = {};
   vm.createContext(context);
   vm.runInContext(
-    `${match[1]}\nthis.workflowCore={WORKFLOW_PRESETS,makeWorkflowPreset,validateWorkflow,normalizeStoredWorkflows,newRun,normalizeRunAfterReload,buildWorkflowMessages,nextWorkflowAction,recordRoleOutput,recordRoleFailure,retryWorkflowRole,prepareRunResume,canEditWorkflowRun};`,
+    `${match[1]}\nthis.workflowCore={workflowAgent,separateWorkflowAgents,WORKFLOW_PRESETS,makeWorkflowPreset,validateWorkflow,normalizeStoredWorkflows,newRun,normalizeRunAfterReload,buildWorkflowMessages,nextWorkflowAction,recordRoleOutput,recordRoleFailure,retryWorkflowRole,prepareRunResume,canEditWorkflowRun};`,
     context
   );
   return context.workflowCore;
@@ -22,6 +22,40 @@ const agents = [
   { id: "a3", name: "Three" },
   { id: "a4", name: "Four" },
 ];
+
+test("workflow settings survive source edits and deletion, independently per role",()=>{
+  const c=loadCore(),source=[{id:"a",name:"Original",prompt:"Original prompt",model:"deepseek-flash",temp:0.4,think:"high"}];
+  const wf=c.separateWorkflowAgents(c.makeWorkflowPreset("research",source,idFactory()),source);
+  wf.roles[0].agent.prompt="Workflow only";
+  source[0].prompt="Changed source";
+  assert.equal(wf.roles[1].agent.prompt,"Original prompt");
+  assert.equal(c.workflowAgent(wf.roles[0],[]).prompt,"Workflow only");
+  assert.equal(c.workflowAgent(wf.roles[0],[]).temp,0.4);
+  assert.deepEqual(Array.from(c.validateWorkflow(wf,[])),[]);
+  c.separateWorkflowAgents(wf,source);
+  assert.equal(wf.roles[0].agent.prompt,"Workflow only");
+});
+
+test("every workflow stage gets images, including after persisted retry and resume",()=>{
+  const c=loadCore(),wf=c.makeWorkflowPreset("research",agents,idFactory());
+  let run=c.newRun(wf,"Inspect this",0,idFactory());
+  run.images=[{url:"data:image/png;base64,AAAA"}];
+  run.outputs=[{roleId:wf.roles[0].id,content:"Findings"}];
+  run=JSON.parse(JSON.stringify(c.retryWorkflowRole(wf,run,wf.roles[1].id,1)));
+  for(const role of wf.roles){
+    const request=c.buildWorkflowMessages(wf,run,role,{prompt:"Independent"});
+    assert.equal(request[1].content[1].image_url.url,run.images[0].url);
+    assert.match(request[1].content[0].text,/Inspect this/);
+  }
+  run.task="";
+  assert.equal(c.buildWorkflowMessages(wf,run,wf.roles[0],{})[1].content[1].type,"image_url");
+});
+
+test("workflow settings reject invalid temperature and blank model",()=>{
+  const c=loadCore(),wf=c.separateWorkflowAgents(c.makeWorkflowPreset("research",agents,idFactory()),agents);
+  wf.roles[0].agent.temp=NaN;wf.roles[1].agent.model=" ";
+  assert.equal(c.validateWorkflow(wf,agents).filter(e=>e.code==="agent-settings").length,2);
+});
 
 function idFactory() {
   let n = 0;
