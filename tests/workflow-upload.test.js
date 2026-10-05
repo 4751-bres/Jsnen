@@ -2,12 +2,12 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const html=fs.readFileSync('index.html','utf8');
+const html=require('./source')();
 function setup(fail=false){
   const data=new Map(),image={url:'data:image/png;base64,AAAA'},input={value:'Inspect'};
   const c={pendingImages:[image],messages:[],currentRun:null,currentId:'wf',agents:[],input,
     workflowErrorText:{},curWorkflow:()=>({id:'wf',roles:[]}),validateWorkflow:()=>[],
-    store:{k:'test',saveRun:(id,r)=>data.set('ds_run_'+id,JSON.stringify(r)),saveConv:(id,m)=>{if(fail)throw Error('quota');data.set('ds_conv_'+id,JSON.stringify(m));}},
+    store:{k:'test',raw:k=>data.get(k)??null,setRaw:(k,v)=>data.set(k,v),removeRaw:k=>data.delete(k),saveRun:(id,r)=>data.set('ds_run_'+id,JSON.stringify(r)),saveConv:(id,m)=>{if(fail)throw Error('quota');data.set('ds_conv_'+id,JSON.stringify(m));}},
     localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},
     newRun:()=>({id:'run',status:'running'}),uid:()=> 'run',Date,
     $:()=>({value:''}),toast:()=>{},autoGrow(){},renderAttachments(){},renderChat(){},renderWorkflowUi(){},continueWorkflowRun:async()=>{},workflowAgent:()=>null,modelSeesImages:()=>true,isContextMessage:m=>!!m.content};

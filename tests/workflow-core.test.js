@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 function loadCore() {
-  const html = fs.readFileSync("index.html", "utf8");
+  const html = require('./source')();
   const match = html.match(/\/\* workflow-core:start \*\/([\s\S]*?)\/\* workflow-core:end \*\//);
   assert.ok(match, "workflow core markers must exist");
   const context = {};

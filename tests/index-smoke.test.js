@@ -10,42 +10,42 @@ function extractInlineScript(html) {
 }
 
 test("inline application script parses", () => {
-  const html = fs.readFileSync("index.html", "utf8");
+  const html = require('./source')();
   new vm.Script(extractInlineScript(html), { filename: "index-inline.js" });
 });
 
 test("group and duplicate controls are present", () => {
-  const html = fs.readFileSync("index.html", "utf8");
+  const html = require('./source')();
   for (const id of ["groupList", "addGroup", "groupEditor", "dupAgent", "responders"])
     assert.match(html, new RegExp(`id=["']${id}["']`));
 });
 
 test("workflow navigation and editor controls are present", () => {
-  const html = fs.readFileSync("index.html", "utf8");
+  const html = require('./source')();
   for (const id of ["workflowList", "addWorkflow", "workflowEditor", "wfTemplate", "wfRoles", "saveWorkflow", "delWorkflow"])
     assert.match(html, new RegExp(`id=["']${id}["']`));
 });
 
 test("workflow progress and review controls are present", () => {
-  const html = fs.readFileSync("index.html", "utf8");
+  const html = require('./source')();
   for (const id of ["workflowProgress", "workflowActions", "reviewGuidance", "approveSynthesis", "resumeWorkflow", "cancelWorkflow"])
     assert.match(html, new RegExp(`id=["']${id}["']`));
 });
 
 test("workflow persistence keys remain browser local", () => {
-  const html = fs.readFileSync("index.html", "utf8");
+  const html = require('./source')();
   for (const key of ["ds_workflows", "ds_run_", "ds_conv_", "ds_key"])
     assert.ok(html.includes(key), `missing ${key}`);
 });
 
 test("legacy agent and group entry points remain defined", () => {
-  const html = fs.readFileSync("index.html", "utf8");
+  const html = require('./source')();
   for (const name of ["buildApiMessages", "runAgent", "groupRespond", "everyoneRespond", "dupAgent"])
     assert.ok(html.includes(name), `missing legacy entry point ${name}`);
 });
 
 test("workflow UI guards active clear, run replacement, and deleted-agent repair", () => {
-  const html = fs.readFileSync("index.html", "utf8");
+  const html = require('./source')();
   assert.match(html, /if\(controller\)\{toast\("Stop the current response before clearing"\)/);
   assert.match(html, /!currentRun\|\|currentRun\.id!==runId/);
   assert.ok(html.includes("Unassigned — deleted agent"));
@@ -53,6 +53,6 @@ test("workflow UI guards active clear, run replacement, and deleted-agent repair
 });
 
 test("new workflow runs clear stale review guidance", () => {
-  const html = fs.readFileSync("index.html", "utf8");
+  const html = require('./source')();
   assert.match(html, /reviewGuidance"\)\.value=""/);
 });

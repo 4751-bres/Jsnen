@@ -2,13 +2,13 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const source=fs.readFileSync('index.html','utf8');
+const source=require('./source')();
 const code=source.slice(source.indexOf('function duplicateCurrentChat(){'),source.indexOf('$("#duplicateChatBtn").onclick'));
 function setup(kind='agent',fail=false){
   const original={id:'old',name:'Room',prompt:'Custom prompt',members:['a'],roleplay:{setting:'Office'},roles:[{id:'role-a'}]};
   const history=[{role:'user',content:'Hello',images:[{url:'image'}]},{role:'assistant',content:'New',versions:[{content:'Old',tail:[{role:'user',content:'Later'}]},{content:'New',tail:[]}],versionIndex:1}];
   const data=new Map([['ds_conv_old',JSON.stringify(history)]]),saved={},notices=[];
-  const store={set agents(v){if(fail)throw Error('quota');saved.agents=v;},set groups(v){if(fail)throw Error('quota');saved.groups=v;},set workflows(v){if(fail)throw Error('quota');saved.workflows=v;}};
+  const store={raw:k=>data.get(k)??null,setRaw:(k,v)=>data.set(k,v),removeRaw:k=>data.delete(k),set agents(v){if(fail)throw Error('quota');saved.agents=v;},set groups(v){if(fail)throw Error('quota');saved.groups=v;},set workflows(v){if(fail)throw Error('quota');saved.workflows=v;}};
   const c=vm.createContext({currentKind:kind,currentId:'old',agents:kind==='agent'?[original]:[],groups:kind==='group'?[original]:[],workflows:kind==='workflow'?[original]:[],messages:history,currentRun:null,controller:null,readingImages:false,pendingImages:[{url:'draft'}],store,uid:()=> 'new',
     localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},
     isWorkflow:()=>kind==='workflow',toast:t=>notices.push(t),loadConv(){c.messages=JSON.parse(data.get('ds_conv_'+c.currentId));c.pendingImages=[];},renderAttachments(){},renderAgents(){},closeAll(){}});

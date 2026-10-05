@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync('index.html','utf8');
+const html=require('./source')();
 function setup(){
   const c=vm.createContext({});vm.runInContext(html.match(/\/\* flash-migration:start \*\/([\s\S]*?)\/\* flash-migration:end \*\//)[1],c);
   const data=new Map([['ds_conv_a','private conversation'],['ds_key','private key']]);

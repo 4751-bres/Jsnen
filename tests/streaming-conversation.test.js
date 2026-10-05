@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 function inlineScript() {
-  const html = fs.readFileSync("index.html", "utf8");
+  const html = require('./source')();
   const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)];
   assert.ok(scripts.length, "index.html must contain an inline script");
   return scripts.at(-1)[1];

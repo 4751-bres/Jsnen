@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const source=fs.readFileSync('index.html','utf8');
+const source=require('./source')();
 test('new agents reason at least at Low while keeping higher choices',()=>{
   const c=vm.createContext({});
   vm.runInContext(source.slice(source.indexOf('const NEW_AGENT_MIN_THINK'),source.indexOf('function openEditor(')),c);

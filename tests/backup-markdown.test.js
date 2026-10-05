@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const source=fs.readFileSync('index.html','utf8');
+const source=require('./source')();
 function memoryStorage(initial={},limit=Infinity){
   const data=new Map(Object.entries(initial));
   return {data,get length(){return data.size},key:i=>[...data.keys()][i]??null,getItem:k=>data.has(k)?data.get(k):null,

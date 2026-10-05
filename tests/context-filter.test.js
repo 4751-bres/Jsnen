@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const source=fs.readFileSync('index.html','utf8');
+const source=require('./source')();
 function setup(messages){
   const ctx=vm.createContext({messages,isGroup:()=>false});
   vm.runInContext(source.slice(source.indexOf('/* roleplay-core:start */'),source.indexOf('/* roleplay-core:end */'))+'\n'+source.slice(source.indexOf('function buildApiMessages('),source.indexOf('/* ---------- Stream one response ---------- */')),ctx);

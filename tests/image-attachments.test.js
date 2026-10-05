@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const source=fs.readFileSync('index.html','utf8');
+const source=require('./source')();
 const core=source.match(/\/\* roleplay-core:start \*\/([\s\S]*?)\/\* roleplay-core:end \*\//)[1];
 const image={name:'test.png',url:'data:image/png;base64,iVBORw0KGgo='};
 const agent={id:'a',name:'Analyst',prompt:'Analyze images',model:'deepseek-flash',temp:1,think:'off'};

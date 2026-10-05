@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const LF=String.fromCharCode(10);
-const source=fs.readFileSync('index.html','utf8');
+const source=require('./source')();
 const core=source.slice(source.indexOf('/* roleplay-core:start */'),source.indexOf('/* roleplay-core:end */'));
 const single=source.slice(source.indexOf('function buildApiMessages('),source.indexOf('/* ---------- Stream one response'));
 const image={name:'t.png',url:'data:image/png;base64,iVBORw0KGgo='};

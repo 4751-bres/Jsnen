@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 function source() {
-  return fs.readFileSync("index.html", "utf8");
+  return require('./source')();
 }
 
 function loadCore() {

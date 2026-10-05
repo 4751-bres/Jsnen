@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const source=fs.readFileSync('index.html','utf8');
+const source=require('./source')();
 const setup=source.slice(source.indexOf('const THERAPIST_AGENT'),source.indexOf('let groups = normalizeStoredGroups'));
 function boot(saved,flags=new Map()){
   let n=0;
@@ -15,11 +15,19 @@ test('fresh browser gets exactly one sexual-health therapist with the supplied p
   const {agents,flags}=boot(null);
   const found=agents.filter(a=>a.id==='builtin-sexual-health-therapist');
   assert.equal(found.length,1);
-  assert.ok(found[0].prompt.includes('sexual problems therapist with 25-year-old girl and married.'));
+  assert.ok(found[0].prompt.startsWith('You play Elise'));
+  assert.ok(!found[0].prompt.includes('sexual problems therapist with 25-year-old girl'));
   assert.ok(found[0].prompt.includes('not a licensed clinician'));
   assert.equal(found[0].model,'deepseek-flash');
   assert.equal(found[0].think,'off');
   assert.equal(boot(agents,flags).agents.length,agents.length);
+});
+test('untouched legacy therapist prompt loses the stray first line once; edited prompts are kept',()=>{
+  const fresh=boot(null).agents.find(a=>a.id==='builtin-sexual-health-therapist');
+  const legacy={...fresh,prompt:'sexual problems therapist with 25-year-old girl and married.\n\n'+fresh.prompt};
+  assert.equal(boot([legacy],new Map([['ds_therapist_v1','1'],['ds_therapist_brief_v1','1']])).agents[0].prompt,fresh.prompt);
+  const edited={...fresh,prompt:'sexual problems therapist with 25-year-old girl and married. My own edit'};
+  assert.equal(boot([edited],new Map([['ds_therapist_v1','1']])).agents[0].prompt,edited.prompt);
 });
 test('existing agents are preserved and a same-name custom therapist is not overwritten',()=>{
   const original={id:'custom',name:'Sexual-health Therapist',prompt:'My custom prompt',temp:1.2};

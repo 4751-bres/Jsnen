@@ -5,8 +5,9 @@ custom **agents**, group chats, and reusable multi-agent workflows. Chat with on
 let several agents respond together, or run a structured work-and-critique pipeline from
 your **phone's browser** — installable to the home screen.
 
-No server, no build step, no dependencies. It's a single static HTML page that talks to
-the DeepSeek API directly from your browser (DeepSeek's API allows browser/CORS requests).
+No server, no build step, no dependencies. It's a static page (`index.html` with `styles.css`,
+`core.js`, and `app.js`) that talks to the DeepSeek API directly from your browser (DeepSeek's API
+allows browser/CORS requests). Once opened, it also works offline.
 
 ---
 
@@ -44,7 +45,15 @@ That's it — it now behaves like a native app with its own icon.
   temperature).
 - **Character narration** — single-agent and roleplay-group requests label the responding speaker `[char]` and the user `[user]`; other group characters have named labels. These are added to the API context, leaving saved messages and copied text unchanged. Character instructions encourage a direct first-person voice. Single-asterisk `*actions*` are scene events, displayed in italics: characters react to what happened without silently rewriting the user's actions. Character reactions can still include disagreement. The configured API controls its responses.
 - **Group chats** — select several agents, ask a question, then choose one responder or
-  tap **Everyone** to hear from every member in order.
+  tap **Everyone** to hear from every member in order. Other ways to choose who speaks:
+  - **@mentions** — write `@Name` (or `@NameWithoutSpaces`) and the mentioned members reply in
+    the order you mentioned them.
+  - **🎯 Auto** — one small extra request picks the most fitting next speaker.
+  - **💬 Discuss ×N** — members reply to each other for N rounds (set per group, 1–10), starting
+    after whoever spoke last and never repeating a speaker back to back.
+  - **⏭ Skip** — while several members reply in turn, skip only the current speaker; the
+    chips show who is replying and who is next.
+  - **Speaking order** — in the group editor, ↑ / ↓ set the order used by Everyone and Discuss.
 - **Roleplay groups** — turn any group into a persistent scene with your character, one
   character sheet per AI agent, an optional opening scene, and **Continue scene** for
   sequential character replies. Mature roleplay is an explicit browser-local preference;
@@ -70,10 +79,20 @@ That's it — it now behaves like a native app with its own icon.
 - **Full conversations saved** per agent, group, and workflow (in your browser), without a message-count cutoff. Single-agent and group requests include the entire active conversation, including attached images; inactive reply versions remain saved but are not sent. The provider's context limit and browser storage quota still apply. History is never silently shortened to fit either limit. Previously discarded messages cannot be recovered from storage.
 - **Reasoning floor for new agents** — new and duplicated agents start at Low thinking (Off is not offered when creating); existing agents can still be switched to Off.
 - **Clean context** — failed, stopped-before-output, and empty replies stay visible but are never sent back to the model.
-- **Token usage** — each reply shows input/output tokens; replies cut off by the length limit are flagged.
+- **Token usage** — each reply shows input/output tokens and the header shows the chat's running
+  total. Replies cut off by the length limit are flagged; ⏵ continues the latest one in place.
+- **History limits** — ⚙️ Settings → *History sent to the AI* can send only the last 20/50/100
+  messages, optionally with a running summary of older ones (one short extra request about every
+  10 messages). Saved chats are never shortened, and the default still sends everything.
+- **Search, pins, and sorting** — the ☰ drawer searches names and message text (tap a result to jump
+  to the message), 📌 pins items to the top, and sorts by Manual, Recent, or A–Z.
+- **Undo clear** — 🧹 clears immediately and offers **Undo** for a few seconds.
+- **Formatting** — headings, bullet lists, quotes, and pipe tables render in replies.
 - **Backup** — ⚙️ Settings → Export/Import saves or restores agents, groups, workflows, and all chats as JSON. The API key is never exported; import keeps the current key.
-- **Everything local** — your API key and chats live only in your browser's
-  `localStorage`; nothing is sent anywhere except the configured DeepSeek-compatible API.
+- **Everything local** — your API key and settings live in your browser's `localStorage`;
+  conversations live in its IndexedDB (much larger than `localStorage`; existing chats move there
+  automatically on first load, and the browser is asked to keep the data persistent). Nothing is
+  sent anywhere except the configured DeepSeek-compatible API.
 
 ## How workflows run
 
