@@ -70,7 +70,7 @@
     <div class="body">
       <div class="sect"><span class="sect-label">Workflows</span><button class="icon-btn" id="addWorkflow" type="button" aria-label="New workflow" title="New workflow"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
       <div id="workflowList"></div>
-      <div class="sect"><span class="sect-label">Group chats</span><button class="icon-btn" id="addGroup" type="button" aria-label="New group" title="New group"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
+      <div class="sect"><span class="sect-label">Group chats</span><span style="display:flex"><button class="icon-btn" id="openLibrary" type="button" aria-label="Scenario library" title="Scenario library"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></svg></button><button class="icon-btn" id="addGroup" type="button" aria-label="New group" title="New group"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></span></div>
       <div id="groupList"></div>
       <div class="sect"><span class="sect-label">Single agents</span><button class="icon-btn" id="addAgent" type="button" aria-label="New agent" title="New agent"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
       <div id="agentList"></div>
@@ -149,6 +149,19 @@
       <button class="btn primary" id="saveMessageEdit">Save</button>
       <button class="btn ghost" data-close>Cancel</button>
     </div>
+  </section>
+
+  <!-- Scenario library -->
+  <section class="sheet bottom" id="librarySheet">
+    <h3><span class="grow">Scenario library</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body">
+      <div class="hint" style="margin-top:12px">Ready-made mature roleplay scenes. Adding one creates its characters as agents and a roleplay group with mature mode and mood tracking on. All characters are adults. Everything stays editable.</div>
+      <label for="libUserName">Your character name</label>
+      <input class="field" id="libUserName" placeholder="Who you play" autocomplete="off" />
+      <label class="toggle-row"><input id="libAdult" type="checkbox" /> <span>I confirm I am an adult</span></label>
+      <div id="libraryList"></div>
+    </div>
+    <div class="foot"><button class="btn" data-close>Close</button></div>
   </section>
 
   <!-- Moods sheet -->

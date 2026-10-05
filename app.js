@@ -16,6 +16,7 @@ const ICONS={
   discuss:'<path d="M4 5h11v8H9l-4 3v-3H4z"/><path d="M18 9h2v8h-1v3l-4-3h-4v-1"/>',
   book:'<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/>',
   skip:'<path d="M5 5.5l9 6.5-9 6.5z"/><path d="M18 5v14"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
   heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'
 };
 function icon(name){return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'+(ICONS[name]||"")+'</svg>';}
@@ -808,6 +809,29 @@ function openGroupEditor(id){
   renderRoleplayEditor();$("#delGroup").style.display=id?"":"none";
   closeAll();openSheet("#groupEditor");
 }
+/* ---------- Scenario library ---------- */
+function renderLibrary(){
+  const list=$("#libraryList");list.innerHTML="";
+  for(const preset of SCENARIO_LIBRARY){
+    const card=document.createElement("div");card.className="lib-card";
+    card.innerHTML='<div class="lib-head"><span class="av">'+esc(preset.emoji)+'</span><div class="lib-title"><b>'+esc(preset.title)+'</b><small>'+preset.characters.map(c=>esc(c.emoji+" "+c.name)).join(" · ")+'</small></div></div>'+
+      '<p class="lib-tagline">'+esc(preset.tagline)+'</p><button type="button" class="btn primary">'+icon("plus")+'Add scenario</button>';
+    card.querySelector("button").onclick=()=>addScenario(preset);
+    list.appendChild(card);
+  }
+}
+function addScenario(preset){
+  const userName=$("#libUserName").value.trim();
+  if(!userName){toast("Enter your character name first");$("#libUserName").focus();return;}
+  if(!$("#libAdult").checked){toast("Confirm that you are an adult");return;}
+  const {agents:newAgents,group}=buildScenario(preset,userName,uid);
+  const nextAgents=[...agents,...newAgents],nextGroups=[...groups,group];
+  try{store.agents=nextAgents;store.groups=nextGroups;}
+  catch(e){store.agents=agents;toast("Not enough browser storage to add this scenario.");return;}
+  agents=nextAgents;groups=normalizeStoredGroups(nextGroups,agents);
+  selectGroup(group.id);toast(preset.title+" added");
+}
+$("#openLibrary").onclick=()=>{if(controller){toast("Stop the response first");return;}renderLibrary();closeAll();openSheet("#librarySheet");};
 $("#addGroup").onclick=()=>{
   if(!agents.length){toast("Create an agent first");return;}
   openGroupEditor(null);
