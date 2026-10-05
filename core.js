@@ -144,10 +144,14 @@ function withSummary(apiMessages,summary){
 // Emotion tracking: characters end each reply with a hidden "[mood: name N]" line that the app reads and removes.
 const MOOD_NAMES=["calm","happy","playful","affectionate","shy","curious","confident","jealous","sad","anxious","angry","cold"];
 // Only offered when mature roleplay is on (adult-confirmed groups, or single agents that opt in).
-const MATURE_MOODS=["flirty","horny"];
-const MATURE_SYNONYMS={seductive:"flirty",teasing:"flirty",coy:"flirty",aroused:"horny",lustful:"horny",lusty:"horny","turned on":"horny",needy:"horny",desirous:"horny"};
+const MATURE_MOODS=["flirty","teasing","passionate","horny","needy","dominant","submissive","satisfied"];
+const MATURE_SYNONYMS={seductive:"flirty",coy:"flirty",sultry:"flirty",tease:"teasing",taunting:"teasing",provocative:"teasing",
+  heated:"passionate",intense:"passionate",hungry:"passionate",aroused:"horny",lustful:"horny",lusty:"horny","turned on":"horny",desirous:"horny",
+  craving:"needy",yearning:"needy",desperate:"needy",commanding:"dominant",controlling:"dominant",bossy:"dominant",
+  obedient:"submissive",yielding:"submissive",docile:"submissive",sated:"satisfied",blissful:"satisfied",afterglow:"satisfied"};
 // Without mature mode, mature words still get a chip, using the nearest general mood.
-const MATURE_FALLBACK={flirty:"playful",horny:"affectionate"};
+const MATURE_FALLBACK={flirty:"playful",teasing:"playful",passionate:"affectionate",horny:"affectionate",needy:"affectionate",
+  dominant:"confident",submissive:"shy",satisfied:"happy"};
 const MOOD_SYNONYMS={content:"calm",relaxed:"calm",peaceful:"calm",neutral:"calm",serene:"calm",
   joyful:"happy",excited:"happy",cheerful:"happy",delighted:"happy",amused:"playful",mischievous:"playful",
   embarrassed:"shy",bashful:"shy",flustered:"shy",timid:"shy",intrigued:"curious",interested:"curious",fascinated:"curious",

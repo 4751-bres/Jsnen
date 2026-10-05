@@ -46,10 +46,18 @@ test('mature moods appear only in mature mode; otherwise they fall back to gener
   assert.deepEqual({...core.parseMoodTag('Oh? [mood: seductive 6]',true).mood},{mood:'flirty',level:6});
   assert.deepEqual({...core.parseMoodTag('Come here. [mood: horny 8]').mood},{mood:'affectionate',level:8});
   assert.deepEqual({...core.parseMoodTag('Oh? [mood: flirty 6]').mood},{mood:'playful',level:6});
-  assert.match(core.moodInstruction(null,true),/flirty, horny/);
+  assert.match(core.moodInstruction(null,true),/flirty,[a-z, ]*horny/);
   assert.ok(!core.moodInstruction(null,false).includes('horny'));
   const bot={content:'Closer. [mood: lustful 9]',moodMature:true};core.applyMoodTag(bot);
   assert.equal(bot.content,'Closer.');assert.equal(bot.mood.mood,'horny');
   const group={members:['a'],roleplay:{enabled:true,mature:true,opening:'',setting:'',user:{name:'Rin',description:''},characters:{a:{name:'Elise',description:''}}}};
-  assert.match(core.buildGroupApiMessages(group,{id:'a',name:'A'},[],{mood:{track:true,mature:true}})[0].content,/flirty, horny/);
+  assert.match(core.buildGroupApiMessages(group,{id:'a',name:'A'},[],{mood:{track:true,mature:true}})[0].content,/flirty,[a-z, ]*horny/);
+});
+
+test('the full mature set and its fallbacks',()=>{
+  for(const [word,mood] of [['teasing','teasing'],['provocative','teasing'],['passionate','passionate'],['heated','passionate'],['needy','needy'],['yearning','needy'],['dominant','dominant'],['commanding','dominant'],['submissive','submissive'],['obedient','submissive'],['satisfied','satisfied'],['blissful','satisfied']])
+    assert.equal(core.parseMoodTag('Mm. [mood: '+word+' 6]',true).mood.mood,mood,word);
+  for(const [word,fallback] of [['dominant','confident'],['submissive','shy'],['satisfied','happy'],['needy','affectionate'],['teasing','playful']])
+    assert.equal(core.parseMoodTag('Mm. [mood: '+word+' 6]').mood.mood,fallback,word);
+  assert.match(core.moodInstruction(null,true),/flirty, teasing, passionate, horny, needy, dominant, submissive, satisfied/);
 });
