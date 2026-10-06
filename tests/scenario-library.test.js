@@ -32,3 +32,12 @@ test('buildScenario creates mood-tracking mature agents and a valid mature rolep
   const normalized=core.normalizeStoredGroups([group],agents)[0];
   assert.equal(normalized.roleplay.characters[agents[0].id].name,preset.characters[0].name);
 });
+
+test('every library character is written as a woman',()=>{
+  for(const preset of library){
+    const text=[preset.setting,preset.opening,...preset.characters.map(c=>c.description)].join(' ');
+    assert.ok(!/\b(he|him|his|himself|they say|man in black)\b/i.test(text),preset.id+': '+text.match(/\b(he|him|his|himself|they say|man in black)\b/i)?.[0]);
+  }
+  const names=library.flatMap(p=>p.characters.map(c=>c.name));
+  assert.deepEqual([...names],['Nadia','Adriana','Valentina','Lucia','Jamie','Elena','Mara','Kai','Seren']);
+});

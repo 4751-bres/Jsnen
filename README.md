@@ -102,7 +102,7 @@ That's it — it now behaves like a native app with its own icon.
   scenes (Last Call, Overnight Deadline, The Masquerade, Snowed In, The Arrangement, Neon Rain). Enter your
   character name and confirm you are an adult; adding one creates its characters as agents (temperature
   1.3, mood tracking with mature moods) and a roleplay group with the setting, opening scene, mature mode,
-  and moods on. All characters are adults; everything stays editable.
+  and moods on. All characters are adult women; everything stays editable.
 - **Character moods** — in roleplay groups (on by default) and single agents that opt in, each reply
   ends with a hidden `[mood: name N]` tag that the app removes and shows as a coloured chip with an
   intensity bar (calm, happy, playful, affectionate, shy, curious, confident, jealous, sad, anxious,
