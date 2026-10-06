@@ -60,7 +60,7 @@ function uiContext(options={}){
   const original=[{role:'user',content:'Hi'},{role:'assistant',content:'Original',agentId:'agent-a'},{role:'user',content:'Later'}];
   const state={saved:[],requests:[],toasts:[]};
   const c=vm.createContext({$,messages:original,currentId:'chat-a',controller:null,isWorkflow:()=>false,isGroup:()=>true,
-    agents:[{id:'agent-a'}],curAgent:()=>({id:'single'}),closeAll(){},openSheet(){},renderChat(){},renderResponders(){},toast:t=>state.toasts.push(t),
+    agents:[{id:'agent-a'}],curAgent:()=>({id:'single'}),closeAll(){},openSheet(){},renderChat(){},renderResponders(){},refreshHeader(){},currentKind:'group',toast:(t,action)=>{state.toasts.push(t);state.action=action;},
     store:{k:'test-only',saveConv(id,list){if(options.full)throw Error('quota');state.saved.push({id,list});}},
     buildApiMessages:()=>c.messages.map(m=>({role:m.role,content:m.content})),prepareContext:async list=>list,moodOptions:()=>null,moodMeta:()=>({}),
     streamCompletion:async(agent,payload,meta)=>{state.requests.push({agent,payload,meta});if(options.preflightFailure)return false;c.messages.push({role:'assistant',content:'New',...meta});return {ok:true};}
@@ -92,4 +92,24 @@ test('version switching is atomic when storage is full',()=>{
   const {c,state}=uiContext({full:true});c.messages=c.editMessageVersion(c.messages,0,'Edited');const before=c.messages;
   c.selectMessageVersion(c.messages[0],0);assert.equal(c.messages,before);assert.equal(c.messages[0].content,'Edited');
   assert.match(state.toasts.at(-1),/Could not switch/);
+});
+
+test('deleting a message removes it at once and Undo restores it',()=>{
+  const {c,state,original}=uiContext();
+  c.deleteMessage(original[1]);
+  assert.deepEqual([...c.messages.map(m=>m.content)],['Hi','Later']);
+  assert.equal(state.saved.at(-1).list.length,2);assert.equal(state.toasts.at(-1),'Message deleted');
+  state.action.run();
+  assert.equal(c.messages,original);assert.equal(state.saved.at(-1).list.length,3);
+});
+test('Undo does nothing once the chat has changed, and deleting is blocked while a reply streams',()=>{
+  const {c,state,original}=uiContext();
+  c.deleteMessage(original[0]);c.messages=[...c.messages,{role:'user',content:'New'}];state.action.run();
+  assert.deepEqual([...c.messages.map(m=>m.content)],['Original','Later','New']);
+  const busy=uiContext();busy.c.controller={};busy.c.deleteMessage(busy.original[0]);
+  assert.equal(busy.c.messages.length,3);assert.match(busy.state.toasts.at(-1),/Stop the response/);
+});
+test('a storage failure leaves the message in place',()=>{
+  const {c,state,original}=uiContext({full:true});c.deleteMessage(original[1]);
+  assert.equal(c.messages,original);assert.match(state.toasts.at(-1),/Could not delete/);
 });

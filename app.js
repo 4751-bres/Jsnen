@@ -17,6 +17,7 @@ const ICONS={
   book:'<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/>',
   skip:'<path d="M5 5.5l9 6.5-9 6.5z"/><path d="M18 5v14"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
+  trash:'<path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/>',
   heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'
 };
 function icon(name){return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'+(ICONS[name]||"")+'</svg>';}
@@ -341,6 +342,19 @@ async function regenerateMessage(message){
     if(result===false){messages=previous;renderChat();}
   }catch(error){messages=previous;renderChat();toast("Could not regenerate. The previous conversation is still available.");}
 }
+// Deletes one message (with all its versions) right away; Undo restores it unless the chat changed since.
+function deleteMessage(message){
+  if(controller||isWorkflow()||message.streaming){toast("Stop the response before deleting.");return;}
+  const index=messages.indexOf(message);if(index<0)return;
+  const id=currentId,kind=currentKind,before=messages,next=[...messages.slice(0,index),...messages.slice(index+1)];
+  try{store.saveConv(id,next);}catch(error){toast("Could not delete: browser storage is full.");return;}
+  messages=next;renderChat();renderResponders();refreshHeader();
+  toast("Message deleted",{label:"Undo",run(){
+    if(currentId!==id||currentKind!==kind||controller||messages!==next)return;
+    try{store.saveConv(id,before);}catch(error){toast("Could not restore: browser storage is full.");return;}
+    messages=before;renderChat();renderResponders();refreshHeader();
+  }});
+}
 async function copyMessageText(text){
   if(!text)return false;
   try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);return true;}}catch(e){}
@@ -542,6 +556,7 @@ function createChatRow(m){
         const regenerate=actionButton("regen","Regenerate reply (uses API)",()=>regenerateMessage(m));regenerate.disabled=!!controller||!!m.streaming;actions.appendChild(regenerate);
       }
       const edit=actionButton("pencil","Edit message",()=>openMessageEditor(m));edit.disabled=!!controller||!!m.streaming;actions.appendChild(edit);
+      const remove=actionButton("trash","Delete message",()=>deleteMessage(m));remove.disabled=!!controller||!!m.streaming;actions.appendChild(remove);
     }
     for(const button of actions.querySelectorAll("button")){button.dataset.chatAction="true";button.dataset.limitDisabled=String(button.title==="Previous message version"&&(m.versionIndex||0)===0||button.title==="Next message version"&&(m.versionIndex||0)===m.versions.length-1);}
     d._copy=messageCopyButton(m);actions.appendChild(d._copy);d.appendChild(actions);
