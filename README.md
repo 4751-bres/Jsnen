@@ -98,6 +98,13 @@ That's it — it now behaves like a native app with its own icon.
 - **Safer replies** — busy/overloaded errors (429/5xx) retry twice automatically; if the connection
   drops mid-reply, the text written so far is kept and ⏵ finishes it; provider stops (content filter,
   capacity) are labelled; errors say what to do (wrong key, empty balance, chat too long).
+- **Import character cards** — the ⬆ button beside Single agents reads Tavern/SillyTavern cards (PNG with
+  embedded data, or JSON; V1, V2, V3 and older Pygmalion fields). A preview shows the picture, creator, tags
+  and greetings; choose the greeting, start as a roleplay scene or single chat, enter your name for
+  `{{user}}`, and confirm you are an adult for mature cards. The agent gets the card's picture, a prompt
+  built from its system prompt, description, personality, scenario, always-on lore and example dialogue,
+  and mood tracking; the chat opens with the greeting. Keyword lore entries are stored for later use.
+  Any agent can also get a picture in its editor. One-character scenes reply automatically.
 - **Scenario library** — the 📖 button beside Group chats in the drawer offers ready-made mature roleplay
   scenes (Last Call, Overnight Deadline, The Masquerade, Snowed In, The Arrangement, Neon Rain). Enter your
   character name and confirm you are an adult; adding one creates its characters as agents (temperature

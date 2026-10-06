@@ -72,7 +72,7 @@
       <div id="workflowList"></div>
       <div class="sect"><span class="sect-label">Group chats</span><span style="display:flex"><button class="icon-btn" id="openLibrary" type="button" aria-label="Scenario library" title="Scenario library"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></svg></button><button class="icon-btn" id="addGroup" type="button" aria-label="New group" title="New group"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></span></div>
       <div id="groupList"></div>
-      <div class="sect"><span class="sect-label">Single agents</span><button class="icon-btn" id="addAgent" type="button" aria-label="New agent" title="New agent"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
+      <div class="sect"><span class="sect-label">Single agents</span><span style="display:flex"><button class="icon-btn" id="importCard" type="button" aria-label="Import character card" title="Import character card"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg></button><button class="icon-btn" id="addAgent" type="button" aria-label="New agent" title="New agent"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></span></div>
       <div id="agentList"></div>
     </div>
   </aside>
@@ -151,6 +151,31 @@
     </div>
   </section>
 
+  <input id="cardFile" type="file" accept=".png,.json,image/png,application/json" hidden />
+  <!-- Character card import -->
+  <section class="sheet bottom" id="cardSheet">
+    <h3><span class="grow">Import character card</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body">
+      <div id="cardPreview" class="card-preview"></div>
+      <label for="cardGreeting">Greeting</label>
+      <select class="field" id="cardGreeting"></select>
+      <label for="cardMode">Start as</label>
+      <select class="field" id="cardMode">
+        <option value="scene">Roleplay scene (recommended)</option>
+        <option value="single">Single chat</option>
+      </select>
+      <label for="cardUserName">Your name (fills in {{user}})</label>
+      <input class="field" id="cardUserName" placeholder="Who you play" autocomplete="off" />
+      <label class="toggle-row"><input id="cardMature" type="checkbox" /> <span>Mature character (adults only)</span></label>
+      <label class="toggle-row" id="cardAdultRow" hidden><input id="cardAdult" type="checkbox" /> <span>I confirm I am an adult</span></label>
+      <div class="hint">Creates an agent with the card's picture and prompt, and a chat that opens with its greeting. Mood tracking is on. Everything stays editable.</div>
+    </div>
+    <div class="foot">
+      <button class="btn primary" id="cardImportBtn" type="button">Import</button>
+      <button class="btn" data-close>Cancel</button>
+    </div>
+  </section>
+
   <!-- Scenario library -->
   <section class="sheet bottom" id="librarySheet">
     <h3><span class="grow">Scenario library</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
@@ -186,6 +211,12 @@
         </div>
       </div>
 
+      <div class="avatar-row">
+        <span class="av" id="edAvatarPreview" aria-hidden="true"></span>
+        <button class="btn" id="edAvatarPick" type="button">Choose picture</button>
+        <button class="btn ghost" id="edAvatarRemove" type="button">Remove</button>
+      </div>
+      <input id="edAvatarFile" type="file" accept="image/jpeg,image/png,image/webp" hidden />
       <label>System prompt (the agent's role & rules)</label>
       <textarea class="field" id="edPrompt" placeholder="You are a senior software engineer. Be concise and give runnable code."></textarea>
 

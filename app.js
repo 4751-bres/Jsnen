@@ -207,7 +207,7 @@ function refreshHeader(){
   const item=isWorkflow()?curWorkflow():isGroup()?curGroup():curAgent();
   document.body.dataset.mood=isWorkflow()?"workflow":isGroup()?(isRoleplayGroup(curGroup())?"fiction":"social"):"work";
   $("#moodBtn").hidden=!(!isWorkflow()&&!isGroup()&&curAgent()?.moods);
-  $("#hAvatar").textContent=item?.emoji||"💬";
+  $("#hAvatar").innerHTML=avatarInner(item,"💬");
   if(isWorkflow()){
     const w=curWorkflow();
     $("#hAgent").textContent=w.name;
@@ -242,24 +242,24 @@ function renderResponders(){
     // While several agents reply in turn, show progress and allow skipping just the current speaker.
     sequence.list.forEach((a,i)=>{
       if(i<sequence.index)return;
-      const b=chip('<span class="av">'+esc(a.emoji)+'</span><span>'+esc(memberLabel(group,a))+'</span>'+(i===sequence.index?'<small>replying</small>':i===sequence.index+1?'<small>next</small>':''),i===sequence.index?"speaking":i===sequence.index+1?"next":"",null);
+      const b=chip('<span class="av">'+avatarInner(a)+'</span><span>'+esc(memberLabel(group,a))+'</span>'+(i===sequence.index?'<small>replying</small>':i===sequence.index+1?'<small>next</small>':''),i===sequence.index?"speaking":i===sequence.index+1?"next":"",null);
       b.disabled=true;
     });
     const skip=chip(icon("skip")+'<span>Skip</span>',"all",skipCurrentSpeaker,"Stop only the current speaker and continue");
     skip.disabled=!controller||sequence.picking;
     return;
   }
-  mems.forEach(a=>chip('<span class="av">'+esc(a.emoji)+'</span><span>'+esc(memberLabel(group,a))+'</span>',"",()=>groupRespond(a)));
+  mems.forEach(a=>chip('<span class="av">'+avatarInner(a)+'</span><span>'+esc(memberLabel(group,a))+'</span>',"",()=>groupRespond(a)));
   // Roleplay groups keep deleted characters' sheets; surface them instead of silently hiding them.
   for(const id of group.members||[]){
     if(agents.some(a=>a.id===id))continue;
     const b=chip('<span class="av">⚠️</span><span>'+esc(group.roleplay?.characters?.[id]?.name||"Missing character")+' (deleted)</span>',"deleted",null,"This character's agent was deleted. Edit the group to remove or replace it.");
     b.disabled=true;
   }
+  if(isRoleplayGroup(group)&&group.moods!==false&&mems.length)chip(icon("heart")+'<span>Moods</span>',"all",openMoodSheet,"See and set each character's mood");
   if(mems.length>1){
     chip(isRoleplayGroup(group)?icon("book")+'<span>Continue scene</span>':icon("users")+'<span>Everyone</span>',"all",()=>everyoneRespond());
     chip(icon("target")+'<span>Auto</span>',"all",()=>autoRespond(),"Let a quick model call pick who should reply next (1 small extra request)");
-    if(isRoleplayGroup(group)&&group.moods!==false)chip(icon("heart")+'<span>Moods</span>',"all",openMoodSheet,"See and set each character's mood");
     const rounds=groupRounds(group);
     chip(icon("discuss")+'<span>Discuss ×'+rounds+'</span>',"all",()=>discussRespond(),"Agents reply to each other for "+rounds+" round"+(rounds===1?"":"s"));
   }
@@ -501,7 +501,7 @@ function whoLabel(m){
   else if(m.agentName)name=m.agentName;
   else return null;
   const el=document.createElement("div");el.className=cls;
-  el.innerHTML='<span class="av">'+esc(m.agentEmoji||"🤖")+'</span><span class="who-name">'+esc(name)+'</span>'+(sub?'<span class="who-sub">'+esc(sub)+'</span>':"");
+  el.innerHTML='<span class="av">'+avatarInner(agentById(m.agentId)||{emoji:m.agentEmoji})+'</span><span class="who-name">'+esc(name)+'</span>'+(sub?'<span class="who-sub">'+esc(sub)+'</span>':"");
   return el;
 }
 function actionButton(name,title,onclick,extraClass){
@@ -630,7 +630,7 @@ function drawerSection(listEl,kind,items,emptyHint,describe,onSelect,onEdit){
     const row=document.createElement("div"),pinned=pins.includes(item.id);
     row.className="agent-row"+(currentKind===kind&&item.id===currentId?" active":"");
     const snippet=hit?'<span class="snippet">'+esc(hit.before)+'<mark>'+esc(hit.match)+'</mark>'+esc(hit.after)+'</span>':"";
-    row.innerHTML='<div class="av">'+esc(item.emoji)+'</div><div class="meta"><b>'+esc(item.name)+'</b><small>'+describe(item)+'</small>'+snippet+'</div>'+
+    row.innerHTML='<div class="av">'+avatarInner(item)+'</div><div class="meta"><b>'+esc(item.name)+'</b><small>'+describe(item)+'</small>'+snippet+'</div>'+
       '<button class="pin'+(pinned?" on":"")+'" type="button" aria-label="'+(pinned?"Unpin":"Pin to top")+'" aria-pressed="'+pinned+'" title="'+(pinned?"Unpin":"Pin to top")+'">'+icon("pin")+'</button>'+
       '<button class="edit" type="button" aria-label="Edit '+esc(item.name)+'" title="Edit">'+icon("pencil")+'</button>';
     row.querySelector(".meta").onclick=row.querySelector(".av").onclick=()=>{onSelect(item.id);if(hit)focusMessage(hit.index);};
@@ -671,19 +671,31 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";$("#edMoods").checked=!!a.moods;$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);
   $("#delAgent").style.display=(id&&agents.length>1)?"":"none";
   $("#dupAgent").style.display=id?"":"none";
   closeAll();openSheet("#editor");
 }
+let editingAvatar=null;
+function renderEditorAvatar(){
+  $("#edAvatarPreview").innerHTML=avatarInner({avatar:editingAvatar,emoji:$("#edEmoji").value.trim()||"🤖"});
+  $("#edAvatarRemove").hidden=!editingAvatar;$("#edAvatarPick").textContent=editingAvatar?"Change picture":"Choose picture";
+}
+$("#edEmoji").addEventListener("input",renderEditorAvatar);
+$("#edAvatarPick").onclick=()=>$("#edAvatarFile").click();
+$("#edAvatarRemove").onclick=()=>{editingAvatar=null;renderEditorAvatar();};
+$("#edAvatarFile").onchange=async e=>{
+  const file=e.target.files[0];e.target.value="";if(!file)return;
+  try{editingAvatar=await makeAvatar(file);renderEditorAvatar();}catch(err){toast("Could not read this picture.");}
+};
 $("#edTemp").oninput=e=>$("#tempVal").textContent=Number(e.target.value).toFixed(1);
 $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -692,7 +704,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -759,7 +771,7 @@ function collectRoleplayEditor(members){
 }
 function memberRow(id,emoji,title,subtitle,selected){
   const row=document.createElement("div");row.className="mem"+(selected?" sel":"");row.dataset.id=id;
-  row.innerHTML='<div class="av">'+esc(emoji)+'</div><div class="meta"><b>'+esc(title)+'</b><small>'+esc(subtitle)+'</small></div>'+
+  row.innerHTML='<div class="av">'+avatarInner(agentById(id)||{emoji})+'</div><div class="meta"><b>'+esc(title)+'</b><small>'+esc(subtitle)+'</small></div>'+
     '<div class="order"><button type="button" data-move="-1" aria-label="Speak earlier">'+icon("up")+'</button><button type="button" data-move="1" aria-label="Speak later">'+icon("down")+'</button></div><span class="tick"></span>';
   row.onclick=()=>{syncRoleplayCharacterInputs();row.classList.toggle("sel");
     // Newly selected members join the end of the speaking order.
@@ -809,6 +821,50 @@ function openGroupEditor(id){
   renderRoleplayEditor();$("#delGroup").style.display=id?"":"none";
   closeAll();openSheet("#groupEditor");
 }
+/* ---------- Character card import ---------- */
+let pendingCard=null;
+async function readCardFile(file){
+  if(file.size>30*1024*1024)throw new Error("This file is too large to be a character card.");
+  const isPng=/\.png$/i.test(file.name)||file.type==="image/png";
+  const json=isPng?cardJsonFromPng(new Uint8Array(await file.arrayBuffer())):JSON.parse(await file.text());
+  const card=normalizeCard(json);
+  let avatar=null;if(isPng){try{avatar=await makeAvatar(file);}catch(e){/* Card works without its picture. */}}
+  return {card,avatar};
+}
+function renderCardSheet(){
+  const {card,avatar}=pendingCard,snippet=fillPlaceholders(card.description||card.personality||card.scenario||"",card.name,"you").replace(/\s+/g," ").slice(0,220);
+  $("#cardPreview").innerHTML='<div class="card-head"><span class="av">'+avatarInner({avatar,emoji:"🎭"})+'</span><div class="card-title"><b>'+esc(card.name)+'</b>'+
+    '<small>'+esc([card.creator&&"by "+card.creator,card.greetings.length+" greeting"+(card.greetings.length===1?"":"s"),card.book&&card.book.entries.length+" lore entries"].filter(Boolean).join(" · "))+'</small></div></div>'+
+    (snippet?'<p class="card-desc">'+esc(snippet)+(snippet.length>=220?"…":"")+'</p>':"")+
+    (card.tags.length?'<div class="card-tags">'+card.tags.map(t=>'<span>'+esc(t)+'</span>').join("")+'</div>':"");
+  const sel=$("#cardGreeting");sel.innerHTML="";
+  if(!card.greetings.length)sel.innerHTML='<option value="0">No greeting (start empty)</option>';
+  card.greetings.forEach((g,i)=>{const o=document.createElement("option");o.value=i;o.textContent=(i?"Alternate "+i+": ":"Default: ")+g.replace(/\s+/g," ").slice(0,70)+(g.length>70?"…":"");sel.appendChild(o);});
+  const mature=/nsfw|mature|18\+|adult|explicit/i.test(card.tags.join(" "));
+  $("#cardMature").checked=mature;$("#cardAdultRow").hidden=!mature;$("#cardAdult").checked=false;
+}
+$("#cardMature").onchange=()=>{$("#cardAdultRow").hidden=!$("#cardMature").checked;if(!$("#cardMature").checked)$("#cardAdult").checked=false;};
+$("#importCard").onclick=()=>{if(controller){toast("Stop the response first");return;}$("#cardFile").click();};
+$("#cardFile").onchange=async e=>{
+  const file=e.target.files[0];e.target.value="";if(!file)return;
+  try{pendingCard=await readCardFile(file);}catch(err){toast(err instanceof SyntaxError?"This file is not valid card data.":err.message||"Could not read this card.");return;}
+  renderCardSheet();closeAll();openSheet("#cardSheet");
+};
+$("#cardImportBtn").onclick=()=>{
+  if(!pendingCard)return;
+  const mode=$("#cardMode").value,userName=$("#cardUserName").value.trim(),mature=$("#cardMature").checked;
+  if(mode==="scene"&&!userName){toast("Enter your name for the roleplay scene");$("#cardUserName").focus();return;}
+  if(mature&&!$("#cardAdult").checked){toast("Confirm that you are an adult");return;}
+  const built=cardToChat(pendingCard.card,{userName,mature,mode,greetingIndex:Number($("#cardGreeting").value)||0,avatar:pendingCard.avatar},uid,Date.now());
+  const nextAgents=[...agents,built.agent],nextGroups=built.group?[...groups,built.group]:groups;
+  try{store.agents=nextAgents;if(built.group)store.groups=nextGroups;store.saveConv(built.conversationId,built.messages);}
+  catch(err){store.agents=agents;toast("Not enough browser storage to import this card.");return;}
+  agents=nextAgents;if(built.group)groups=normalizeStoredGroups(nextGroups,agents);
+  pendingCard=null;
+  if(built.group)selectGroup(built.group.id);else selectAgent(built.agent.id);
+  toast(built.agent.name+" imported");
+};
+
 /* ---------- Scenario library ---------- */
 function renderLibrary(){
   const list=$("#libraryList");list.innerHTML="";
@@ -1295,6 +1351,23 @@ function afterMoodReply(agent,result){
   if(!s||!result?.bot?.mood||!s.owner.moodSteer?.[s.key])return;
   delete s.owner.moodSteer[s.key];try{s.save();}catch(e){/* The steer simply stays for one more reply. */}
 }
+/* ---------- Avatars: a picture when the agent has one, otherwise its emoji ---------- */
+function avatarInner(item,fallback){
+  const url=item?.avatar;
+  if(typeof url==="string"&&/^data:image\/(jpeg|png|webp);base64,/.test(url))return '<img src="'+url+'" alt="">';
+  return esc(item?.emoji||fallback||"🤖");
+}
+function agentById(id){return agents.find(a=>a.id===id);}
+// Square, centre-cropped thumbnail so pictures stay small in storage.
+async function makeAvatar(blob,size=160){
+  const url=URL.createObjectURL(blob),img=new Image();
+  try{
+    img.src=url;await img.decode();
+    const side=Math.min(img.naturalWidth,img.naturalHeight),canvas=document.createElement("canvas");canvas.width=canvas.height=size;
+    canvas.getContext("2d").drawImage(img,(img.naturalWidth-side)/2,(img.naturalHeight-side)/2,side,side,0,0,size,size);
+    return canvas.toDataURL("image/jpeg",0.82);
+  }finally{URL.revokeObjectURL(url);}
+}
 function moodLabel(m){return m.mood.charAt(0).toUpperCase()+m.mood.slice(1)+" "+m.level;}
 function moodChip(m,tag="span"){
   return "<"+tag+' class="mood mood-'+esc(m.mood)+'" style="--lvl:'+(m.level*10)+'%"><i></i>'+esc(moodLabel(m))+"</"+tag+">";
@@ -1309,7 +1382,7 @@ function renderMoodSheet(){
     const s=moodSettings(agent);if(!s)continue;
     const history=moodHistory(agent.id),now=history.at(-1),steer=s.owner.moodSteer?.[s.key];
     const card=document.createElement("div");card.className="mood-card";
-    card.innerHTML='<div class="mood-head"><span class="av">'+esc(agent.emoji)+'</span><b>'+esc(name)+'</b>'+(now?moodChip(now):'<span class="hint" style="margin:0">No mood yet</span>')+'</div>'+
+    card.innerHTML='<div class="mood-head"><span class="av">'+avatarInner(agent)+'</span><b>'+esc(name)+'</b>'+(now?moodChip(now):'<span class="hint" style="margin:0">No mood yet</span>')+'</div>'+
       (history.length>1?'<div class="mood-trail" aria-label="Recent moods, oldest first">'+history.slice(-8).map(m=>moodChip(m)).join('<span aria-hidden="true">›</span>')+'</div>':"")+
       '<label>'+(steer?"Set for the next reply: "+esc(moodLabel(steer)):"Set a mood for the next reply")+'</label>'+
       '<div class="mood-steer"><select class="field" aria-label="Mood">'+moodNames(s.mature).map(n=>'<option value="'+n+'"'+((steer||now)?.mood===n?" selected":"")+'>'+n.charAt(0).toUpperCase()+n.slice(1)+'</option>').join("")+'</select>'+
@@ -1553,6 +1626,8 @@ function send(){
     // "@Name" picks responders directly; otherwise you choose who replies.
     const group=curGroup(),ids=findMentions(text,mentionCandidates(group));
     if(ids.length){runSequence(ids.map(id=>agents.find(a=>a.id===id)).filter(Boolean));return;}
+    // A one-character scene (for example an imported card) simply replies.
+    const only=groupMembers(group);if(only.length===1){runSequence(only);return;}
     renderResponders();return;
   }
   runAgent(curAgent());

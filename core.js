@@ -514,3 +514,92 @@ function buildScenario(preset,userName,idFactory){
   return {agents,group};
 }
 /* scenario-library:end */
+/* card-import:start */
+// Character cards (Tavern / SillyTavern V1, V2 and V3 data) from PNG text chunks or JSON files.
+function bytesToText(bytes,encoding){return new TextDecoder(encoding).decode(bytes);}
+// Reads tEXt and uncompressed iTXt chunks; compressed chunks are reported so the caller can explain.
+function pngTextChunks(bytes){
+  const signature=[137,80,78,71,13,10,26,10];
+  if(bytes.length<8||signature.some((b,i)=>bytes[i]!==b))throw new Error("This file is not a PNG image.");
+  const out=[];let p=8;
+  while(p+12<=bytes.length){
+    const len=((bytes[p]<<24)|(bytes[p+1]<<16)|(bytes[p+2]<<8)|bytes[p+3])>>>0;
+    const type=String.fromCharCode(bytes[p+4],bytes[p+5],bytes[p+6],bytes[p+7]);
+    const start=p+8,end=start+len;if(end>bytes.length)break;
+    const data=bytes.subarray(start,end),zero=data.indexOf(0);
+    if(type==="tEXt"&&zero>0)out.push({keyword:bytesToText(data.subarray(0,zero),"latin1"),text:bytesToText(data.subarray(zero+1),"latin1")});
+    else if(type==="iTXt"&&zero>0){
+      const keyword=bytesToText(data.subarray(0,zero),"latin1"),compressed=data[zero+1]===1;
+      let q=zero+3;const langEnd=data.indexOf(0,q);q=langEnd+1;const transEnd=data.indexOf(0,q);
+      if(langEnd<0||transEnd<0){}
+      else if(compressed)out.push({keyword,compressed:true});
+      else out.push({keyword,text:bytesToText(data.subarray(transEnd+1),"utf-8")});
+    }else if(type==="zTXt"&&zero>0)out.push({keyword:bytesToText(data.subarray(0,zero),"latin1"),compressed:true});
+    if(type==="IEND")break;
+    p=end+4;
+  }
+  return out;
+}
+function base64ToUtf8(b64){
+  const binary=atob(String(b64).replace(/\s+/g,"")),bytes=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+  return bytesToText(bytes,"utf-8");
+}
+// Prefers the V3 "ccv3" chunk, then the V2 "chara" chunk.
+function cardJsonFromPng(bytes){
+  const chunks=pngTextChunks(bytes),pick=k=>chunks.find(c=>c.keyword.toLowerCase()===k);
+  const chunk=pick("ccv3")||pick("chara");
+  if(!chunk)throw new Error("This image has no character card data inside.");
+  if(chunk.compressed)throw new Error("This card uses a compressed format that isn't supported yet. Try its JSON version.");
+  try{return JSON.parse(base64ToUtf8(chunk.text));}catch(e){return JSON.parse(chunk.text);}
+}
+function normalizeLorebook(book){
+  if(!book||typeof book!=="object"||!Array.isArray(book.entries))return null;
+  const entries=book.entries.filter(e=>e&&typeof e.content==="string"&&e.content.trim()&&e.enabled!==false).map(e=>({
+    name:String(e.name||e.comment||""),keys:(Array.isArray(e.keys)?e.keys:[]).filter(k=>typeof k==="string"&&k.trim()),
+    content:e.content.trim(),constant:e.constant===true}));
+  return entries.length?{name:String(book.name||""),entries}:null;
+}
+// One shape for every card version (V1 fields, older Pygmalion names, V2/V3 "data").
+function normalizeCard(json){
+  if(!json||typeof json!=="object")throw new Error("This file is not a character card.");
+  const d=json.data&&typeof json.data==="object"?json.data:json,str=v=>typeof v==="string"?v:"";
+  const name=(str(d.name)||str(json.char_name)).trim();
+  if(!name)throw new Error("This character card has no name.");
+  const greetings=[str(d.first_mes)||str(json.char_greeting),...(Array.isArray(d.alternate_greetings)?d.alternate_greetings:[])]
+    .filter(g=>typeof g==="string"&&g.trim());
+  return {name,description:str(d.description)||str(json.char_persona),personality:str(d.personality),
+    scenario:str(d.scenario)||str(json.world_scenario),greetings,examples:str(d.mes_example)||str(json.example_dialogue),
+    systemPrompt:str(d.system_prompt),postHistory:str(d.post_history_instructions),creatorNotes:str(d.creator_notes),
+    creator:str(d.creator),tags:(Array.isArray(d.tags)?d.tags:[]).filter(t=>typeof t==="string").slice(0,12),
+    book:normalizeLorebook(d.character_book)};
+}
+function fillPlaceholders(text,charName,userName){
+  return String(text||"").replace(/\{\{\s*char\s*\}\}|<BOT>/gi,charName).replace(/\{\{\s*user\s*\}\}|<USER>/gi,userName||"User")
+    .replace(/\{\{\s*original\s*\}\}/gi,"").trim();
+}
+function cardPrompt(card,userName){
+  const f=t=>fillPlaceholders(t,card.name,userName);
+  const lore=(card.book?.entries||[]).filter(e=>e.constant);
+  return [card.systemPrompt&&f(card.systemPrompt),"You are "+card.name+".",card.description&&f(card.description),
+    card.personality&&"Personality: "+f(card.personality),card.scenario&&"Scenario: "+f(card.scenario),
+    lore.length&&"World facts:\n"+lore.map(e=>"- "+f(e.content)).join("\n"),
+    card.examples&&"Example dialogue (a guide to voice and style; never repeat it word for word):\n"+f(card.examples),
+    card.postHistory&&f(card.postHistory)].filter(Boolean).join("\n\n");
+}
+// Builds the agent, the optional roleplay group, and the opening messages; nothing is saved here.
+function cardToChat(card,options,idFactory,now){
+  const userName=String(options.userName||"").trim()||"User",f=t=>fillPlaceholders(t,card.name,userName);
+  const agent={id:idFactory(),emoji:options.emoji||"🎭",avatar:options.avatar||null,name:card.name,prompt:cardPrompt(card,userName),
+    model:"deepseek-flash",temp:1.3,think:"off",moods:true,matureMoods:options.mature===true,
+    lorebook:card.book,card:{creator:card.creator,tags:card.tags}};
+  const greeting=f(card.greetings[options.greetingIndex||0]||"");
+  if(options.mode!=="scene")
+    return {agent,group:null,conversationId:agent.id,messages:greeting?[{role:"assistant",content:greeting,at:now}]:[]};
+  const group={id:idFactory(),emoji:agent.emoji,avatar:agent.avatar,name:card.name,members:[agent.id],moods:true,discussRounds:2,
+    roleplay:{enabled:true,mature:options.mature===true,setting:f(card.scenario),opening:"",user:{name:userName,description:""},
+      characters:{[agent.id]:{name:card.name,description:""}}}};
+  const messages=greeting?[{role:"assistant",agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,characterName:card.name,content:greeting,at:now}]:[];
+  return {agent,group,conversationId:group.id,messages};
+}
+/* card-import:end */

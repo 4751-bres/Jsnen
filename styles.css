@@ -235,6 +235,23 @@ button.mood{cursor:pointer}
 .mood-actions{display:flex;gap:10px;margin-top:12px}
 @media (max-width:400px){header .icon-btn{width:40px}}
 
+/* Picture avatars (agents imported from cards, or chosen in the editor) */
+.av,.h-avatar{overflow:hidden}
+.av img,.h-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.avatar-row{display:flex;align-items:center;gap:10px;margin-top:12px}
+.avatar-row .av{width:48px;height:48px;flex:none;display:grid;place-items:center;border-radius:14px;background:var(--surface-2);border:1px solid var(--line-strong);font-size:24px}
+.avatar-row .btn{flex:none}
+/* Card import preview */
+.card-preview{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.card-head{display:flex;align-items:center;gap:12px}
+.card-head .av{width:64px;height:64px;flex:none;display:grid;place-items:center;border-radius:18px;background:var(--surface-2);border:1.5px solid var(--mood-fiction);font-size:30px}
+.card-title{min-width:0;display:flex;flex-direction:column;gap:2px}
+.card-title b{font-size:18px}
+.card-title small{font-size:12.5px;color:var(--text-3)}
+.card-desc{margin:0;font-size:14px;line-height:1.5;color:var(--text-2)}
+.card-tags{display:flex;flex-wrap:wrap;gap:6px}
+.card-tags span{height:24px;display:inline-flex;align-items:center;padding:0 9px;border:1px solid var(--line-strong);border-radius:var(--radius-pill);font-size:12px;color:var(--text-2)}
+
 /* Scenario library */
 .lib-card{border:1px solid var(--line);background:var(--surface-2);border-radius:16px;padding:14px;margin:12px 0;display:flex;flex-direction:column;gap:10px}
 .lib-head{display:flex;align-items:center;gap:12px}
