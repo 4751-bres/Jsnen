@@ -1,6 +1,6 @@
 // Offline shell for the installed app. Network first, so a new GitHub Pages deploy is picked up on the next
 // online load; the cached copy is used only when the network fails. API calls (other origins) are never cached.
-const CACHE = "ds-agents-shell-v2";
+const CACHE = "ds-agents-shell-v3";
 const SHELL = ["./", "index.html", "styles.css", "core.js", "app.js", "manifest.json"];
 
 self.addEventListener("install", event => {
@@ -19,7 +19,7 @@ self.addEventListener("fetch", event => {
   const request = event.request;
   if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
   event.respondWith(
-    fetch(request)
+    fetch(request.url, { cache: "no-cache", credentials: "same-origin" })
       .then(response => {
         if (response.ok) {
           const copy = response.clone();

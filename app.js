@@ -41,7 +41,7 @@ const store = {
   get ctxLimit(){return Number(localStorage.getItem("ds_ctx_limit"))||0}, set ctxLimit(v){localStorage.setItem("ds_ctx_limit",String(v||0))},
   get ctxSummary(){return localStorage.getItem("ds_ctx_summary")==="1"}, set ctxSummary(v){localStorage.setItem("ds_ctx_summary",v?"1":"0")},
   get pins(){try{return JSON.parse(localStorage.getItem("ds_pins"))||[]}catch(e){return []}}, set pins(v){localStorage.setItem("ds_pins",JSON.stringify(v))},
-  get sort(){return localStorage.getItem("ds_sort")||"manual"}, set sort(v){localStorage.setItem("ds_sort",v)},
+  get sort(){return localStorage.getItem("ds_sort")||"recent"}, set sort(v){localStorage.setItem("ds_sort",v)},
   get activity(){try{return JSON.parse(localStorage.getItem("ds_activity"))||{}}catch(e){return {}}},
   touch(id){try{const a=this.activity;a[id]=Date.now();localStorage.setItem("ds_activity",JSON.stringify(a));}catch(e){/* Sorting hint only. */}},
   // Conversations, runs, and summaries are large: IndexedDB holds them when available (records mirrors it in memory
@@ -98,8 +98,10 @@ const store = {
   saveRun(id,v){if(v)this.setRaw("ds_run_"+id,JSON.stringify(v));else this.removeRaw("ds_run_"+id)},
   clearRun(id){this.removeRaw("ds_run_"+id)},
   conv(id){try{return JSON.parse(this.raw("ds_conv_"+id))||[]}catch(e){return []}},
-  saveConv(id,m){this.setRaw("ds_conv_"+id,JSON.stringify(m));this.touch(id);},
-  clearConv(id){this.removeRaw("ds_conv_"+id);this.removeRaw("ds_sum_"+id);},
+  saveConv(id,m){this.setRaw("ds_conv_"+id,JSON.stringify(m));this.touch(id);try{this.setPreview(id,previewOf(m));}catch(e){/* List preview only. */}},
+  clearConv(id){this.removeRaw("ds_conv_"+id);this.removeRaw("ds_sum_"+id);this.setPreview(id,undefined);},
+  get previews(){try{return JSON.parse(localStorage.getItem("ds_previews"))||{}}catch(e){return {}}},
+  setPreview(id,value){try{const p=this.previews;if(value===undefined)delete p[id];else p[id]=value;localStorage.setItem("ds_previews",JSON.stringify(p));}catch(e){/* List preview only. */}},
   summary(id){try{return JSON.parse(this.raw("ds_sum_"+id))}catch(e){return null}},
   saveSummary(id,v){this.setRaw("ds_sum_"+id,JSON.stringify(v));},
 };
@@ -222,7 +224,7 @@ function refreshHeader(){
   }else if(isGroup()){
     const g=curGroup(),n=groupMembers(g).length,roleplay=isRoleplayGroup(g);
     $("#hAgent").textContent=g.name;
-    $("#hSub").textContent=(roleplay?"Roleplay · You are "+(g.roleplay.user.name||"your character"):n+" agent"+(n===1?"":"s")+" · tap a name below to reply")+usedText;
+    $("#hSub").textContent=roleplay?"Roleplay · "+(g.roleplay.user.name||"you"):n+" agent"+(n===1?"":"s")+usedText;
     $("#input").placeholder=roleplay?"Continue the scene, or @name…":"Message the group, or @name…";
   }else{
     const a=curAgent();
@@ -248,8 +250,12 @@ function renderResponders(){
     });
     const skip=chip(icon("skip")+'<span>Skip</span>',"all",skipCurrentSpeaker,"Stop only the current speaker and continue");
     skip.disabled=!controller||sequence.picking;
-    return;
+    updateChipFade();return;
   }
+  const roleplay=isRoleplayGroup(group),rounds=groupRounds(group);
+  const continueChip=()=>chip(roleplay?icon("book")+'<span>Continue scene</span>':icon("users")+'<span>Everyone</span>',"all",()=>everyoneRespond());
+  // In a scene the main action leads; in an ordinary group the members do.
+  if(roleplay&&mems.length>1)continueChip();
   mems.forEach(a=>chip('<span class="av">'+avatarInner(a)+'</span><span>'+esc(memberLabel(group,a))+'</span>',"",()=>groupRespond(a)));
   // Roleplay groups keep deleted characters' sheets; surface them instead of silently hiding them.
   for(const id of group.members||[]){
@@ -257,14 +263,18 @@ function renderResponders(){
     const b=chip('<span class="av">⚠️</span><span>'+esc(group.roleplay?.characters?.[id]?.name||"Missing character")+' (deleted)</span>',"deleted",null,"This character's agent was deleted. Edit the group to remove or replace it.");
     b.disabled=true;
   }
-  if(isRoleplayGroup(group)&&group.moods!==false&&mems.length)chip(icon("heart")+'<span>Moods</span>',"all",openMoodSheet,"See and set each character's mood");
   if(mems.length>1){
-    chip(isRoleplayGroup(group)?icon("book")+'<span>Continue scene</span>':icon("users")+'<span>Everyone</span>',"all",()=>everyoneRespond());
+    if(!roleplay)continueChip();
     chip(icon("target")+'<span>Auto</span>',"all",()=>autoRespond(),"Let a quick model call pick who should reply next (1 small extra request)");
-    const rounds=groupRounds(group);
     chip(icon("discuss")+'<span>Discuss ×'+rounds+'</span>',"all",()=>discussRespond(),"Agents reply to each other for "+rounds+" round"+(rounds===1?"":"s"));
   }
+  if(roleplay&&group.moods!==false&&mems.length)chip(icon("heart")+'<span>Moods</span>',"all",openMoodSheet,"See and set each character's mood");
+  bar.scrollLeft=0;updateChipFade();
 }
+// Fade the right edge only while more chips are hidden off-screen.
+function updateChipFade(){const bar=$("#responders");bar.classList.toggle("more",bar.scrollWidth-bar.clientWidth-bar.scrollLeft>4);}
+$("#responders").addEventListener("scroll",updateChipFade,{passive:true});
+addEventListener("resize",updateChipFade);
 
 /* ---------- Chat rendering ---------- */
 /* message-edit-core:start */
@@ -390,6 +400,14 @@ $("#chat").addEventListener("click",async e=>{
   const code=button.parentElement.querySelector("code")?.textContent||"";
   const ok=await copyMessageText(code);button.innerHTML=icon(ok?"check":"x")+(ok?"Copied":"Failed");setTimeout(()=>{button.innerHTML=icon("copy")+"Copy";},1500);
 });
+$("#chat").addEventListener("click",e=>{
+  if(e.target.closest("button,a,summary,details,img,input,textarea,select,.code-copy"))return;
+  if(String(getSelection?.()||""))return;
+  const row=e.target.closest(".msg");if(!row||!row.closest("#chat"))return;
+  const show=!row._showActions;
+  for(const other of $("#chat").querySelectorAll(".msg.show-actions"))if(other!==row){other._showActions=false;other.classList.remove("show-actions");}
+  row._showActions=show;row.classList.toggle("show-actions",show);
+});
 $("#jumpToLatest").onclick=()=>{chatFollowing=true;$("#chat").scrollTop=$("#chat").scrollHeight;updateLatestButton();};
 function loadEarlierMessages(){
   if(chatVisibleStart===0)return;
@@ -424,11 +442,14 @@ function updateChatRow(m,d){
   }
   d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
   if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
+  if(d._showActions)d.classList.add("show-actions");
   const note=m.interrupted?"⚠ connection lost — reply incomplete":m.finish?"⚠ "+(FINISH_NOTES[m.finish]||m.finish):m.truncated?"⚠ "+FINISH_NOTES.length:"";
   // Time only: the day divider above already shows the date.
-  const meta=[messageTime(m.at,m.at),note,m.usage&&formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+" out"].filter(Boolean).join(" · ");
+  const time=messageTime(m.at,m.at);
+  const meta=(time?'<span>'+time+'</span>':"")+(note?'<span class="w">'+esc(note)+'</span>':"")+
+    (m.usage?'<span class="tok">'+formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+' out</span>':"");
   if(d._continue)d._continue.hidden=!(m.truncated&&!m.streaming&&messages.at(-1)===m);
-  if(d._meta.textContent!==meta){d._meta.textContent=meta;d._meta.classList.toggle("warn",!!note);}
+  if(d._metaHtml!==meta){d._meta.innerHTML=meta;d._metaHtml=meta;}
   if(m.mood){
     const key=m.mood.mood+":"+m.mood.level;
     if(d._moodKey!==key){d._mood.className="mood mood-"+m.mood.mood;d._mood.style.setProperty("--lvl",(m.mood.level*10)+"%");d._mood.innerHTML="<i></i>"+esc(moodLabel(m.mood));d._mood.setAttribute("aria-label","Mood: "+moodLabel(m.mood)+" of 10. Open moods");d._moodKey=key;}
@@ -645,7 +666,9 @@ function drawerSection(listEl,kind,items,emptyHint,describe,onSelect,onEdit){
     const row=document.createElement("div"),pinned=pins.includes(item.id);
     row.className="agent-row"+(currentKind===kind&&item.id===currentId?" active":"");
     const snippet=hit?'<span class="snippet">'+esc(hit.before)+'<mark>'+esc(hit.match)+'</mark>'+esc(hit.after)+'</span>':"";
-    row.innerHTML='<div class="av">'+avatarInner(item)+'</div><div class="meta"><b>'+esc(item.name)+'</b><small>'+describe(item)+'</small>'+snippet+'</div>'+
+    const preview=chatPreview(item.id),when=preview?shortWhen(preview.at,Date.now()):"";
+    const sub=preview?(preview.who?'<span class="who-prefix">'+esc(preview.who)+':</span> ':"")+esc(preview.text):describe(item);
+    row.innerHTML='<div class="av">'+avatarInner(item)+'</div><div class="meta"><span class="row-top"><b>'+esc(item.name)+'</b>'+(when?'<span class="when">'+esc(when)+'</span>':"")+'</span><small>'+sub+'</small>'+snippet+'</div>'+
       '<button class="pin'+(pinned?" on":"")+'" type="button" aria-label="'+(pinned?"Unpin":"Pin to top")+'" aria-pressed="'+pinned+'" title="'+(pinned?"Unpin":"Pin to top")+'">'+icon("pin")+'</button>'+
       '<button class="edit" type="button" aria-label="Edit '+esc(item.name)+'" title="Edit">'+icon("pencil")+'</button>';
     row.querySelector(".meta").onclick=row.querySelector(".av").onclick=()=>{onSelect(item.id);if(hit)focusMessage(hit.index);};
@@ -653,7 +676,7 @@ function drawerSection(listEl,kind,items,emptyHint,describe,onSelect,onEdit){
     row.querySelector(".edit").onclick=e=>{e.stopPropagation();onEdit(item.id);};
     listEl.appendChild(row);
   }
-  if(!shown)listEl.innerHTML='<div class="hint" style="margin:0 6px 6px">'+(q?"No matches.":emptyHint)+'</div>';
+  if(!shown&&(q||emptyHint))listEl.innerHTML='<div class="hint" style="margin:0 6px 6px">'+(q?"No matches.":emptyHint)+'</div>';
 }
 // Scroll a chat message into view after opening a search result.
 function focusMessage(index){
@@ -663,16 +686,39 @@ function focusMessage(index){
   const row=chatRows.get(messages[index]);if(!row)return;
   row.scrollIntoView({block:"center"});row.classList.add("flash");setTimeout(()=>row.classList.remove("flash"),1600);updateLatestButton();
 }
+// Previews are cached by saveConv; chats saved before that are read once and cached.
+function chatPreview(id){
+  const map=store.previews;
+  if(!(id in map)){const p=store.raw("ds_conv_"+id)===null?null:previewOf(store.conv(id));store.setPreview(id,p);return p;}
+  return map[id];
+}
 function renderWorkflows(){
-  drawerSection($("#workflowList"),"workflow",workflows,"No workflows yet. Start from Research, Coding, or Decision.",
+  drawerSection($("#workflowList"),"workflow",workflows,"",
     w=>esc(w.template||"custom")+' · '+w.roles.length+' roles',selectWorkflow,openWorkflowEditor);
 }
+// Agents that only exist as characters in a roleplay scene (and have no chat of their own) go in a folded list.
+function isSceneCharacter(a){
+  return !(currentKind==="agent"&&currentId===a.id)&&store.raw("ds_conv_"+a.id)===null&&groups.some(g=>isRoleplayGroup(g)&&(g.members||[]).includes(a.id));
+}
+let showCharacters=false;
 function renderAgents(){
   renderWorkflows();
-  drawerSection($("#groupList"),"group",groups,"No groups yet. Create one to chat with several agents at once.",
-    g=>{const mems=groupMembers(g);return (isRoleplayGroup(g)?'🎭 roleplay · ':'')+mems.map(a=>esc(a.emoji)).join(" ")+' · '+mems.length+' agent'+(mems.length===1?"":"s");},
+  drawerSection($("#groupList"),"group",groups,"No groups yet. Use + for a new group, or Library for a ready-made scene.",
+    g=>{const mems=groupMembers(g);return (isRoleplayGroup(g)?'Roleplay · ':'')+mems.map(a=>esc(a.name)).join(", ");},
     selectGroup,openGroupEditor);
-  drawerSection($("#agentList"),"agent",agents,"No agents yet.",a=>esc(a.model||store.model),selectAgent,openEditor);
+  const searching=!!drawerQuery.trim(),characters=searching?[]:agents.filter(isSceneCharacter);
+  const regular=agents.filter(a=>!characters.includes(a));
+  drawerSection($("#agentList"),"agent",regular,"No agents yet.",()=>"Start a chat",selectAgent,openEditor);
+  const wrap=$("#characterList");wrap.innerHTML="";
+  if(characters.length){
+    const toggle=document.createElement("button");toggle.type="button";toggle.className="chars-toggle";toggle.setAttribute("aria-expanded",String(showCharacters));
+    toggle.innerHTML='<span>Scene characters · '+characters.length+'</span>'+icon(showCharacters?"chevL":"chevR");
+    toggle.onclick=()=>{showCharacters=!showCharacters;renderAgents();};
+    wrap.appendChild(toggle);
+    if(showCharacters){const list=document.createElement("div");wrap.appendChild(list);
+      drawerSection(list,"agent",characters,"",a=>"Character in "+esc(groups.filter(g=>(g.members||[]).includes(a.id)).map(g=>g.name).join(", ")),selectAgent,openEditor);}
+  }
+  $("#workflowSect").hidden=searching&&!$("#workflowList").children.length;
 }
 $("#drawerSearch").addEventListener("input",e=>{clearTimeout(e.target._t);e.target._t=setTimeout(()=>{drawerQuery=e.target.value;renderAgents();},150);});
 $("#drawerSort").onchange=e=>{try{store.sort=e.target.value;}catch(err){}renderAgents();};
@@ -688,15 +734,15 @@ function openEditor(id){
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
   $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
-  $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);
-  $("#delAgent").style.display=(id&&agents.length>1)?"":"none";
-  $("#dupAgent").style.display=id?"":"none";
+  $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);syncTempState();
+  $("#delAgent").hidden=!(id&&agents.length>1);
+  $("#dupAgent").hidden=!id;
   closeAll();openSheet("#editor");
 }
 let editingAvatar=null;
 function renderEditorAvatar(){
   $("#edAvatarPreview").innerHTML=avatarInner({avatar:editingAvatar,emoji:$("#edEmoji").value.trim()||"🤖"});
-  $("#edAvatarRemove").hidden=!editingAvatar;$("#edAvatarPick").textContent=editingAvatar?"Change picture":"Choose picture";
+  $("#edAvatarRemove").hidden=!editingAvatar;$("#edAvatarPickLabel").textContent=editingAvatar?"Change photo":"Add photo";
 }
 $("#edEmoji").addEventListener("input",renderEditorAvatar);
 $("#edAvatarPick").onclick=()=>$("#edAvatarFile").click();
@@ -705,6 +751,13 @@ $("#edAvatarFile").onchange=async e=>{
   const file=e.target.files[0];e.target.value="";if(!file)return;
   try{editingAvatar=await makeAvatar(file);renderEditorAvatar();}catch(err){toast("Could not read this picture.");}
 };
+// DeepSeek ignores temperature in thinking mode, so the slider is only active with thinking off.
+function syncTempState(){
+  const thinking=$("#edThink").value!=="off";
+  $("#edTempBlock").classList.toggle("disabled",thinking);$("#edTemp").disabled=thinking;
+  $("#edTempHint").textContent=thinking?"Not used while thinking is on.":"0.0 for code and maths · 1.0 for chat · 1.3 for creative writing and roleplay";
+}
+$("#edThink").addEventListener("change",syncTempState);
 $("#edTemp").oninput=e=>$("#tempVal").textContent=Number(e.target.value).toFixed(1);
 $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{

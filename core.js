@@ -467,6 +467,25 @@ function searchConversation(list,query){
   }
   return null;
 }
+// Last visible message of a chat, for the chat list ("Mara: Bravo. I almost…").
+function previewOf(list){
+  for(let i=(list||[]).length-1;i>=0;i--){
+    const m=list[i];
+    if(!m||(m.role!=="user"&&m.role!=="assistant")||m.error||m.streaming)continue;
+    const text=String(m.content||"").replace(/\*/g,"").replace(/\s+/g," ").trim();
+    if(!text&&!m.images?.length)continue;
+    return {who:m.role==="user"?"You":(m.characterName||m.agentName||""),text:text?text.slice(0,90):"Photo",at:m.at||0};
+  }
+  return null;
+}
+// Compact time for list rows: 14:05 today, Yesterday, a weekday this week, otherwise "Oct 3".
+function shortWhen(at,now){
+  if(!at)return "";
+  const label=dayLabel(at,now);
+  if(label==="Today")return messageTime(at,at);
+  if(label==="Yesterday")return label;
+  return label.includes(", ")&&/^[A-Z][a-z]{2}, /.test(label)?label.slice(0,3):label.replace(/, \d{4}$/,"");
+}
 /* drawer-core:end */
 /* scenario-library:start */
 // Ready-made mature roleplay scenarios. Every character is an adult woman; consent is part of each character's rules.

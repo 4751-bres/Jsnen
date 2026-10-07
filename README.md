@@ -73,6 +73,12 @@ That's it — it now behaves like a native app with its own icon.
 - **Streaming replies** with a stop button.
 - **Responsive long chats** — streaming refreshes only the active reply, with batched screen updates. Scroll up freely while a reply arrives; **↓ Latest** returns to the bottom. The screen initially shows the latest 40 messages, with **Load earlier messages** to display more. This display batching does not shorten saved conversations or the history sent to the AI. Collapsed reasoning is rendered only when opened, and images load lazily.
 - **Copy any message** — use the small bottom-right copy button on your messages or the AI's replies. Copies the original text, including `*actions*` and code, without reasoning or speaker labels. Image-only messages have no text to copy.
+- **Calmer reading** — message buttons appear on the latest message, or on the one you tap (hover with a
+  mouse); in roleplay, token counts show only on the tapped message. The reply bar starts with Continue
+  scene in roleplay and fades at the edge when more buttons are off-screen.
+- **Chat list as an inbox** — each chat shows its last message, who sent it, and when; Recent order by
+  default; groups first, workflows last; characters that only belong to a scene are folded under
+  "Scene characters". Pin and edit buttons show on the open chat (or on hover).
 - **Delete messages** — the 🗑 button under any message in single-agent, group and roleplay chats removes
   it (with all its versions) immediately; **Undo** in the toast brings it back for a few seconds.
 - **Edit and reply versions** — in single-agent and group chats, use ✎ to edit either side and ↻ to request another AI reply (one API request). Use ‹ / › to switch saved versions. Regenerating an earlier reply starts a new branch; the old version retains its later conversation, restored when you switch back. Manual edits keep later messages and save the original version too. Versions survive reloads in browser storage. Workflow messages instead use their existing role-retry controls.

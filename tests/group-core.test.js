@@ -58,3 +58,18 @@ test('pipe tables render as escaped HTML tables',()=>{
   assert.equal(html,'<div class="md-table"><table><thead><tr><th>Name</th><th>Score</th></tr></thead><tbody><tr><td>&lt;b&gt;x&lt;/b&gt;</td><td><b>9</b></td></tr></tbody></table></div>after');
   assert.equal(ctx.md('a | b'),'a | b');
 });
+
+test('chat-list previews show the last real message with its speaker',()=>{
+  const at=new Date(2026,9,7,11,37).getTime();
+  assert.deepEqual({...core.previewOf([{role:'user',content:'Hi',at:1},{role:'assistant',characterName:'Mara',agentName:'Mara agent',content:'*Raises a glass.*  Bravo.',at}])},{who:'Mara',text:'Raises a glass. Bravo.',at});
+  assert.equal(core.previewOf([{role:'user',content:'Hi'},{role:'assistant',content:'⚠️ HTTP 401',error:true}]).who,'You');
+  assert.equal(core.previewOf([{role:'user',content:'',images:[{}]}]).text,'Photo');
+  assert.equal(core.previewOf([]),null);
+  const now=new Date(2026,9,7,15,0).getTime();
+  assert.equal(core.shortWhen(at,now),'11:37');
+  assert.equal(core.shortWhen(new Date(2026,9,6,9,0).getTime(),now),'Yesterday');
+  assert.equal(core.shortWhen(new Date(2026,9,3,9,0).getTime(),now),'Sat');
+  assert.equal(core.shortWhen(new Date(2026,8,20,9,0).getTime(),now),'Sep 20');
+  assert.equal(core.shortWhen(new Date(2025,0,2,9,0).getTime(),now),'Jan 2');
+  assert.equal(core.shortWhen(0,now),'');
+});
