@@ -1292,12 +1292,15 @@ async function streamCompletion(agent,apiMessages,meta={}){
   setSending(true);renderResponders();renderChat();acquireWakeLock();
   let aborted=false;
   try{
-    const res=await fetchWithRetry(()=>fetch(store.base+"/chat/completions",{
+    // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
+    const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
+      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature"].filter(k=>meta[k]!==undefined).map(k=>[k,meta[k]]))};
+    const res=await fetchWithRetry(()=>backgroundFetch(store.base+"/chat/completions",{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":"Bearer "+store.k},
       body:JSON.stringify(payload),
       signal,
-    }),signal);
+    },jobMeta),signal);
     if(!res.ok){
       let detail="";try{const j=await res.json();detail=j.error?.message||JSON.stringify(j);}catch(e){detail=await res.text().catch(()=>"");}
       throw new Error(friendlyApiError(res.status,detail));
@@ -1353,6 +1356,29 @@ async function streamCompletion(agent,apiMessages,meta={}){
     renderChat();try{store.saveConv(convId,conversationMessages);}catch(error){toast("Response received, but browser storage is full. This reply is not saved.");}renderResponders();
   }
   return {ok:!aborted&&!bot.error&&!bot.interrupted,aborted,bot};
+}
+// Runs the request in the service worker when one controls the page, so the reply keeps streaming while the app
+// is hidden or closed; the worker's chunks are replayed here as an ordinary Response. Falls back to fetch.
+function backgroundFetch(url,init,jobMeta){
+  const worker=globalThis.navigator?.serviceWorker?.controller;
+  if(!worker||typeof BroadcastChannel==="undefined"||typeof ReadableStream==="undefined")return fetch(url,init);
+  const id="job-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+  return new Promise((resolve,reject)=>{
+    const channel=new BroadcastChannel("ds-jobs"),encoder=new TextEncoder();
+    let sink=null,started=false,finished=false;
+    const body=new ReadableStream({start(c){sink=c;}});
+    const finish=()=>{if(finished)return;finished=true;channel.close();worker.postMessage({type:"forget",id});};
+    const fail=error=>{if(!started)reject(error);else{try{sink.error(error);}catch(e){}}finish();};
+    init.signal?.addEventListener("abort",()=>{worker.postMessage({type:"abort",id});const e=new Error("Stopped");e.name="AbortError";fail(e);},{once:true});
+    channel.onmessage=e=>{
+      const m=e.data||{};if(m.id!==id||finished)return;
+      if(m.type==="head"){started=true;resolve(new Response(body,{status:m.status,headers:{"Content-Type":m.contentType||"text/event-stream"}}));}
+      else if(m.type==="chunk")sink.enqueue(encoder.encode(m.chunk));
+      else if(m.type==="end"){try{sink.close();}catch(err){}finish();}
+      else if(m.type==="fail"){const err=m.aborted?Object.assign(new Error("Stopped"),{name:"AbortError"}):new TypeError(m.error||"Network error");fail(err);}
+    };
+    worker.postMessage({type:"generate",id,url,headers:init.headers,body:init.body,meta:jobMeta||null});
+  });
 }
 // Retries busy/overloaded responses and network failures before any text arrives (2 retries, backing off).
 async function fetchWithRetry(request,signal){
@@ -1741,7 +1767,67 @@ store.init().finally(()=>{
   renderAgents();loadConv();refreshConnPill();
   if(!store.k){setTimeout(()=>{$("#setBtn").click();},400);}
   else remindBackup();
+  recoverBackgroundReplies();
 });
+/* ---------- Replies that finished (or are still finishing) while the app was closed ---------- */
+function jobsDb(){
+  return new Promise((resolve,reject)=>{
+    const request=indexedDB.open("ds-jobs",1);
+    request.onupgradeneeded=()=>request.result.createObjectStore("jobs",{keyPath:"id"});
+    request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+  });
+}
+async function readJobs(){
+  const db=await jobsDb();
+  try{return await new Promise((resolve,reject)=>{const r=db.transaction("jobs").objectStore("jobs").getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});}
+  finally{db.close();}
+}
+async function dropJob(id){
+  try{const db=await jobsDb(),tx=db.transaction("jobs","readwrite");tx.objectStore("jobs").delete(id);await new Promise(r=>{tx.oncomplete=tx.onerror=tx.onabort=r;});db.close();}catch(e){}
+}
+// Adds a background reply to its chat, unless the page already saved it (same timestamp).
+function adoptJob(job,interrupted){
+  const meta=job.meta;
+  if(!meta?.convId||meta.workflow||job.httpStatus<200||job.httpStatus>=300)return false;
+  const r=parseSseText(job.raw);if(!r.content&&!r.reasoning)return false;
+  const list=store.conv(meta.convId);
+  if(list.some(m=>m.role==="assistant"&&m.at===meta.at))return false;
+  const bot={role:"assistant",content:r.content||"(empty response)",reasoning:r.reasoning,at:meta.at||Date.now(),...(meta.fields||{})};
+  if(r.usage)bot.usage=r.usage;
+  if(r.finish){if(r.finish!=="length")bot.finish=r.finish;if(r.finish!=="content_filter")bot.truncated=true;}
+  if(interrupted||job.status!=="done"){bot.interrupted="The app was closed before this reply finished";bot.truncated=true;}
+  if(bot.moodTracked)applyMoodTag(bot);
+  try{store.saveConv(meta.convId,[...list,bot]);}catch(e){return false;}
+  return meta.convId;
+}
+function refreshIfShowing(convId){
+  if(convId!==currentId||controller||sequence)return;
+  const images=pendingImages,draft=input.value;loadConv();pendingImages=images;input.value=draft;renderAttachments();
+}
+async function recoverBackgroundReplies(){
+  if(typeof indexedDB==="undefined")return;
+  let jobs=[];try{jobs=await readJobs();}catch(e){return;}
+  let added=0;
+  for(const job of jobs){
+    // A recent heartbeat means the worker is still streaming it: wait for it to finish.
+    if(job.status==="running"&&Date.now()-(job.heartbeat||0)<15000){watchJob(job.id);continue;}
+    const convId=adoptJob(job,job.status==="running");
+    if(convId){added++;refreshIfShowing(convId);}
+    await dropJob(job.id);
+  }
+  if(added){renderAgents();toast(added===1?"A reply arrived while you were away":added+" replies arrived while you were away");}
+}
+function watchJob(id){
+  toast("Finishing a reply in the background…");
+  const channel=new BroadcastChannel("ds-jobs");
+  channel.onmessage=async e=>{
+    if(e.data?.id!==id||(e.data.type!=="end"&&e.data.type!=="fail"))return;
+    channel.close();
+    const job=(await readJobs().catch(()=>[])).find(j=>j.id===id);if(!job)return;
+    const convId=adoptJob(job,false);await dropJob(id);
+    if(convId){refreshIfShowing(convId);renderAgents();toast("A reply arrived while you were away");}
+  };
+}
 // Another open tab (or the installed app) saved something: mirror it instead of later overwriting it.
 if(store.channel)store.channel.onmessage=e=>{
   const {k,v,reload}=e.data||{};

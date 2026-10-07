@@ -99,3 +99,14 @@ test('day dividers label today, yesterday, this week, and older dates',()=>{
   assert.equal(core.dayKey(new Date(2026,9,5,0,1).getTime()),core.dayKey(new Date(2026,9,5,23,59).getTime()));
   assert.notEqual(core.dayKey(new Date(2026,9,5,0,1).getTime()),core.dayKey(new Date(2026,9,4,23,59).getTime()));
 });
+
+test('a saved event-stream transcript rebuilds the reply for background recovery',()=>{
+  const raw=['data: {"choices":[{"delta":{"reasoning_content":"think "}}]}','','data: {"choices":[{"delta":{"content":"Hello"}}]}',
+    'data: {"choices":[{"delta":{"content":" there"},"finish_reason":"length"}]}','data: {"choices":[],"usage":{"prompt_tokens":9,"completion_tokens":2}}',
+    ': keep-alive','data: not json','data: [DONE]',''].join('\n');
+  const r=core.parseSseText(raw);
+  assert.equal(r.content,'Hello there');assert.equal(r.reasoning,'think ');assert.equal(r.finish,'length');
+  assert.deepEqual({...r.usage},{prompt:9,completion:2});assert.equal(r.error,null);
+  assert.equal(core.parseSseText('data: {"error":{"message":"Overloaded"}}\n').error,'Overloaded');
+  assert.equal(core.parseSseText('').content,'');
+});

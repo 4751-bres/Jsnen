@@ -73,6 +73,11 @@ That's it — it now behaves like a native app with its own icon.
 - **Streaming replies** with a stop button.
 - **Responsive long chats** — streaming refreshes only the active reply, with batched screen updates. Scroll up freely while a reply arrives; **↓ Latest** returns to the bottom. The screen initially shows the latest 40 messages, with **Load earlier messages** to display more. This display batching does not shorten saved conversations or the history sent to the AI. Collapsed reasoning is rendered only when opened, and images load lazily.
 - **Copy any message** — use the small bottom-right copy button on your messages or the AI's replies. Copies the original text, including `*actions*` and code, without reasoning or speaker labels. Image-only messages have no text to copy.
+- **Replies keep going when you leave** — once the app has loaded, replies stream through its service
+  worker, so switching apps, locking the phone, or Android closing the page does not stop them. Come back
+  and the reply is there (a closed page adds it with "A reply arrived while you were away"). If the phone
+  stops the background worker too (after several minutes away), the text so far is kept with Continue.
+  The API key is never stored in the background copy.
 - **Calmer reading** — message buttons appear on the latest message, or on the one you tap (hover with a
   mouse); in roleplay, token counts show only on the tapped message. The reply bar starts with Continue
   scene in roleplay and fades at the edge when more buttons are off-screen.

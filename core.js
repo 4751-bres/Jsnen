@@ -261,6 +261,22 @@ function chatToMarkdown(title,list,userName){
   }
   return lines.join("\n");
 }
+// Rebuilds a reply from a saved event-stream transcript (used for replies that finished in the background).
+function parseSseText(raw){
+  const out={content:"",reasoning:"",usage:null,finish:null,error:null};
+  for(const line of String(raw||"").split("\n")){
+    const t=line.trim();if(!t.startsWith("data:"))continue;
+    const data=t.slice(5).trim();if(!data||data==="[DONE]")continue;
+    let j;try{j=JSON.parse(data);}catch(e){continue;}
+    if(j.error){out.error=String(j.error.message||"The provider reported an error.");continue;}
+    const choice=j.choices?.[0];
+    if(choice?.finish_reason&&choice.finish_reason!=="stop"&&choice.finish_reason!=="tool_calls")out.finish=choice.finish_reason;
+    if(j.usage)out.usage={prompt:j.usage.prompt_tokens||0,completion:j.usage.completion_tokens||0};
+    if(choice?.delta?.reasoning_content)out.reasoning+=choice.delta.reasoning_content;
+    if(choice?.delta?.content)out.content+=choice.delta.content;
+  }
+  return out;
+}
 /* api-core:end */
 function didResponseComplete(result){return result!==false&&result?.ok===true;}
 function groupAfterAgentDelete(group,agentId){
