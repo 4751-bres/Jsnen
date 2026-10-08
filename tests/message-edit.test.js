@@ -113,3 +113,19 @@ test('a storage failure leaves the message in place',()=>{
   const {c,state,original}=uiContext({full:true});c.deleteMessage(original[1]);
   assert.equal(c.messages,original);assert.match(state.toasts.at(-1),/Could not delete/);
 });
+
+test('Save & regenerate saves the edit, then regenerates the reply from the edited text',async()=>{
+  const {c,state,original,$}=uiContext();
+  c.openMessageEditor(original[0]);$('#messageEditText').value='Hello there';$('#saveRegenEdit').onclick();
+  await new Promise(r=>setTimeout(r,0));
+  assert.equal(state.requests.length,1);assert.equal(state.requests[0].agent.id,'agent-a');
+  assert.equal(state.requests[0].payload.at(-1).content,'Hello there');
+  assert.equal(c.messages[0].content,'Hello there');assert.equal(c.messages[0].versions.length,2);
+  assert.equal(c.messages[1].content,'New');assert.equal(c.messages[1].versions[0].content,'Original');
+  assert.equal(c.messages[1].versions[0].tail[0].content,'Later');
+});
+test('the regenerate button is offered only for your own messages',()=>{
+  const {c,original,$}=uiContext();
+  c.openMessageEditor(original[1]);assert.equal($('#saveRegenEdit').hidden,true);
+  c.openMessageEditor(original[0]);assert.equal($('#saveRegenEdit').hidden,false);
+});

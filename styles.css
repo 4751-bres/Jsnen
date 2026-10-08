@@ -311,6 +311,9 @@ body[data-mood="fiction"] .msg:not(.show-actions) .reply-meta>.tok:first-child+*
 .temp-block input[type=range]{width:100%;margin-top:6px}
 .temp-block.disabled label,.temp-block.disabled input{opacity:.45}
 
+/* Edit message footer: three equal buttons */
+#messageEditor .foot .btn{flex:1 1 0;min-width:0;padding:0 8px;font-size:14px;line-height:1.2;white-space:normal;min-height:52px}
+
 /* Composer */
 .composer{
   display:flex;gap:8px;align-items:flex-end;flex:none;background:var(--bg);

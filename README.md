@@ -84,6 +84,9 @@ That's it — it now behaves like a native app with its own icon.
 - **Chat list as an inbox** — each chat shows its last message, who sent it, and when; Recent order by
   default; groups first, workflows last; characters that only belong to a scene are folded under
   "Scene characters". Pin and edit buttons show on the open chat (or on hover).
+- **Save & regenerate** — when you edit one of your messages, the editor offers Save & regenerate, Save,
+  and Cancel. Save & regenerate saves your edit and asks for a new AI reply to it; the previous reply and
+  everything after it stay available as a version (‹ ›).
 - **Delete messages** — the 🗑 button under any message in single-agent, group and roleplay chats removes
   it (with all its versions) immediately; **Undo** in the toast brings it back for a few seconds.
 - **Edit and reply versions** — in single-agent and group chats, use ✎ to edit either side and ↻ to request another AI reply (one API request). Use ‹ / › to switch saved versions. Regenerating an earlier reply starts a new branch; the old version retains its later conversation, restored when you switch back. Manual edits keep later messages and save the original version too. Versions survive reloads in browser storage. Workflow messages instead use their existing role-retry controls.

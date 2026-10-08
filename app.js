@@ -315,17 +315,33 @@ function openMessageEditor(message){
   if(isWorkflow()){toast("Workflow messages are managed by their run. Use Retry this role instead.");return;}
   messageEditTarget={conversationId:currentId,message};
   $("#messageEditText").value=message.content||"";
+  // Regenerating only makes sense from one of your own messages.
+  $("#saveRegenEdit").hidden=message.role!=="user";
   closeAll();openSheet("#messageEditor");$("#messageEditText").focus();
 }
-$("#saveMessageEdit").onclick=()=>{
-  if(controller){toast("Stop the response before editing.");return;}
+// Saves the edit as a new version; returns the edited message's index, or -1 when nothing was saved.
+function saveMessageEdit(){
+  if(controller){toast("Stop the response before editing.");return -1;}
   const target=messageEditTarget;
-  if(!target||target.conversationId!==currentId)return;
-  const index=messages.indexOf(target.message);if(index<0)return;
+  if(!target||target.conversationId!==currentId)return -1;
+  const index=messages.indexOf(target.message);if(index<0)return -1;
   let next;try{next=editMessageVersion(messages,index,$("#messageEditText").value);}
-  catch(error){toast(error.message);return;}
-  try{store.saveConv(currentId,next);}catch(error){toast("Browser storage is full. Your edit has not been applied.");return;}
-  messages=next;messageEditTarget=null;closeAll();renderChat();toast("Message updated");
+  catch(error){toast(error.message);return -1;}
+  try{store.saveConv(currentId,next);}catch(error){toast("Browser storage is full. Your edit has not been applied.");return -1;}
+  messages=next;messageEditTarget=null;closeAll();renderChat();
+  return index;
+}
+$("#saveMessageEdit").onclick=()=>{if(saveMessageEdit()>=0)toast("Message updated");};
+// Save, then get a fresh AI reply to the edited text. The old reply (and anything after it) stays as a version.
+$("#saveRegenEdit").onclick=()=>{
+  const index=saveMessageEdit();if(index<0)return;
+  const reply=messages[index+1];
+  if(reply?.role==="assistant"){regenerateMessage(reply);return;}
+  if(index!==messages.length-1)return;
+  if(!isGroup()){runAgent(curAgent());return;}
+  const members=groupMembers(curGroup());
+  if(members.length===1){runSequence(members);return;}
+  renderResponders();toast("Message updated. Choose who replies.");
 };
 function selectMessageVersion(message,target){
   if(controller||isWorkflow()){toast("Stop the response before changing versions.");return;}

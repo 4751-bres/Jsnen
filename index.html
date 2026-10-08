@@ -145,11 +145,12 @@
     <div class="body">
       <label for="messageEditText">Message text</label>
       <textarea class="field" id="messageEditText" rows="8"></textarea>
-      <div class="hint">Saves a new version of this message. Attachments and later messages are kept. Use the arrows to return to an older version. No new AI response is requested.</div>
+      <div class="hint">Every save keeps the old text as a version (switch with ‹ ›). <b>Save &amp; regenerate</b> also gets a new AI reply to your edited message; the previous reply stays as a version too.</div>
     </div>
     <div class="foot">
-      <button class="btn primary" id="saveMessageEdit">Save</button>
-      <button class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary" id="saveRegenEdit" type="button">Save &amp; regenerate</button>
+      <button class="btn" id="saveMessageEdit" type="button">Save</button>
+      <button class="btn ghost" type="button" data-close>Cancel</button>
     </div>
   </section>
 
