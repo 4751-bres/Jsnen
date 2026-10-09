@@ -43,6 +43,8 @@ const store = {
   get ctxSummary(){return localStorage.getItem("ds_ctx_summary")==="1"}, set ctxSummary(v){localStorage.setItem("ds_ctx_summary",v?"1":"0")},
   get pins(){try{return JSON.parse(localStorage.getItem("ds_pins"))||[]}catch(e){return []}}, set pins(v){localStorage.setItem("ds_pins",JSON.stringify(v))},
   get personas(){try{const p=JSON.parse(localStorage.getItem("ds_personas"));return Array.isArray(p)?p:[]}catch(e){return []}}, set personas(v){localStorage.setItem("ds_personas",JSON.stringify(v))},
+  get showSpeak(){return localStorage.getItem("ds_show_speak")!=="0"}, set showSpeak(v){localStorage.setItem("ds_show_speak",v?"1":"0")},
+  get showPin(){return localStorage.getItem("ds_show_pin")!=="0"}, set showPin(v){localStorage.setItem("ds_show_pin",v?"1":"0")},
   get sort(){return localStorage.getItem("ds_sort")||"recent"}, set sort(v){localStorage.setItem("ds_sort",v)},
   get activity(){try{return JSON.parse(localStorage.getItem("ds_activity"))||{}}catch(e){return {}}},
   touch(id){try{const a=this.activity;a[id]=Date.now();localStorage.setItem("ds_activity",JSON.stringify(a));}catch(e){/* Sorting hint only. */}},
@@ -592,10 +594,10 @@ function createChatRow(m){
       }
       if(m.role==="assistant"){
         const more=document.createElement("button");more.type="button";more.className="copy-msg continue-msg";more.innerHTML=icon("play")+"Continue";more.title="Continue this cut-off reply (uses API)";more.setAttribute("aria-label",more.title);more.hidden=true;more.onclick=()=>continueMessage(m);actions.appendChild(more);d._continue=more;
-        if(globalThis.speechSynthesis){const listen=actionButton("speaker","Read aloud",()=>speakMessage(m));actions.appendChild(listen);}
+        if(globalThis.speechSynthesis){const listen=actionButton("speaker","Read aloud",()=>speakMessage(m),"act-speak");actions.appendChild(listen);}
         const regenerate=actionButton("regen","Regenerate reply (uses API)",()=>regenerateMessage(m));regenerate.disabled=!!controller||!!m.streaming;actions.appendChild(regenerate);
       }
-      const pin=actionButton("pin","Add to story memory",()=>pinToMemory(m));actions.appendChild(pin);
+      const pin=actionButton("pin","Add to story memory",()=>pinToMemory(m),"act-pin");actions.appendChild(pin);
       const edit=actionButton("pencil","Edit message",()=>openMessageEditor(m));edit.disabled=!!controller||!!m.streaming;actions.appendChild(edit);
       const remove=actionButton("trash","Delete message",()=>deleteMessage(m));remove.disabled=!!controller||!!m.streaming;actions.appendChild(remove);
     }
@@ -1196,6 +1198,15 @@ function downloadFile(name,text,type){
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
+// Optional message buttons, hidden with one class on <body> so existing rows update at once.
+function applyMessageButtons(){
+  document.body.classList.toggle("hide-speak",!store.showSpeak);
+  document.body.classList.toggle("hide-pin",!store.showPin);
+  $("#showSpeak").checked=store.showSpeak;$("#showPin").checked=store.showPin;
+}
+$("#showSpeak").onchange=e=>{try{store.showSpeak=e.target.checked;}catch(err){}applyMessageButtons();if(!e.target.checked)globalThis.speechSynthesis?.cancel();};
+$("#showPin").onchange=e=>{try{store.showPin=e.target.checked;}catch(err){}applyMessageButtons();};
+applyMessageButtons();
 $("#themeSelect").onchange=e=>{applyTheme(e.target.value);try{localStorage.setItem("ds_theme",e.target.value);}catch(err){}};
 $("#setBtn").onclick=()=>{try{$("#themeSelect").value=localStorage.getItem("ds_theme")||"";}catch(e){}refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
 $("#saveSettings").onclick=()=>{

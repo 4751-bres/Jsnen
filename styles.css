@@ -318,6 +318,9 @@ body[data-mood="fiction"] .msg:not(.show-actions) .reply-meta>.tok:first-child+*
 .voice-row select{flex:1;min-width:0}
 .voice-row .btn{flex:none}
 
+/* Optional message buttons (Settings → Message buttons) */
+body.hide-speak .act-speak,body.hide-pin .act-pin{display:none!important}
+
 /* Composer */
 .composer{
   display:flex;gap:8px;align-items:flex-end;flex:none;background:var(--bg);

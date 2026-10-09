@@ -84,6 +84,8 @@ That's it — it now behaves like a native app with its own icon.
 - **Chat list as an inbox** — each chat shows its last message, who sent it, and when; Recent order by
   default; groups first, workflows last; characters that only belong to a scene are folded under
   "Scene characters". Pin and edit buttons show on the open chat (or on hover).
+- **Message buttons setting** — ⚙️ Settings → Message buttons turns the Read aloud 🔊 and Pin to story
+  memory 📌 buttons on or off in every chat (both on by default; saved memory and voices are kept).
 - **Story memory** — each agent and group has a Story memory box (one fact per line) that is always sent
   to the characters; the 📌 button on any message adds it there in one tap. Keyword lore from imported
   cards is now used: entries whose keywords appear in the last few messages are sent as world info.
