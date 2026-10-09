@@ -55,7 +55,7 @@ function buildGroupApiMessages(group,agent,messages,options={}){
   if(!isRoleplayGroup(group)){
     const base=agent.prompt?agent.prompt+"\n\n":"";
     const discussion=options.discussion?" This is an open discussion between the agents: respond directly to the other participants' latest points — build on them, question them, or disagree — and keep it brief.":"";
-    const system=base+"You are \""+agent.name+"\" in a group chat with a human user and other AI agents. Messages from other participants are prefixed with their name in square brackets, e.g. \"[Coder]: ...\". Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name."+discussion;
+    const system=base+"You are \""+agent.name+"\" in a group chat with a human user and other AI agents. Messages from other participants are prefixed with their name in square brackets, e.g. \"[Coder]: ...\". Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name."+discussion+(options.memory?"\n\n"+options.memory:"");
     const history=messages.filter(isContextMessage).map(m=>m.role==="user"
       ?{role:"user",content:imageContent(m.content,m.images)}
       :m.agentId===agent.id?{role:"assistant",content:m.content}
@@ -67,7 +67,7 @@ function buildGroupApiMessages(group,agent,messages,options={}){
   const system=[agent.prompt,"Within this scene, you are "+character.name+" ([char]). Speak as I from your own perspective, with your established personality and knowledge.","Character: "+character.description,
     "User character: "+rp.user.name+" — "+rp.user.description,"Setting: "+rp.setting,
     cast&&"Other characters:\n"+cast,rp.opening&&"Opening scene (already shown to the user before the conversation began):\n"+rp.opening,rp.mature&&"Mature-mode preference: enabled.",
-    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE,
+    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE,options.memory,
     options.mood?.track&&moodInstruction(options.mood.current,options.mood.mature)
   ].filter(Boolean).join("\n\n");
   const history=messages.filter(isContextMessage).map(m=>{
@@ -276,6 +276,18 @@ function parseSseText(raw){
     if(choice?.delta?.content)out.content+=choice.delta.content;
   }
   return out;
+}
+// Keyword lore from imported cards: entries whose keys appear in recent messages (always-on ones are in the prompt).
+function activeLore(book,texts){
+  if(!book?.entries?.length)return [];
+  const hay=(texts||[]).join("\n").toLowerCase();
+  return book.entries.filter(e=>!e.constant&&e.keys.some(k=>k.trim()&&hay.includes(k.trim().toLowerCase()))).map(e=>e.content);
+}
+// Pinned facts plus triggered lore, as one block for the system prompt ("" when there is nothing).
+function memoryBlock(facts,lore){
+  const f=(facts||[]).map(s=>String(s).trim()).filter(Boolean),l=(lore||[]).filter(Boolean);
+  return [f.length&&"STORY MEMORY (established facts; keep them consistent):\n"+f.map(x=>"- "+x).join("\n"),
+    l.length&&"RELEVANT WORLD INFO:\n"+l.map(x=>"- "+x).join("\n")].filter(Boolean).join("\n\n");
 }
 /* api-core:end */
 function didResponseComplete(result){return result!==false&&result?.ok===true;}

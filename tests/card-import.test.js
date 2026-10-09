@@ -63,3 +63,16 @@ test('importing creates a single chat or a roleplay scene that opens with the ch
   assert.match(scene.messages[0].content,/half drowned, Rin\./);
   assert.deepEqual([...core.validateRoleplay(scene.group.roleplay,scene.group.members,true)],[]);
 });
+
+test('story memory: pinned facts always, keyword lore only when its key comes up',()=>{
+  const book=core.normalizeCard(v2).book;
+  assert.deepEqual([...core.activeLore(book,['We should go upstairs','The ghost is back'])],['A ghost walks the stairs.']);
+  assert.deepEqual([...core.activeLore(book,['Nothing relevant'])],[]);
+  assert.deepEqual([...core.activeLore(null,['ghost'])],[]);
+  assert.equal(core.memoryBlock([],[]),'');
+  assert.equal(core.memoryBlock(['Elena knows about the ring',' '],['A ghost walks the stairs.']),
+    'STORY MEMORY (established facts; keep them consistent):\n- Elena knows about the ring\n\nRELEVANT WORLD INFO:\n- A ghost walks the stairs.');
+  const group={members:['a'],roleplay:{enabled:true,opening:'',setting:'',user:{name:'Rin',description:''},characters:{a:{name:'Mira',description:''}}}};
+  assert.match(core.buildGroupApiMessages(group,{id:'a',name:'A'},[],{memory:'STORY MEMORY (x):\n- fact'})[0].content,/STORY MEMORY \(x\):\n- fact/);
+  assert.match(core.buildGroupApiMessages({members:['a']},{id:'a',name:'A'},[],{memory:'STORY MEMORY (x):\n- fact'})[0].content,/own name\.\n\nSTORY MEMORY/);
+});

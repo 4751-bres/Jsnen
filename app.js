@@ -595,6 +595,7 @@ function createChatRow(m){
         if(globalThis.speechSynthesis){const listen=actionButton("speaker","Read aloud",()=>speakMessage(m));actions.appendChild(listen);}
         const regenerate=actionButton("regen","Regenerate reply (uses API)",()=>regenerateMessage(m));regenerate.disabled=!!controller||!!m.streaming;actions.appendChild(regenerate);
       }
+      const pin=actionButton("pin","Add to story memory",()=>pinToMemory(m));actions.appendChild(pin);
       const edit=actionButton("pencil","Edit message",()=>openMessageEditor(m));edit.disabled=!!controller||!!m.streaming;actions.appendChild(edit);
       const remove=actionButton("trash","Delete message",()=>deleteMessage(m));remove.disabled=!!controller||!!m.streaming;actions.appendChild(remove);
     }
@@ -751,7 +752,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);syncTempState();
   $("#delAgent").hidden=!(id&&agents.length>1);
@@ -782,7 +783,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,memory:memoryLines($("#edMemory").value)};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -791,7 +792,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,memory:memoryLines($("#edMemory").value)};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -886,6 +887,7 @@ function openGroupEditor(id){
   const g=id?groups.find(x=>x.id===id):{emoji:"👥",name:"",members:agents.slice(0,Math.min(3,agents.length)).map(a=>a.id)};
   groupRoleplayDraft=normalizeRoleplay(g.roleplay,g.members||[],agents);
   $("#grTitle").textContent=id?"Edit group":"New group";
+  $("#grMemory").value=(g.memory||[]).join("\n");
   $("#grEmoji").value=g.emoji;$("#grName").value=g.name;$("#grRounds").value=groupRounds(g);$("#grHistory").value=g.historyLimit??"";
   const wrap=$("#grMembers");wrap.innerHTML="";
   const members=g.members||[];
@@ -953,6 +955,25 @@ $("#cardImportBtn").onclick=()=>{
   toast(built.agent.name+" imported");
 };
 
+/* ---------- Story memory: pinned facts per chat, plus keyword lore from imported cards ---------- */
+function memoryOwner(){return isWorkflow()?null:isGroup()?curGroup():curAgent();}
+function memoryFor(agent){
+  const owner=memoryOwner();if(!owner)return "";
+  const recent=messages.filter(isContextMessage).slice(-6).map(m=>messageText(m.content));
+  return memoryBlock(owner.memory,activeLore(agent?.lorebook,recent));
+}
+function pinToMemory(m){
+  const owner=memoryOwner();if(!owner)return;
+  const who=m.role==="user"?(isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user.name||"You":"You"):(m.characterName||m.agentName||curAgent().name);
+  const text=cleanCharacterReply(m.content||"").replace(/\*/g,"").replace(/\s+/g," ").trim();
+  if(!text){toast("Nothing to remember in this message.");return;}
+  const fact=who+": "+(text.length>240?text.slice(0,237)+"…":text);
+  owner.memory=[...(owner.memory||[]).filter(f=>f!==fact),fact];
+  try{if(isGroup())store.groups=groups;else store.agents=agents;}catch(e){toast("Could not save to memory.");return;}
+  toast("Added to story memory · edit it in the "+(isGroup()?"group":"agent")+" editor");
+}
+const memoryLines=value=>String(value||"").split("\n").map(s=>s.trim()).filter(Boolean);
+
 /* ---------- Personas: your own characters, saved once and reused in any scene ---------- */
 function personaByName(name){const key=String(name||"").trim().toLowerCase();return key?store.personas.find(p=>p.name.toLowerCase()===key):null;}
 function renderPersonaChoices(){
@@ -1017,7 +1038,7 @@ $("#saveGroup").onclick=()=>{
   const roleplay=collectRoleplayEditor(members),errors=validateRoleplay(roleplay,members,$("#grRpAdult").checked);
   if(errors.includes("adult-confirmation")){toast("Confirm that you are an adult");return;}
   if(errors.length){toast("Complete the roleplay character details");return;}
-  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked};
+  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),memory:memoryLines($("#grMemory").value),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked};
   if(editingGroupId){Object.assign(groups.find(g=>g.id===editingGroupId),data);}
   else{const g={id:uid(),...data};groups.push(g);currentKind="group";currentId=g.id;store.kind="group";store.cur=g.id;}
   store.groups=groups;renderAgents();loadConv();closeAll();toast("Group saved");
@@ -1332,9 +1353,10 @@ function setSending(on){
 function buildApiMessages(agent,options={}){
   const sys=[];
   if(isGroup()){
-    return buildGroupApiMessages(curGroup(),agent,messages,options);
+    return buildGroupApiMessages(curGroup(),agent,messages,{...options,memory:typeof memoryFor==="function"?memoryFor(agent):""});
   }
-  const instructions=agentInstructions(agent)+(options.mood?.track?"\n"+moodInstruction(options.mood.current,options.mood.mature):"");
+  const memory=typeof memoryFor==="function"?memoryFor(agent):"";
+  const instructions=agentInstructions(agent)+(memory?"\n\n"+memory:"")+(options.mood?.track?"\n"+moodInstruction(options.mood.current,options.mood.mature):"");
   const grounded=groundSystem(instructions,messages);
   if(grounded) sys.push({role:"system",content:grounded});
   const hist=messages.filter(m=>(m.role==="user"||m.role==="assistant")&&isContextMessage(m)).map(m=>({role:m.role,content:speakerContent(m.role==="user"?"user":"char",m.content,m.role==="user"?m.images:undefined)}));

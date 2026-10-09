@@ -84,6 +84,9 @@ That's it — it now behaves like a native app with its own icon.
 - **Chat list as an inbox** — each chat shows its last message, who sent it, and when; Recent order by
   default; groups first, workflows last; characters that only belong to a scene are folded under
   "Scene characters". Pin and edit buttons show on the open chat (or on hover).
+- **Story memory** — each agent and group has a Story memory box (one fact per line) that is always sent
+  to the characters; the 📌 button on any message adds it there in one tap. Keyword lore from imported
+  cards is now used: entries whose keywords appear in the last few messages are sent as world info.
 - **Personas** — save your own character (name and description) with **Save as persona** in a roleplay
   group's editor, then pick it from **Saved persona** in any scene. The Scenario library and card import
   suggest saved names and bring the persona's description into the new scene.

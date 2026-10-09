@@ -249,6 +249,9 @@
       <label class="toggle-row"><input id="edMoods" type="checkbox" /> <span>Track mood (for character agents)</span></label>
       <div class="hint" style="margin-top:-6px">The agent reports its mood after each reply; the heart button in the header shows the history and sets its mood for the next reply.</div>
       <label class="toggle-row"><input id="edMatureMoods" type="checkbox" /> <span>Include mature moods — flirty, horny and more (adults only)</span></label>
+      <label for="edMemory">Story memory</label>
+      <textarea class="field" id="edMemory" placeholder="One fact per line, e.g. Elena knows Rin lied about the ring."></textarea>
+      <div class="hint">Always sent to the characters so they stay consistent. Add from any message with the 📌 button.</div>
       <label for="edHistory">History sent to the AI</label>
       <select class="field" id="edHistory">
         <option value="">Use Settings default</option>
@@ -285,6 +288,9 @@
       <div id="grMembers"></div>
       <label for="grRounds">Discussion rounds (used by Discuss)</label>
       <input class="field" id="grRounds" type="number" min="1" max="10" step="1" value="2" />
+      <label for="grMemory">Story memory</label>
+      <textarea class="field" id="grMemory" placeholder="One fact per line, e.g. Elena knows Rin lied about the ring."></textarea>
+      <div class="hint">Always sent to the characters so they stay consistent. Add from any message with the 📌 button.</div>
       <label for="grHistory">History sent to the AI</label>
       <select class="field" id="grHistory">
         <option value="">Use Settings default</option>
