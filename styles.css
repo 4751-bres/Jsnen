@@ -333,6 +333,11 @@ body[data-mood="fiction"] .msg:not(.show-actions) .reply-meta>.tok:first-child+*
 .send.stop{background:var(--danger-fill)}
 .send.stop svg{fill:currentColor;stroke:none}
 .send:disabled{opacity:.4}
+#draftBtn{
+  width:44px;height:44px;flex:0 0 auto;display:grid;place-items:center;padding:0;border:1px solid var(--line);
+  border-radius:var(--radius-pill);background:var(--surface-1);color:var(--accent)
+}
+#draftBtn:disabled{opacity:.4}
 #attachBtn{
   width:44px;height:44px;flex:0 0 auto;display:grid;place-items:center;padding:0;border:1px solid var(--line);
   border-radius:var(--radius-pill);background:var(--surface-1);color:var(--text-2)

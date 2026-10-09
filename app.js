@@ -1203,6 +1203,7 @@ function renderAttachments(){
     remove.onclick=()=>{pendingImages.splice(index,1);renderAttachments();};item.append(img,remove);tray.append(item);
   });
   $("#attachBtn").disabled=readingImages||!!controller;
+  $("#draftBtn").disabled=readingImages||!!controller;$("#draftBtn").hidden=isWorkflow();
   $("#attachBtn").title="Attach images or paste a screenshot";
 }
 async function prepareImage(file){
@@ -1234,6 +1235,29 @@ async function addImages(files){
   finally{readingImages=false;$("#imageFiles").value="";renderAttachments();}
 }
 $("#attachBtn").onclick=()=>$("#imageFiles").click();
+/* ---------- Write my reply: draft the user's next message in their own voice ---------- */
+async function draftMyReply(){
+  if(controller||readingImages||isWorkflow())return;
+  if(!store.k){toast("Add your API key in Settings");$("#setBtn").click();return;}
+  const usable=messages.filter(isContextMessage);
+  if(!usable.length){toast("Start the conversation first, then I can draft your replies.");return;}
+  const persona=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user:null;
+  const name=persona?.name||"the user",other=isGroup()?"":curAgent().name;
+  const transcript=usable.slice(-40).map(m=>"["+(m.role==="user"?name:(m.characterName||m.agentName||other||"Assistant"))+"]: "+messageText(m.content)).join("\n\n");
+  const idea=input.value.trim();
+  const system="You write the next message for "+name+" in an ongoing conversation."+(persona?.description?" About "+name+": "+persona.description:"")+
+    " Match how "+name+" has been writing (tone, length, *asterisk actions* if they use them). Write only "+name+"'s own words and actions; never speak or act for anyone else. Usually one to three sentences. Output only the message, with no name label or quotes around it.";
+  toast("Drafting your reply…");
+  try{
+    const draft=await withBusy(signal=>quickCompletion([{role:"system",content:system},
+      {role:"user",content:"Conversation so far:\n\n"+transcript+"\n\nWrite "+name+"'s next message."+(idea?" Build it from this idea: "+idea:"")}],signal,400));
+    const clean=draft.trim().replace(/^\[[^\]]{1,40}\]:\s*/,"").replace(/^"([\s\S]*)"$/,"$1");
+    if(!clean){toast("No draft came back. Try again.");return;}
+    input.value=clean;input.dispatchEvent(new Event("input"));input.focus();
+    toast("Draft ready. Edit it or send it.");
+  }catch(error){if(error.name!=="AbortError")toast("Could not draft a reply: "+(error.message||"try again"));}
+}
+$("#draftBtn").onclick=draftMyReply;
 $("#imageFiles").onchange=e=>addImages(Array.from(e.target.files));
 input.addEventListener("paste",e=>{
   const files=Array.from(e.clipboardData?.files||[]).filter(f=>f.type.startsWith("image/"));
