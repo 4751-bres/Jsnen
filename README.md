@@ -84,6 +84,9 @@ That's it — it now behaves like a native app with its own icon.
 - **Chat list as an inbox** — each chat shows its last message, who sent it, and when; Recent order by
   default; groups first, workflows last; characters that only belong to a scene are folded under
   "Scene characters". Pin and edit buttons show on the open chat (or on hover).
+- **Personas** — save your own character (name and description) with **Save as persona** in a roleplay
+  group's editor, then pick it from **Saved persona** in any scene. The Scenario library and card import
+  suggest saved names and bring the persona's description into the new scene.
 - **Read aloud** — the 🔊 button on AI messages reads the reply with the device's built-in voices (free,
   works offline); tap again to stop. Each character gets its own voice automatically (female-named voices
   preferred when the device has them), or pick one with Test in the agent editor.

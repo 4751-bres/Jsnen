@@ -42,6 +42,7 @@ const store = {
   get ctxLimit(){return Number(localStorage.getItem("ds_ctx_limit"))||0}, set ctxLimit(v){localStorage.setItem("ds_ctx_limit",String(v||0))},
   get ctxSummary(){return localStorage.getItem("ds_ctx_summary")==="1"}, set ctxSummary(v){localStorage.setItem("ds_ctx_summary",v?"1":"0")},
   get pins(){try{return JSON.parse(localStorage.getItem("ds_pins"))||[]}catch(e){return []}}, set pins(v){localStorage.setItem("ds_pins",JSON.stringify(v))},
+  get personas(){try{const p=JSON.parse(localStorage.getItem("ds_personas"));return Array.isArray(p)?p:[]}catch(e){return []}}, set personas(v){localStorage.setItem("ds_personas",JSON.stringify(v))},
   get sort(){return localStorage.getItem("ds_sort")||"recent"}, set sort(v){localStorage.setItem("ds_sort",v)},
   get activity(){try{return JSON.parse(localStorage.getItem("ds_activity"))||{}}catch(e){return {}}},
   touch(id){try{const a=this.activity;a[id]=Date.now();localStorage.setItem("ds_activity",JSON.stringify(a));}catch(e){/* Sorting hint only. */}},
@@ -900,7 +901,7 @@ function openGroupEditor(id){
   numberMembers();
   $("#grRoleplay").checked=groupRoleplayDraft.enabled;$("#grRpSetting").value=groupRoleplayDraft.setting;
   $("#grRpOpening").value=groupRoleplayDraft.opening;$("#grRpUserName").value=groupRoleplayDraft.user.name;
-  $("#grRpUserDescription").value=groupRoleplayDraft.user.description;$("#grRpMature").checked=groupRoleplayDraft.mature;
+  $("#grRpUserDescription").value=groupRoleplayDraft.user.description;renderPersonaChoices();$("#grRpMature").checked=groupRoleplayDraft.mature;
   $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;
   $("#grRoleplay").onchange=renderRoleplayEditor;
   $("#grRpMature").onchange=()=>{$("#grRpAdultRow").style.display=$("#grRpMature").checked?"flex":"none";if(!$("#grRpMature").checked)$("#grRpAdult").checked=false;};
@@ -942,6 +943,7 @@ $("#cardImportBtn").onclick=()=>{
   if(mode==="scene"&&!userName){toast("Enter your name for the roleplay scene");$("#cardUserName").focus();return;}
   if(mature&&!$("#cardAdult").checked){toast("Confirm that you are an adult");return;}
   const built=cardToChat(pendingCard.card,{userName,mature,mode,greetingIndex:Number($("#cardGreeting").value)||0,avatar:pendingCard.avatar},uid,Date.now());
+  if(built.group)applyPersona(built.group);
   const nextAgents=[...agents,built.agent],nextGroups=built.group?[...groups,built.group]:groups;
   try{store.agents=nextAgents;if(built.group)store.groups=nextGroups;store.saveConv(built.conversationId,built.messages);}
   catch(err){store.agents=agents;toast("Not enough browser storage to import this card.");return;}
@@ -950,6 +952,37 @@ $("#cardImportBtn").onclick=()=>{
   if(built.group)selectGroup(built.group.id);else selectAgent(built.agent.id);
   toast(built.agent.name+" imported");
 };
+
+/* ---------- Personas: your own characters, saved once and reused in any scene ---------- */
+function personaByName(name){const key=String(name||"").trim().toLowerCase();return key?store.personas.find(p=>p.name.toLowerCase()===key):null;}
+function renderPersonaChoices(){
+  const personas=store.personas;
+  $("#personaNames").innerHTML=personas.map(p=>'<option value="'+esc(p.name)+'"></option>').join("");
+  const select=$("#grPersona");
+  select.innerHTML='<option value="">'+(personas.length?"Choose a saved persona…":"No saved personas yet")+'</option>'+personas.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join("");
+}
+$("#grPersona").onchange=e=>{
+  const p=personaByName(e.target.value);if(!p)return;
+  $("#grRpUserName").value=p.name;$("#grRpUserDescription").value=p.description;e.target.value="";
+};
+$("#grRpUserName").addEventListener("change",()=>{
+  const p=personaByName($("#grRpUserName").value);
+  if(p&&!$("#grRpUserDescription").value.trim())$("#grRpUserDescription").value=p.description;
+});
+$("#grSavePersona").onclick=()=>{
+  const name=$("#grRpUserName").value.trim(),description=$("#grRpUserDescription").value.trim();
+  if(!name){toast("Enter your character's name first");return;}
+  const others=store.personas.filter(p=>p.name.toLowerCase()!==name.toLowerCase());
+  try{store.personas=[...others,{name,description}].sort((a,b)=>a.name.localeCompare(b.name));}catch(e){toast("Could not save the persona.");return;}
+  renderPersonaChoices();toast(name+" saved as a persona");
+};
+// A scene started from the library or a card picks up the persona's description when the name matches.
+function applyPersona(group){
+  const p=group?.roleplay?personaByName(group.roleplay.user.name):null;
+  if(p&&!group.roleplay.user.description)group.roleplay.user.description=p.description;
+  return group;
+}
+renderPersonaChoices();
 
 /* ---------- Scenario library ---------- */
 function renderLibrary(){
@@ -966,7 +999,7 @@ function addScenario(preset){
   const userName=$("#libUserName").value.trim();
   if(!userName){toast("Enter your character name first");$("#libUserName").focus();return;}
   if(!$("#libAdult").checked){toast("Confirm that you are an adult");return;}
-  const {agents:newAgents,group}=buildScenario(preset,userName,uid);
+  const {agents:newAgents,group}=buildScenario(preset,userName,uid);applyPersona(group);
   const nextAgents=[...agents,...newAgents],nextGroups=[...groups,group];
   try{store.agents=nextAgents;store.groups=nextGroups;}
   catch(e){store.agents=agents;toast("Not enough browser storage to add this scenario.");return;}

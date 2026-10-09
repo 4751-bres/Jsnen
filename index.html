@@ -169,7 +169,7 @@
         <option value="single">Single chat</option>
       </select>
       <label for="cardUserName">Your name (fills in {{user}})</label>
-      <input class="field" id="cardUserName" placeholder="Who you play" autocomplete="off" />
+      <input class="field" id="cardUserName" placeholder="Who you play" autocomplete="off" list="personaNames" />
       <label class="toggle-row"><input id="cardMature" type="checkbox" /> <span>Mature character (adults only)</span></label>
       <label class="toggle-row" id="cardAdultRow" hidden><input id="cardAdult" type="checkbox" /> <span>I confirm I am an adult</span></label>
       <div class="hint">Creates an agent with the card's picture and prompt, and a chat that opens with its greeting. Mood tracking is on. Everything stays editable.</div>
@@ -180,13 +180,14 @@
     </div>
   </section>
 
+  <datalist id="personaNames"></datalist>
   <!-- Scenario library -->
   <section class="sheet bottom" id="librarySheet">
     <h3><span class="grow">Scenario library</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
     <div class="body">
       <div class="hint" style="margin-top:12px">Ready-made mature roleplay scenes. Adding one creates its characters as agents and a roleplay group with mature mode and mood tracking on. All characters are adult women. Everything stays editable.</div>
       <label for="libUserName">Your character name</label>
-      <input class="field" id="libUserName" placeholder="Who you play" autocomplete="off" />
+      <input class="field" id="libUserName" placeholder="Who you play" autocomplete="off" list="personaNames" />
       <label class="toggle-row"><input id="libAdult" type="checkbox" /> <span>I confirm I am an adult</span></label>
       <div id="libraryList"></div>
     </div>
@@ -298,8 +299,11 @@
         <textarea class="field" id="grRpSetting" placeholder="World, tone, premise, and important facts"></textarea>
         <label>Opening scene</label>
         <textarea class="field" id="grRpOpening" placeholder="Optional first scene shown before the story begins"></textarea>
+        <label for="grPersona">Saved persona</label>
+        <div class="voice-row"><select class="field" id="grPersona"><option value="">Choose a saved persona…</option></select>
+          <button class="btn" id="grSavePersona" type="button">Save as persona</button></div>
         <label>Your character name</label>
-        <input class="field" id="grRpUserName" placeholder="Who you play" />
+        <input class="field" id="grRpUserName" placeholder="Who you play" list="personaNames" />
         <label>Your character</label>
         <textarea class="field" id="grRpUserDescription" placeholder="Identity, personality, appearance, goals, and boundaries"></textarea>
         <label class="toggle-row"><input id="grRpMature" type="checkbox" /> <span>Mature roleplay</span></label>
