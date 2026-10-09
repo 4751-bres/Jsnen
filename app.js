@@ -18,6 +18,7 @@ const ICONS={
   skip:'<path d="M5 5.5l9 6.5-9 6.5z"/><path d="M18 5v14"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   trash:'<path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/>',
+  speaker:'<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>',
   heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'
 };
 function icon(name){return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'+(ICONS[name]||"")+'</svg>';}
@@ -590,6 +591,7 @@ function createChatRow(m){
       }
       if(m.role==="assistant"){
         const more=document.createElement("button");more.type="button";more.className="copy-msg continue-msg";more.innerHTML=icon("play")+"Continue";more.title="Continue this cut-off reply (uses API)";more.setAttribute("aria-label",more.title);more.hidden=true;more.onclick=()=>continueMessage(m);actions.appendChild(more);d._continue=more;
+        if(globalThis.speechSynthesis){const listen=actionButton("speaker","Read aloud",()=>speakMessage(m));actions.appendChild(listen);}
         const regenerate=actionButton("regen","Regenerate reply (uses API)",()=>regenerateMessage(m));regenerate.disabled=!!controller||!!m.streaming;actions.appendChild(regenerate);
       }
       const edit=actionButton("pencil","Edit message",()=>openMessageEditor(m));edit.disabled=!!controller||!!m.streaming;actions.appendChild(edit);
@@ -748,7 +750,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);syncTempState();
   $("#delAgent").hidden=!(id&&agents.length>1);
@@ -779,7 +781,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -788,7 +790,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -1485,6 +1487,43 @@ function afterMoodReply(agent,result){
   if(!s||!result?.bot?.mood||!s.owner.moodSteer?.[s.key])return;
   delete s.owner.moodSteer[s.key];try{s.save();}catch(e){/* The steer simply stays for one more reply. */}
 }
+/* ---------- Read aloud with the device's own voices (free, works offline) ---------- */
+let speakingMessage=null;
+function speechVoices(){return globalThis.speechSynthesis?.getVoices?.()||[];}
+// The agent's chosen voice, or a stable automatic pick in the device language so each character sounds different.
+function voiceFor(agent){
+  const voices=speechVoices();if(!voices.length)return null;
+  const chosen=voices.find(v=>v.voiceURI===agent?.voice);if(chosen)return chosen;
+  const lang=(navigator.language||"en").slice(0,2).toLowerCase(),local=voices.filter(v=>(v.lang||"").toLowerCase().startsWith(lang));
+  // Characters here are usually women, so prefer voices the device labels or names as female when there are any.
+  const female=/female|woman|zira|samantha|victoria|karen|moira|tessa|fiona|susan|hazel|aria|jenny|emma|ava|allison|serena|kate|libby|sonia|natasha|clara|heather|joanna|salli|kimberly|ivy|amy|olivia|ioana|elena|paulina|monica|alice|amelie|anna|sara|laura/i;
+  const base=local.length?local:voices,women=base.filter(v=>female.test(v.name)),pool=women.length?women:base,hash=[...String(agent?.id||agent?.name||"x")].reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,7);
+  return pool[hash%pool.length];
+}
+function speakMessage(m){
+  const synth=globalThis.speechSynthesis;if(!synth){toast("This browser can't read aloud.");return;}
+  if(speakingMessage===m){synth.cancel();speakingMessage=null;return;}
+  synth.cancel();
+  const text=cleanCharacterReply(m.content||"").replace(/```[\s\S]*?```/g," (code) ").replace(/[*_#>`|]/g,"").replace(/\s+/g," ").trim();
+  if(!text){toast("Nothing to read in this message.");return;}
+  const utterance=new SpeechSynthesisUtterance(text),agent=isGroup()?agentById(m.agentId):curAgent(),voice=voiceFor(agent);
+  if(voice){utterance.voice=voice;utterance.lang=voice.lang;}
+  utterance.onend=utterance.onerror=()=>{if(speakingMessage===m)speakingMessage=null;};
+  speakingMessage=m;synth.speak(utterance);
+}
+function fillVoiceSelect(selected){
+  const select=$("#edVoice"),voices=speechVoices();
+  select.innerHTML='<option value="">Automatic</option>'+voices.map(v=>'<option value="'+esc(v.voiceURI)+'">'+esc(v.name+" ("+v.lang+")")+'</option>').join("");
+  select.value=voices.some(v=>v.voiceURI===selected)?selected:"";
+  $("#edVoiceRow").hidden=!globalThis.speechSynthesis;
+}
+if(globalThis.speechSynthesis)speechSynthesis.addEventListener?.("voiceschanged",()=>{if($("#editor").classList.contains("on"))fillVoiceSelect($("#edVoice").value);});
+$("#edVoiceTest").onclick=()=>{
+  const synth=globalThis.speechSynthesis;if(!synth)return;synth.cancel();
+  const name=$("#edName").value.trim()||"this agent",u=new SpeechSynthesisUtterance("Hi, I'm "+name+". This is how I sound.");
+  const v=speechVoices().find(x=>x.voiceURI===$("#edVoice").value)||voiceFor(agents.find(a=>a.id===editingId)||{name});
+  if(v){u.voice=v;u.lang=v.lang;}synth.speak(u);
+};
 /* ---------- Avatars: a picture when the agent has one, otherwise its emoji ---------- */
 function avatarInner(item,fallback){
   const url=item?.avatar;

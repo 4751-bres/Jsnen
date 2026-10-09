@@ -239,6 +239,12 @@
         <option value="max">Maximum — up to 384K tokens</option>
       </select>
       <div class="hint">Only an upper bound: replies are billed for what is actually written. If a reply still stops early, Continue finishes it.</div>
+      <div id="edVoiceRow">
+        <label for="edVoice">Voice for Read aloud</label>
+        <div class="voice-row"><select class="field" id="edVoice"><option value="">Automatic</option></select>
+          <button class="btn" id="edVoiceTest" type="button">Test</button></div>
+        <div class="hint">Uses this device's built-in voices. Automatic gives each character its own voice.</div>
+      </div>
       <label class="toggle-row"><input id="edMoods" type="checkbox" /> <span>Track mood (for character agents)</span></label>
       <div class="hint" style="margin-top:-6px">The agent reports its mood after each reply; the heart button in the header shows the history and sets its mood for the next reply.</div>
       <label class="toggle-row"><input id="edMatureMoods" type="checkbox" /> <span>Include mature moods — flirty, horny and more (adults only)</span></label>
