@@ -321,6 +321,18 @@ body[data-mood="fiction"] .msg:not(.show-actions) .reply-meta>.tok:first-child+*
 /* Optional message buttons (Settings → Message buttons) */
 body.hide-speak .act-speak,body.hide-pin .act-pin{display:none!important}
 
+/* Chat options menu */
+.menu-list{display:flex;flex-direction:column;gap:6px}
+.menu-item{display:flex;align-items:center;gap:14px;width:100%;min-height:60px;padding:10px 14px;border:1px solid var(--line);border-radius:var(--radius-md);
+  background:var(--surface-2);color:var(--text);text-align:left;font:inherit;cursor:pointer}
+.menu-item svg{flex:none;color:var(--accent)}
+.menu-item span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.menu-item b{font-size:15px;font-weight:600}
+.menu-item small{font-size:12.5px;color:var(--text-3)}
+.menu-item.danger svg,.menu-item.danger b{color:var(--danger)}
+.menu-item:disabled{opacity:.45;cursor:default}
+.menu-item:not(:disabled):active{background:var(--surface-1)}
+
 /* Providers */
 .provider-row{display:flex;align-items:center;gap:10px;min-height:56px;padding:8px 8px 8px 12px;margin-bottom:8px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-2)}
 .provider-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}

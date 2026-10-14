@@ -1330,11 +1330,37 @@ $("#checkKey").onclick=async()=>{
     out.textContent="✗ "+friendlyApiError(res.status,detail);
   }catch(e){out.textContent="✗ Could not reach "+base+". Check the base URL and your connection.";}
 };
+/* ---------- Chat options menu: download as text / Markdown, share, duplicate, clear ---------- */
+function currentChatExport(){
+  const item=isWorkflow()?curWorkflow():isGroup()?curGroup():curAgent();
+  const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
+  return {item,title:((item.emoji||"")+" "+(item.name||"Chat")).trim(),userName:roleplay?.user?.name||"",assistantName:isGroup()||isWorkflow()?"":item.name,intro:roleplay?.opening?"Opening scene:\n"+roleplay.opening:""};
+}
+function chatAsText(){const c=currentChatExport();return {name:chatFileName(c.item.name,"txt"),text:chatToText(c.title,messages,{userName:c.userName,assistantName:c.assistantName,intro:c.intro})};}
+function textFileFor(){const {name,text}=chatAsText();try{return new File([text],name,{type:"text/plain"});}catch(e){return null;}}
+$("#chatMenuBtn").onclick=()=>{
+  const c=currentChatExport();$("#chatMenuTitle").textContent=c.title;
+  const file=messages.length?textFileFor():null;
+  $("#shareTxt").hidden=!(file&&navigator.canShare?.({files:[file]}));
+  for(const id of ["#dlTxt","#shareTxt","#dlMd"])$(id).disabled=!messages.length;
+  closeAll();openSheet("#chatMenu");
+};
+// Menu actions close the sheet first, so confirmations and toasts show over the chat.
+$("#chatMenu").addEventListener("click",e=>{if(e.target.closest(".menu-item:not(:disabled)"))closeAll();},true);
+$("#dlTxt").onclick=()=>{
+  if(!messages.length){toast("This chat is empty.");return;}
+  const {name,text}=chatAsText();downloadFile(name,text,"text/plain;charset=utf-8");toast("Saved "+name);
+};
+$("#shareTxt").onclick=async()=>{
+  const file=textFileFor();if(!file)return;
+  try{await navigator.share({files:[file],title:file.name});}catch(e){if(e.name!=="AbortError")toast("Sharing failed. Use Download as text instead.");}
+};
+$("#dlMd").onclick=()=>$("#exportChat").click();
 $("#exportChat").onclick=()=>{
   if(!messages.length){toast("This chat is empty.");return;}
   const item=isWorkflow()?curWorkflow():isGroup()?curGroup():curAgent();
   const userName=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user.name:"";
-  downloadFile((item.name||"chat").replace(/[^\w\- ]+/g,"").trim()+".md",chatToMarkdown(item.emoji+" "+item.name,messages,userName),"text/markdown");
+  downloadFile(chatFileName(item.name,"md"),chatToMarkdown(item.emoji+" "+item.name,messages,userName),"text/markdown");
   toast("Chat exported");
 };
 function downloadFile(name,text,type){

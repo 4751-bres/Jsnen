@@ -565,6 +565,37 @@ function buildScenario(preset,userName,idFactory){
 /* scenario-library:end */
 
 
+
+/* text-export:start */
+// A chat as plain text: readable anywhere (Notes, e-mail, any phone), with times, day breaks and sources.
+function pad2(n){return String(n).padStart(2,"0");}
+function clockTime(ts){const d=new Date(ts);return pad2(d.getHours())+":"+pad2(d.getMinutes());}
+function longDate(ts){
+  const d=new Date(ts),days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
+    months=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  return days[d.getDay()]+", "+months[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear();
+}
+function chatToText(title,list,options={}){
+  const visible=(list||[]).filter(m=>(m.role==="user"||m.role==="assistant")&&!m.error&&(m.content||m.images?.length));
+  const now=options.now||Date.now(),name=String(title||"Chat");
+  const out=[name,"Saved "+longDate(now)+" at "+clockTime(now)+" · "+visible.length+" message"+(visible.length===1?"":"s"),"=".repeat(Math.min(48,Math.max(24,name.length)))];
+  if(options.intro)out.push("",String(options.intro).trim());
+  let day="";
+  for(const m of visible){
+    if(m.at){const k=dayKey(m.at);if(k!==day){day=k;out.push("","—— "+longDate(m.at)+" ——");}}
+    const who=m.role==="user"?(options.userName||"You"):(m.characterName||m.agentName||m.workflowRoleName||options.assistantName||"Assistant");
+    out.push("",(m.at?"["+clockTime(m.at)+"] ":"")+who+":");
+    if(m.content)out.push(String(m.content).replace(/\r\n/g,"\n").trim());
+    if(m.images?.length)out.push("["+m.images.length+" image"+(m.images.length===1?"":"s")+"]");
+    if(m.sources?.length)out.push("Sources:",...m.sources.map((s,i)=>"  ["+(i+1)+"] "+s.title+" — "+s.url));
+  }
+  return out.join("\n")+"\n";
+}
+function chatFileName(name,ext,now){
+  const d=new Date(now||Date.now()),safe=String(name||"chat").replace(/[^\p{L}\p{N}\- ]+/gu,"").trim().replace(/\s+/g,"-").slice(0,60)||"chat";
+  return safe+"-"+d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate())+"."+ext;
+}
+/* text-export:end */
 /* web-search-core:start */
 // Exa web search: request body, prompt block with numbered sources, and [n] citation links.
 function exaSearchBody(query,count){
