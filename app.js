@@ -2,6 +2,7 @@
 const $ = s => document.querySelector(s);
 // Line icons (24px grid, stroke = currentColor); styled by svg.i in styles.css.
 const ICONS={
+  globe:'<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.3 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.3-3.5-8.5s1.1-6.1 3.5-8.5z"/>',
   copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>',
   check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   regen:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/>',
@@ -47,6 +48,8 @@ const store = {
   get showPin(){return localStorage.getItem("ds_show_pin")!=="0"}, set showPin(v){localStorage.setItem("ds_show_pin",v?"1":"0")},
   get providers(){try{const p=JSON.parse(localStorage.getItem("ds_providers"));return Array.isArray(p)?p:[]}catch(e){return []}}, set providers(v){localStorage.setItem("ds_providers",JSON.stringify(v))},
   get modelCache(){try{return JSON.parse(localStorage.getItem("ds_models"))||{}}catch(e){return {}}}, set modelCache(v){localStorage.setItem("ds_models",JSON.stringify(v))},
+  get exaKey(){return localStorage.getItem("ds_exa_key")||""}, set exaKey(v){if(v)localStorage.setItem("ds_exa_key",v);else localStorage.removeItem("ds_exa_key")},
+  get webOn(){return localStorage.getItem("ds_web_on")==="1"}, set webOn(v){localStorage.setItem("ds_web_on",v?"1":"0")},
   get sort(){return localStorage.getItem("ds_sort")||"recent"}, set sort(v){localStorage.setItem("ds_sort",v)},
   get activity(){try{return JSON.parse(localStorage.getItem("ds_activity"))||{}}catch(e){return {}}},
   touch(id){try{const a=this.activity;a[id]=Date.now();localStorage.setItem("ds_activity",JSON.stringify(a));}catch(e){/* Sorting hint only. */}},
@@ -457,12 +460,17 @@ function updateChatRow(m,d){
     // Long hidden reasoning is not parsed or inserted into the page on every token.
     if(details.open&&text.textContent!==m.reasoning)text.textContent=m.reasoning||"";
   }
-  if(d._contentValue!==m.content||d._streaming!==!!m.streaming){
+  if(d._contentValue!==m.content||d._streaming!==!!m.streaming||d._searching!==!!m.searching){
     const shown=m.role==="assistant"?cleanCharacterReply(m.moodTracked&&m.streaming?stripPartialMoodTag(m.content):m.content):m.content||"";
-    d._text.innerHTML=md(shown)+(m.streaming?'<span class="cursor"></span>':"");
-    d._contentValue=m.content;d._streaming=!!m.streaming;
+    d._text.innerHTML=m.searching?'<span class="searching">'+icon("globe")+'Searching the web…</span>':linkCitations(md(shown),m.sources)+(m.streaming?'<span class="cursor"></span>':"");
+    d._contentValue=m.content;d._streaming=!!m.streaming;d._searching=!!m.searching;
     if(!m.streaming)for(const pre of d._text.querySelectorAll("pre")){const b=document.createElement("button");b.type="button";b.className="code-copy";b.innerHTML=icon("copy")+"Copy";b.setAttribute("aria-label","Copy code");pre.prepend(b);}
   }
+  if(m.sources&&!m.searching){
+    if(!d._sources){d._sources=document.createElement("div");d._sources.className="sources";d._text.after(d._sources);}
+    const key=m.searchQuery+"|"+m.sources.length;
+    if(d._sourcesKey!==key){d._sources.innerHTML=sourcesHtml(m);d._sourcesKey=key;}
+  }else if(d._sources){d._sources.remove();d._sources=null;d._sourcesKey=null;}
   d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
   if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
   if(d._showActions)d.classList.add("show-actions");
@@ -757,7 +765,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);syncTempState();
   $("#delAgent").hidden=!(id&&agents.length>1);
@@ -788,7 +796,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,memory:memoryLines($("#edMemory").value)};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,memory:memoryLines($("#edMemory").value)};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -797,7 +805,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,memory:memoryLines($("#edMemory").value)};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,memory:memoryLines($("#edMemory").value)};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -1164,6 +1172,39 @@ $("#delWorkflow").onclick=()=>{
   renderAgents();loadConv();closeAll();toast("Workflow deleted");
 };
 
+/* ---------- Web search (Exa) ---------- */
+function webSearchWanted(agent,meta){
+  return !!store.exaKey&&!meta.workflowRoleId&&!meta.noSearch&&(store.webOn||!!agent?.webSearch);
+}
+let lastWebSearch=null; // reused when several group members answer the same message
+async function runWebSearch(apiMessages,signal){
+  const fallback=lastUserText(apiMessages);if(!fallback)return null;
+  const key=currentId+"\n"+fallback;
+  if(lastWebSearch?.key===key&&Date.now()-lastWebSearch.at<10*60*1000)return lastWebSearch.found;
+  let query=fallback;
+  try{query=cleanSearchQuery(await quickCompletion(searchQueryMessages(apiMessages),signal,60),fallback);}
+  catch(e){if(signal?.aborted)throw e;}
+  const res=await fetch("https://api.exa.ai/search",{method:"POST",signal,headers:{"Content-Type":"application/json","x-api-key":store.exaKey},body:JSON.stringify(exaSearchBody(query,5))});
+  if(!res.ok){
+    let detail="";try{detail=(await res.json()).error||"";}catch(e){}
+    throw new Error(res.status===401||res.status===403?"Exa rejected the key. Check it in Settings.":res.status===402?"Your Exa credits have run out.":"Exa search failed (HTTP "+res.status+")"+(detail?": "+detail:""));
+  }
+  const found={query,results:exaResults(await res.json())};
+  lastWebSearch={key,at:Date.now(),found};
+  return found;
+}
+function renderWebBtn(){
+  const b=$("#webBtn");b.hidden=!store.exaKey||isWorkflow();
+  b.classList.toggle("on",store.webOn);b.setAttribute("aria-pressed",String(store.webOn));
+  b.title=store.webOn?"Web search on: replies search the web first. Tap to turn off.":"Web search off. Tap to search the web before each reply.";
+  b.disabled=!!controller;
+}
+$("#webBtn").onclick=()=>{store.webOn=!store.webOn;renderWebBtn();toast(store.webOn?"🌐 Web search on — replies will search the web and cite sources":"Web search off");};
+function sourcesHtml(m){
+  return '<div class="sources-head">'+icon("globe")+'<span>'+esc(m.sources.length?"Sources":"No web results")+(m.searchQuery?' · <i>'+esc(m.searchQuery)+'</i>':"")+'</span></div>'+
+    (m.sources.length?'<ol>'+m.sources.map(s=>'<li><a href="'+esc(s.url)+'" target="_blank" rel="noopener"><b>'+esc(s.title)+'</b><small>'+esc(sourceHost(s.url))+'</small></a></li>').join("")+'</ol>':"");
+}
+
 /* ---------- Providers: DeepSeek (default) plus any OpenAI-compatible API, chosen per agent ---------- */
 function defaultProvider(){return {id:"",name:providerKind(store.base)==="deepseek"?"DeepSeek":"Default",base:store.base,key:store.k,model:store.model};}
 function providerById(id){return (id&&store.providers.find(p=>p.id===id))||defaultProvider();}
@@ -1310,9 +1351,10 @@ $("#showSpeak").onchange=e=>{try{store.showSpeak=e.target.checked;}catch(err){}a
 $("#showPin").onchange=e=>{try{store.showPin=e.target.checked;}catch(err){}applyMessageButtons();};
 applyMessageButtons();
 $("#themeSelect").onchange=e=>{applyTheme(e.target.value);try{localStorage.setItem("ds_theme",e.target.value);}catch(err){}};
-$("#setBtn").onclick=()=>{renderProviderList();try{$("#themeSelect").value=localStorage.getItem("ds_theme")||"";}catch(e){}refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
+$("#setBtn").onclick=()=>{renderProviderList();try{$("#themeSelect").value=localStorage.getItem("ds_theme")||"";}catch(e){}refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#exaKey").value=store.exaKey;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
 $("#saveSettings").onclick=()=>{
   store.k=$("#apiKey").value.trim();
+  store.exaKey=$("#exaKey").value.trim();renderWebBtn();
   store.base=($("#baseUrl").value.trim()||"https://api.deepseek.com").replace(/\/+$/,"");
   store.model=$("#defModel").value.trim()||"deepseek-flash";
   store.ctxLimit=Number($("#ctxLimit").value)||0;store.ctxSummary=$("#ctxSummary").checked;
@@ -1379,7 +1421,7 @@ function renderAttachments(){
     remove.onclick=()=>{pendingImages.splice(index,1);renderAttachments();};item.append(img,remove);tray.append(item);
   });
   $("#attachBtn").disabled=readingImages||!!controller;
-  $("#draftBtn").disabled=readingImages||!!controller;$("#draftBtn").hidden=isWorkflow();
+  $("#draftBtn").disabled=readingImages||!!controller;$("#draftBtn").hidden=isWorkflow();renderWebBtn();
   $("#attachBtn").title="Attach images or paste a screenshot";
 }
 async function prepareImage(file){
@@ -1489,7 +1531,9 @@ async function streamCompletion(agent,apiMessages,meta={}){
   if(!provider.key&&!isLocalBase(provider.base)){toast("Add an API key for "+provider.name+" in Settings");$("#setBtn").click();return false;}
   if(!modelSeesImages(agent.model||provider.model||store.model)&&apiMessages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url"))){toast("This chat contains images. Set this agent's model to deepseek-flash for vision.");return false;}
   const convId=currentId,conversationMessages=messages;
+  const search=webSearchWanted(agent,meta);
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,at:Date.now(),...meta};
+  delete bot.noSearch;if(search)bot.searching=true;
   messages.push(bot);
   renderChat();
 
@@ -1501,9 +1545,19 @@ async function streamCompletion(agent,apiMessages,meta={}){
   setSending(true);renderResponders();renderChat();acquireWakeLock();
   let aborted=false;
   try{
+    if(search){
+      try{
+        const found=await runWebSearch(apiMessages,signal);
+        if(found){
+          bot.searchQuery=found.query;bot.sources=found.results.map(({title,url})=>({title,url}));
+          if(found.results.length)payload.messages=withSearchResults(apiMessages,searchResultsBlock(found.query,found.results));
+        }
+      }catch(e){if(signal.aborted)throw e;toast("🌐 "+(e instanceof TypeError?"Could not reach Exa.":e.message)+" Replying without search.");}
+      bot.searching=false;scheduleStreamPaint(bot);
+    }
     // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
-      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature"].filter(k=>meta[k]!==undefined).map(k=>[k,meta[k]]))};
+      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
     const res=await fetchWithRetry(()=>backgroundFetch(request.url,{
       method:"POST",
       headers:request.headers,
@@ -1553,7 +1607,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     bot.streaming=false;
     if(!bot.content&&!bot.reasoning){bot.content="(empty response)";}
   }catch(err){
-    bot.streaming=false;
+    bot.streaming=false;bot.searching=false;
     if(err.name==="AbortError"){aborted=true;bot.content=bot.content||"⏹ stopped.";}
     // A dropped connection keeps everything already written; Continue can finish it.
     else if(bot.content){bot.interrupted=String(err.message||"Connection lost");bot.truncated=true;}
@@ -1840,7 +1894,7 @@ async function continueMessage(message){
   const mood=moodOptions(agent);
   const base=await prepareContext(buildApiMessages(agent,{mood}));if(!base)return;
   const payload=[...base,{role:"user",content:"Continue your previous reply exactly where it stopped. Do not repeat anything already written and do not add a preamble."}];
-  const meta={};for(const key of ["agentId","agentName","agentEmoji","characterName"])if(message[key])meta[key]=message[key];
+  const meta={noSearch:true};for(const key of ["agentId","agentName","agentEmoji","characterName"])if(message[key])meta[key]=message[key];
   Object.assign(meta,moodMeta(mood));
   const result=await streamCompletion(agent,payload,meta);
   if(!result)return;

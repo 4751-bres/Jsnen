@@ -258,6 +258,7 @@ function chatToMarkdown(title,list,userName){
     const who=m.role==="user"?(userName||"You"):(m.characterName||m.agentName||m.workflowRoleName||"Assistant");
     const when=m.at?" · "+new Date(m.at).toISOString().slice(0,16).replace("T"," "):"";
     lines.push("**"+who+"**"+when,"",String(m.content||"")+(m.images?.length?"\n\n_["+m.images.length+" image"+(m.images.length===1?"":"s")+"]_":""),"");
+    if(m.sources?.length)lines.push("Sources:",...m.sources.map((s,i)=>(i+1)+". "+s.title+" — "+s.url),"");
   }
   return lines.join("\n");
 }
@@ -563,6 +564,62 @@ function buildScenario(preset,userName,idFactory){
 }
 /* scenario-library:end */
 
+
+/* web-search-core:start */
+// Exa web search: request body, prompt block with numbered sources, and [n] citation links.
+function exaSearchBody(query,count){
+  return {query:String(query||"").slice(0,400),type:"auto",numResults:Math.max(1,Math.min(10,count||5)),contents:{text:{maxCharacters:1800}}};
+}
+function exaResults(json){
+  return (Array.isArray(json?.results)?json.results:[]).filter(r=>r&&r.url).map(r=>({
+    title:String(r.title||r.url).trim().slice(0,200),url:String(r.url),
+    date:r.publishedDate?String(r.publishedDate).slice(0,10):"",text:String(r.text||"").replace(/\s+/g," ").trim().slice(0,1800)
+  }));
+}
+// The text the helper model turns into a search query.
+function searchQueryMessages(apiMessages){
+  const turns=(apiMessages||[]).filter(m=>m.role!=="system").slice(-6).map(m=>{
+    const text=typeof m.content==="string"?m.content:(m.content||[]).filter(p=>p.type==="text").map(p=>p.text).join(" ");
+    return (m.role==="user"?"User: ":"Assistant: ")+text.slice(0,1200);
+  }).join("\n\n");
+  return [{role:"system",content:"You write one web search query that would find current information needed to answer the user's latest message. Reply with only the query (under 15 words, no quotes). If no web search is useful, reply with the user's latest message shortened to a query anyway."},
+    {role:"user",content:turns||"(empty)"}];
+}
+function lastUserText(apiMessages){
+  const m=[...(apiMessages||[])].reverse().find(x=>x.role==="user");if(!m)return "";
+  const text=typeof m.content==="string"?m.content:(m.content||[]).filter(p=>p.type==="text").map(p=>p.text).join(" ");
+  return text.replace(/^\[[^\]]{1,40}\]:?\s*/,"").replace(/\s+/g," ").trim().slice(0,300);
+}
+function cleanSearchQuery(text,fallback){
+  const q=String(text||"").split("\n").map(s=>s.trim()).find(Boolean)||"";
+  const cleaned=q.replace(/^(query|search)\s*:\s*/i,"").replace(/^["'`]+|["'`]+$/g,"").trim();
+  return (cleaned||String(fallback||"")).slice(0,300);
+}
+function searchResultsBlock(query,results,now){
+  const day=new Date(now||Date.now()).toISOString().slice(0,10);
+  const list=results.map((r,i)=>"["+(i+1)+"] "+r.title+" — "+r.url+(r.date?" ("+r.date+")":"")+"\n"+r.text).join("\n\n");
+  return "Web search results (searched "+day+" for \""+query+"\"). Use them when they help answer the latest message. "+
+    "Cite facts taken from them inline with their number in square brackets, like [1] or [2][3]. Do not invent sources or numbers. "+
+    "If the results do not answer the question, say so briefly and answer from what you know. Stay in character if you are playing one.\n\n"+list;
+}
+// Adds the results to the system prompt (or as a new first system message).
+function withSearchResults(apiMessages,block){
+  const list=[...(apiMessages||[])];
+  if(list[0]?.role==="system"&&typeof list[0].content==="string")list[0]={...list[0],content:list[0].content+"\n\n"+block};
+  else list.unshift({role:"system",content:block});
+  return list;
+}
+// Turns [n] in rendered HTML into links to the matching source, leaving code untouched.
+function linkCitations(html,sources){
+  if(!sources?.length)return html;
+  const attr=s=>String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+  return String(html).split(/(<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>|<a [\s\S]*?<\/a>)/).map((part,i)=>i%2?part:part.replace(/\[(\d{1,2})\]/g,(all,n)=>{
+    const s=sources[Number(n)-1];
+    return s?'<a class="cite" href="'+attr(s.url)+'" target="_blank" rel="noopener" title="'+attr(s.title)+'">'+n+'</a>':all;
+  })).join("");
+}
+function sourceHost(url){return String(url||"").replace(/^[a-z][a-z0-9+.-]*:\/\//i,"").split(/[/?#]/)[0].replace(/^www\./,"");}
+/* web-search-core:end */
 /* provider-core:start */
 // Ready-made providers. All speak the OpenAI-style /chat/completions API; the kind is derived from the URL.
 const PROVIDER_PRESETS=[

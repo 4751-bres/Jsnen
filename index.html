@@ -47,6 +47,7 @@
   <input id="imageFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
   <div class="composer">
     <button id="attachBtn" aria-label="Attach images" title="Attach images or paste a screenshot"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2a3.3 3.3 0 0 1 4.7 4.7l-8.2 8.2a1.7 1.7 0 0 1-2.4-2.4l7.5-7.5"/></svg></button>
+    <button id="webBtn" type="button" aria-label="Web search" aria-pressed="false" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.3 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.3-3.5-8.5s1.1-6.1 3.5-8.5z"/></svg></button>
     <button id="draftBtn" type="button" aria-label="Write my reply" title="Write my reply: draft your next message from the conversation"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z"/></svg></button>
     <textarea id="input" rows="1" placeholder="Message your agent…" enterkeyhint="send"></textarea>
     <button class="send" id="sendBtn" aria-label="Send message"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
@@ -88,6 +89,10 @@
       <label>DeepSeek API key</label>
       <input class="field" id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
       <div class="hint">Stored only in this browser (localStorage). Get one at <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">platform.deepseek.com</a>.</div>
+
+      <label for="exaKey">Exa API key (web search)</label>
+      <input class="field" id="exaKey" type="password" placeholder="Optional" autocomplete="off" />
+      <div class="hint">Lets agents search the web and cite sources. With a key saved, tap 🌐 beside the message box to turn search on, or enable it per agent. Get a key at <a href="https://dashboard.exa.ai/api-keys" target="_blank" rel="noopener">dashboard.exa.ai</a>. Never included in backups.</div>
 
       <label>API base URL</label>
       <input class="field" id="baseUrl" value="https://api.deepseek.com" />
@@ -289,6 +294,7 @@
           <button class="btn" id="edVoiceTest" type="button">Test</button></div>
         <div class="hint">Uses this device's built-in voices. Automatic gives each character its own voice.</div>
       </div>
+      <label class="toggle-row"><input id="edWebSearch" type="checkbox" /> <span>Always search the web before replying (needs an Exa key)</span></label>
       <label class="toggle-row"><input id="edMoods" type="checkbox" /> <span>Track mood (for character agents)</span></label>
       <div class="hint" style="margin-top:-6px">The agent reports its mood after each reply; the heart button in the header shows the history and sets its mood for the next reply.</div>
       <label class="toggle-row"><input id="edMatureMoods" type="checkbox" /> <span>Include mature moods — flirty, horny and more (adults only)</span></label>

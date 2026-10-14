@@ -7,7 +7,7 @@ const core=source.match(/\/\* roleplay-core:start \*\/([\s\S]*?)\/\* roleplay-co
 const image={name:'test.png',url:'data:image/png;base64,iVBORw0KGgo='};
 const agent={id:'a',name:'Analyst',prompt:'Analyze images',model:'deepseek-flash',temp:1,think:'off'};
 const pcore=require('./source').loadCore();
-function context(extra={}){return vm.createContext({buildChatRequest:pcore.buildChatRequest,isLocalBase:pcore.isLocalBase,...extra});}
+function context(extra={}){return vm.createContext({webSearchWanted:()=>false,buildChatRequest:pcore.buildChatRequest,isLocalBase:pcore.isLocalBase,...extra});}
 test('single-agent image-only message sends real image_url blocks to fetch',async()=>{
   let payload;
   const ctx=context({AbortController,TextDecoder,store:{k:'test',base:'https://example.invalid',saveConv(){}},
