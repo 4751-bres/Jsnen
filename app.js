@@ -2,7 +2,7 @@
 const $ = s => document.querySelector(s);
 // Line icons (24px grid, stroke = currentColor); styled by svg.i in styles.css.
 const ICONS={
-  clapper:'<path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 9l1.2-4 14.6 0L21 9M9 5l-1.5 4M14 5l-1.5 4M19 5l-1.5 4"/>',
+  clapper:'<path d="M4 11h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 11L3.2 7.6 18.6 3.8l.8 3.4z"/><path d="M8.2 6.6l2.4 3.1M13.2 5.4l2.4 3.1"/>',
   note:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
   dice:'<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="15" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/>',
   globe:'<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.3 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.3-3.5-8.5s1.1-6.1 3.5-8.5z"/>',
@@ -1344,7 +1344,7 @@ function renderDirectorBar(){
   const bar=$("#directorBar"),d=currentId&&!isWorkflow()?directionFor(currentId):{next:"",note:""};
   bar.hidden=!d.next&&!d.note;if(bar.hidden){bar.innerHTML="";return;}
   bar.innerHTML=(d.next?'<button type="button" class="dir-pill next" data-open>'+icon("clapper")+'<span><b>Next reply:</b> '+esc(d.next)+'</span></button><button type="button" class="dir-x" data-clear-next aria-label="Remove next-reply direction">'+icon("x")+'</button>':"")+
-    (d.note?'<button type="button" class="dir-pill note" data-open>'+icon("note")+'<span><b>Author\'s note on</b></span></button>':"");
+    (d.note?'<button type="button" class="dir-pill note" data-open>'+icon("note")+'<span><b>Note</b></span></button>':"");
   bar.querySelectorAll("[data-open]").forEach(b=>b.onclick=openDirector);
   const x=bar.querySelector("[data-clear-next]");if(x)x.onclick=()=>{saveDirection(currentId,{...directionFor(currentId),next:""});renderDirectorBar();toast("Direction removed");};
 }
