@@ -272,7 +272,7 @@ function parseSseText(raw){
     const choice=j.choices?.[0];
     if(choice?.finish_reason&&choice.finish_reason!=="stop"&&choice.finish_reason!=="tool_calls")out.finish=choice.finish_reason;
     if(j.usage)out.usage={prompt:j.usage.prompt_tokens||0,completion:j.usage.completion_tokens||0};
-    if(choice?.delta?.reasoning_content)out.reasoning+=choice.delta.reasoning_content;
+    const thought=choice?.delta?.reasoning_content||choice?.delta?.reasoning;if(typeof thought==="string")out.reasoning+=thought;
     if(choice?.delta?.content)out.content+=choice.delta.content;
   }
   return out;
@@ -454,7 +454,8 @@ function migrateEffortLevels(storage,agentList,workflowList){
 /* backup-core:start */
 const BACKUP_APP="deepseek-agents";
 // The API key stays on the device; everything else under the app prefix is portable.
-function isBackupKey(key){return key.startsWith("ds_")&&key!=="ds_key";}
+const SECRET_KEYS=["ds_key","ds_providers","ds_exa_key"];
+function isBackupKey(key){return key.startsWith("ds_")&&!SECRET_KEYS.includes(key);}
 function makeBackup(storage,extra){
   const data={};
   for(let i=0;i<storage.length;i++){const key=storage.key(i);if(isBackupKey(key))data[key]=storage.getItem(key);}
@@ -561,6 +562,57 @@ function buildScenario(preset,userName,idFactory){
   return {agents,group};
 }
 /* scenario-library:end */
+
+/* provider-core:start */
+// Ready-made providers. All speak the OpenAI-style /chat/completions API; the kind is derived from the URL.
+const PROVIDER_PRESETS=[
+  {id:"openrouter",name:"OpenRouter",base:"https://openrouter.ai/api/v1",keyUrl:"https://openrouter.ai/keys",hint:"Hundreds of models (DeepSeek, Claude, GPT, Llama, Mistral…) with one key."},
+  {id:"openai",name:"OpenAI",base:"https://api.openai.com/v1",keyUrl:"https://platform.openai.com/api-keys",hint:"GPT models."},
+  {id:"gemini",name:"Google Gemini",base:"https://generativelanguage.googleapis.com/v1beta/openai",keyUrl:"https://aistudio.google.com/apikey",hint:"Gemini models through Google's OpenAI-compatible endpoint."},
+  {id:"groq",name:"Groq",base:"https://api.groq.com/openai/v1",keyUrl:"https://console.groq.com/keys",hint:"Very fast open models."},
+  {id:"mistral",name:"Mistral",base:"https://api.mistral.ai/v1",keyUrl:"https://console.mistral.ai/api-keys",hint:"Mistral models."},
+  {id:"xai",name:"xAI (Grok)",base:"https://api.x.ai/v1",keyUrl:"https://console.x.ai",hint:"Grok models."},
+  {id:"deepseek",name:"DeepSeek (second key)",base:"https://api.deepseek.com",keyUrl:"https://platform.deepseek.com/api_keys",hint:"Another DeepSeek account."},
+  {id:"ollama",name:"Ollama",base:"http://localhost:11434/v1",keyUrl:"",hint:"Local models on a computer running Ollama. No key needed."},
+  {id:"lmstudio",name:"LM Studio",base:"http://localhost:1234/v1",keyUrl:"",hint:"Local models served by LM Studio. No key needed."},
+  {id:"custom",name:"Custom",base:"",keyUrl:"",hint:"Any OpenAI-compatible server."}
+];
+function providerKind(base){
+  const url=String(base||"").toLowerCase();
+  if(url.includes("deepseek.com"))return "deepseek";
+  if(url.includes("openrouter.ai"))return "openrouter";
+  if(url.includes("api.openai.com"))return "openai";
+  if(url.includes("generativelanguage.googleapis.com"))return "gemini";
+  return "generic";
+}
+function isLocalBase(base){return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|192\.168\.|10\.|[^/]*\.local)/i.test(String(base||""));}
+// One streaming chat request in the dialect each provider expects.
+function buildChatRequest(provider,agent,apiMessages,defaultModel){
+  const kind=providerKind(provider.base),thinking=!!agent.think&&agent.think!=="off";
+  const effort=agent.think==="max"?"high":agent.think;
+  const body={model:agent.model||provider.model||defaultModel,messages:apiMessages,stream:true};
+  if(kind!=="generic"&&kind!=="gemini")body.stream_options={include_usage:true};
+  if(kind==="deepseek"){
+    if(thinking){body.thinking={type:"enabled"};body.reasoning_effort=agent.think;}
+    else{body.thinking={type:"disabled"};body.temperature=agent.temp;}
+  }else if(kind==="openrouter"){
+    if(thinking)body.reasoning={effort};else body.temperature=agent.temp;
+  }else if(kind==="openai"||kind==="gemini"){
+    if(thinking)body.reasoning_effort=effort;else body.temperature=agent.temp;
+  }else body.temperature=agent.temp;
+  const max=replyTokenLimit(agent.maxTokens);
+  if(max){if(kind==="openai")body.max_completion_tokens=max;else body.max_tokens=max;}
+  const headers={"Content-Type":"application/json"};
+  if(provider.key)headers.Authorization="Bearer "+provider.key;
+  if(kind==="openrouter")headers["X-Title"]="DeepSeek Agents";
+  return {url:String(provider.base||"").replace(/\/+$/,"")+"/chat/completions",headers,body};
+}
+// Model ids from an OpenAI-style /models response, sorted, without duplicates.
+function modelIdsFrom(json){
+  const list=Array.isArray(json?.data)?json.data:Array.isArray(json?.models)?json.models:Array.isArray(json)?json:[];
+  return [...new Set(list.map(m=>typeof m==="string"?m:String(m?.id||m?.name||"").replace(/^models\//,"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+}
+/* provider-core:end */
 /* card-import:start */
 // Character cards (Tavern / SillyTavern V1, V2 and V3 data) from PNG text chunks or JSON files.
 function bytesToText(bytes,encoding){return new TextDecoder(encoding).decode(bytes);}

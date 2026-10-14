@@ -45,6 +45,8 @@ const store = {
   get personas(){try{const p=JSON.parse(localStorage.getItem("ds_personas"));return Array.isArray(p)?p:[]}catch(e){return []}}, set personas(v){localStorage.setItem("ds_personas",JSON.stringify(v))},
   get showSpeak(){return localStorage.getItem("ds_show_speak")!=="0"}, set showSpeak(v){localStorage.setItem("ds_show_speak",v?"1":"0")},
   get showPin(){return localStorage.getItem("ds_show_pin")!=="0"}, set showPin(v){localStorage.setItem("ds_show_pin",v?"1":"0")},
+  get providers(){try{const p=JSON.parse(localStorage.getItem("ds_providers"));return Array.isArray(p)?p:[]}catch(e){return []}}, set providers(v){localStorage.setItem("ds_providers",JSON.stringify(v))},
+  get modelCache(){try{return JSON.parse(localStorage.getItem("ds_models"))||{}}catch(e){return {}}}, set modelCache(v){localStorage.setItem("ds_models",JSON.stringify(v))},
   get sort(){return localStorage.getItem("ds_sort")||"recent"}, set sort(v){localStorage.setItem("ds_sort",v)},
   get activity(){try{return JSON.parse(localStorage.getItem("ds_activity"))||{}}catch(e){return {}}},
   touch(id){try{const a=this.activity;a[id]=Date.now();localStorage.setItem("ds_activity",JSON.stringify(a));}catch(e){/* Sorting hint only. */}},
@@ -233,7 +235,8 @@ function refreshHeader(){
   }else{
     const a=curAgent();
     $("#hAgent").textContent=a.name;
-    $("#hSub").textContent=(a.model||store.model)+" · temp "+a.temp+usedText;
+    const p=providerFor(a);
+    $("#hSub").textContent=(a.provider&&p.id?p.name+" · ":"")+(a.model||p.model||store.model)+(a.think&&a.think!=="off"?" · thinking "+a.think:" · temp "+a.temp)+usedText;
     $("#input").placeholder="Message your agent…";
   }
 }
@@ -359,7 +362,7 @@ async function regenerateMessage(message){
   const index=messages.indexOf(message);if(index<0)return;
   const agent=isGroup()?agents.find(a=>a.id===message.agentId):curAgent();
   if(!agent){toast("The original agent is no longer available.");return;}
-  if(!store.k){toast("Add your API key in Settings");$("#setBtn").click();return;}
+  if(!anyProviderReady()){toast("Add your API key in Settings");$("#setBtn").click();return;}
   const previous=messages,branch=prepareRegeneration(messages,index);
   const meta={versions:branch.versions,versionIndex:branch.versionIndex};
   for(const key of ["agentId","agentName","agentEmoji","characterName"])if(message[key])meta[key]=message[key];
@@ -501,9 +504,9 @@ function renderChat(){
   }
   if(chatVisibleStart>=messages.length)chatVisibleStart=Math.max(0,messages.length-CHAT_BATCH);
   if(!messages.length){
-    const title=!store.k?"Add your API key to start":isWorkflow()?curWorkflow().name:isGroup()?curGroup().name:curAgent().name;
+    const title=!anyProviderReady()?"Add your API key to start":isWorkflow()?curWorkflow().name:isGroup()?curGroup().name:curAgent().name;
     const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
-    const sub = !store.k ? "Add your DeepSeek API key in Settings to begin. It stays in this browser and is only sent to DeepSeek."
+    const sub = !anyProviderReady() ? "Add your DeepSeek API key in Settings to begin. It stays in this browser and is only sent to DeepSeek."
       : isWorkflow() ? "Describe a task to run its work, critique, and synthesis roles."
       : roleplay ? ((roleplay.opening?esc(roleplay.opening)+"<br><br>":"")+"<b>You play as "+esc(roleplay.user.name||"your character")+".</b>")
       : isGroup() ? "Send a message, then tap an agent below to have it reply."
@@ -754,7 +757,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);syncTempState();
   $("#delAgent").hidden=!(id&&agents.length>1);
@@ -785,7 +788,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,memory:memoryLines($("#edMemory").value)};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,memory:memoryLines($("#edMemory").value)};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -794,7 +797,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,memory:memoryLines($("#edMemory").value)};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,memory:memoryLines($("#edMemory").value)};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -1161,6 +1164,105 @@ $("#delWorkflow").onclick=()=>{
   renderAgents();loadConv();closeAll();toast("Workflow deleted");
 };
 
+/* ---------- Providers: DeepSeek (default) plus any OpenAI-compatible API, chosen per agent ---------- */
+function defaultProvider(){return {id:"",name:providerKind(store.base)==="deepseek"?"DeepSeek":"Default",base:store.base,key:store.k,model:store.model};}
+function providerById(id){return (id&&store.providers.find(p=>p.id===id))||defaultProvider();}
+function providerFor(agent){return providerById(agent?.provider);}
+function providerReady(provider){return !!provider.key||isLocalBase(provider.base);}
+function anyProviderReady(){return providerReady(defaultProvider())||store.providers.some(providerReady);}
+// Helper requests (summaries, Auto, Write my reply) use the default provider, or the first other ready one.
+function helperProvider(){const d=defaultProvider();return providerReady(d)?d:(store.providers.find(providerReady)||d);}
+async function fetchModels(provider){
+  const res=await fetch(String(provider.base).replace(/\/+$/,"")+"/models",{headers:provider.key?{Authorization:"Bearer "+provider.key}:{}});
+  if(!res.ok){let detail="";try{detail=(await res.json()).error?.message||"";}catch(e){}throw new Error(friendlyApiError(res.status,detail));}
+  const ids=modelIdsFrom(await res.json());
+  try{store.modelCache={...store.modelCache,[provider.id||"default"]:ids.slice(0,800)};}catch(e){}
+  return ids;
+}
+function fillModelList(listId,providerId){
+  const ids=store.modelCache[providerId||"default"]||(providerId?[]:["deepseek-flash","deepseek-v4-pro"]);
+  $("#"+listId).innerHTML=ids.map(id=>'<option value="'+esc(id)+'"></option>').join("");
+}
+function renderProviderList(){
+  const list=$("#providerList"),providers=store.providers;
+  list.innerHTML=providers.length?"":'<div class="hint" style="margin:0">No other providers yet.</div>';
+  for(const p of providers){
+    const row=document.createElement("div");row.className="provider-row";
+    row.innerHTML='<div class="provider-meta"><b>'+esc(p.name)+'</b><small>'+esc(p.base)+(providerReady(p)?"":" · no key")+'</small></div>'+
+      '<button class="btn" type="button">Edit</button>';
+    row.querySelector("button").onclick=()=>openProviderSheet(p.id);
+    list.appendChild(row);
+  }
+}
+let editingProviderId=null,draftProviderId=null;
+function openProviderSheet(id){
+  editingProviderId=id;draftProviderId=id||"p-"+uid();
+  const p=id?store.providers.find(x=>x.id===id):null,preset=PROVIDER_PRESETS[0];
+  $("#pvPreset").innerHTML=PROVIDER_PRESETS.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
+  $("#pvPreset").value=p?.preset||"custom";$("#pvPresetRow").hidden=!!p;
+  $("#pvName").value=p?p.name:preset.name;$("#pvBase").value=p?p.base:preset.base;$("#pvKey").value=p?.key||"";$("#pvModel").value=p?.model||"";
+  if(!p)$("#pvPreset").value=preset.id;
+  $("#pvTitle").textContent=p?"Edit provider":"Add provider";$("#pvDelete").hidden=!p;$("#pvStatus").textContent="";
+  updatePresetHint();fillModelList("pvModels",id);
+  closeAll();openSheet("#providerSheet");
+}
+function updatePresetHint(){
+  const preset=PROVIDER_PRESETS.find(x=>x.id===$("#pvPreset").value);
+  $("#pvHint").innerHTML=preset?esc(preset.hint)+(preset.keyUrl?' <a href="'+esc(preset.keyUrl)+'" target="_blank" rel="noopener">Get a key ↗</a>':""):"";
+}
+$("#pvPreset").onchange=()=>{
+  const preset=PROVIDER_PRESETS.find(x=>x.id===$("#pvPreset").value);if(!preset)return;
+  $("#pvName").value=preset.name;$("#pvBase").value=preset.base;$("#pvModel").value="";updatePresetHint();
+};
+function providerFromSheet(){
+  return {id:draftProviderId,preset:editingProviderId?(store.providers.find(x=>x.id===editingProviderId)?.preset||"custom"):$("#pvPreset").value,
+    name:$("#pvName").value.trim()||"Provider",base:$("#pvBase").value.trim().replace(/\/+$/,""),key:$("#pvKey").value.trim(),model:$("#pvModel").value.trim()};
+}
+$("#pvLoad").onclick=async()=>{
+  const p=providerFromSheet();if(!p.base){$("#pvStatus").textContent="Enter the base URL first.";return;}
+  $("#pvStatus").textContent="Checking…";
+  try{const ids=await fetchModels(p);$("#pvModels").innerHTML=ids.map(id=>'<option value="'+esc(id)+'"></option>').join("");
+    $("#pvStatus").textContent="✓ Connected · "+ids.length+" models available. Tap Default model to pick one.";}
+  catch(e){$("#pvStatus").textContent="✗ "+(e instanceof TypeError?"Could not reach "+p.base+". Check the URL (and that the server allows browser requests).":e.message);}
+};
+$("#pvSave").onclick=()=>{
+  const p=providerFromSheet();
+  if(!/^https?:\/\//i.test(p.base)){toast("Enter a base URL starting with https://");return;}
+  const list=store.providers.filter(x=>x.id!==p.id);
+  try{store.providers=[...list,p];}catch(e){toast("Could not save the provider.");return;}
+  closeAll();renderProviderList();$("#setBtn").click();toast(p.name+" saved");
+};
+$("#pvDelete").onclick=()=>{
+  const p=store.providers.find(x=>x.id===editingProviderId);if(!p)return;
+  const users=agents.filter(a=>a.provider===p.id);
+  if(!confirm("Delete “"+p.name+"”?"+(users.length?" "+users.length+" agent"+(users.length===1?"":"s")+" will switch to the default provider.":"")))return;
+  try{store.providers=store.providers.filter(x=>x.id!==p.id);agents.forEach(a=>{if(a.provider===p.id)delete a.provider;});store.agents=agents;}catch(e){}
+  closeAll();renderProviderList();$("#setBtn").click();refreshHeader();toast("Provider deleted");
+};
+$("#addProvider").onclick=()=>openProviderSheet(null);
+// Agent editor: provider picker and model list for the chosen provider.
+function fillProviderSelect(selected){
+  const providers=store.providers;
+  $("#edProvider").innerHTML='<option value="">'+esc(defaultProvider().name)+' (default)</option>'+providers.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");
+  $("#edProvider").value=providers.some(p=>p.id===selected)?selected:"";
+  $("#edProviderRow").hidden=!providers.length;
+  onProviderPicked();
+}
+function onProviderPicked(){
+  const p=providerById($("#edProvider").value);
+  fillModelList("edModelList",$("#edProvider").value);
+  $("#edModel").placeholder=p.model?"Provider default ("+p.model+")":"Model id, e.g. from Load models";
+}
+$("#edProvider").onchange=()=>{
+  // DeepSeek model ids mean nothing to other providers; start the model field fresh.
+  if(providerKind(providerById($("#edProvider").value).base)!=="deepseek"&&/^deepseek-/.test($("#edModel").value))$("#edModel").value="";
+  onProviderPicked();
+};
+$("#edLoadModels").onclick=async()=>{
+  const id=$("#edProvider").value,p=providerById(id);
+  try{const ids=await fetchModels(p);fillModelList("edModelList",id);toast(ids.length+" models loaded. Tap Model to choose.");}
+  catch(e){toast(e instanceof TypeError?"Could not reach "+p.name+".":e.message);}
+};
 /* ---------- Settings ---------- */
 function refreshConnPill(){const p=$("#connPill");if(store.k){p.textContent="key saved";p.style.color="var(--ok)";}else{p.textContent="not set";p.style.color="var(--muted)";}}
 async function refreshStorageInfo(){
@@ -1208,7 +1310,7 @@ $("#showSpeak").onchange=e=>{try{store.showSpeak=e.target.checked;}catch(err){}a
 $("#showPin").onchange=e=>{try{store.showPin=e.target.checked;}catch(err){}applyMessageButtons();};
 applyMessageButtons();
 $("#themeSelect").onchange=e=>{applyTheme(e.target.value);try{localStorage.setItem("ds_theme",e.target.value);}catch(err){}};
-$("#setBtn").onclick=()=>{try{$("#themeSelect").value=localStorage.getItem("ds_theme")||"";}catch(e){}refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
+$("#setBtn").onclick=()=>{renderProviderList();try{$("#themeSelect").value=localStorage.getItem("ds_theme")||"";}catch(e){}refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
 $("#saveSettings").onclick=()=>{
   store.k=$("#apiKey").value.trim();
   store.base=($("#baseUrl").value.trim()||"https://api.deepseek.com").replace(/\/+$/,"");
@@ -1218,6 +1320,7 @@ $("#saveSettings").onclick=()=>{
 };
 $("#exportBackup").onclick=()=>{
   const records=Object.fromEntries(store.bigKeys().map(k=>[k,store.raw(k)]));
+  records.ds_provider_list=JSON.stringify(store.providers.map(({key,...rest})=>rest));
   downloadFile("deepseek-agents-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify(makeBackup(localStorage,records)),"application/json");
   try{localStorage.setItem("ds_last_backup",String(Date.now()));}catch(e){}
   refreshStorageInfo();toast("Backup exported");
@@ -1240,6 +1343,12 @@ $("#backupFile").onchange=async e=>{
       catch(error){restoreBackup(localStorage,previous);throw new Error("Could not store the backup's conversations. Nothing was changed.");}
     }
   }catch(error){toast(error.message);return;}
+  // Providers come back without keys; keep keys already saved on this device for the same provider.
+  try{
+    const listed=JSON.parse(localStorage.getItem("ds_provider_list")||"null");
+    if(Array.isArray(listed)){const current=store.providers;store.providers=listed.map(p=>({...p,key:current.find(c=>c.id===p.id)?.key||""}));}
+    localStorage.removeItem("ds_provider_list");
+  }catch(e){}
   location.reload();
 };
 $("#moodBtn").onclick=openMoodSheet;
@@ -1305,7 +1414,7 @@ $("#attachBtn").onclick=()=>$("#imageFiles").click();
 /* ---------- Write my reply: draft the user's next message in their own voice ---------- */
 async function draftMyReply(){
   if(controller||readingImages||isWorkflow())return;
-  if(!store.k){toast("Add your API key in Settings");$("#setBtn").click();return;}
+  if(!anyProviderReady()){toast("Add your API key in Settings");$("#setBtn").click();return;}
   const usable=messages.filter(isContextMessage);
   if(!usable.length){toast("Start the conversation first, then I can draft your replies.");return;}
   const persona=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user:null;
@@ -1376,24 +1485,16 @@ function buildApiMessages(agent,options={}){
 
 /* ---------- Stream one response ---------- */
 async function streamCompletion(agent,apiMessages,meta={}){
-  if(!store.k){toast("Add your API key in Settings");$("#setBtn").click();return false;}
-  if(!modelSeesImages(agent.model||store.model)&&apiMessages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url"))){toast("This chat contains images. Set this agent's model to deepseek-flash for vision.");return false;}
+  const provider=typeof providerFor==="function"?providerFor(agent):{name:"DeepSeek",base:store.base,key:store.k,model:store.model};
+  if(!provider.key&&!isLocalBase(provider.base)){toast("Add an API key for "+provider.name+" in Settings");$("#setBtn").click();return false;}
+  if(!modelSeesImages(agent.model||provider.model||store.model)&&apiMessages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url"))){toast("This chat contains images. Set this agent's model to deepseek-flash for vision.");return false;}
   const convId=currentId,conversationMessages=messages;
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,at:Date.now(),...meta};
   messages.push(bot);
   renderChat();
 
-  const payload={
-    model:agent.model||store.model,
-    messages:apiMessages,
-    stream:true,
-    stream_options:{include_usage:true},
-  };
-  // DeepSeek V4 thinking mode (reasoning_content). "off" => cheaper non-thinking path.
-  // Thinking mode does not support temperature, so it is only sent when thinking is off.
-  if(agent.think && agent.think!=="off"){payload.thinking={type:"enabled"};payload.reasoning_effort=agent.think;}
-  else{payload.thinking={type:"disabled"};payload.temperature=agent.temp;}
-  const maxTokens=replyTokenLimit(agent.maxTokens);if(maxTokens)payload.max_tokens=maxTokens;
+  // Each provider gets its own dialect: DeepSeek thinking, OpenRouter reasoning, OpenAI max_completion_tokens…
+  const request=buildChatRequest(provider,agent,apiMessages,store.model),payload=request.body;
 
   controller=new AbortController();
   const signal=controller.signal;
@@ -1403,9 +1504,9 @@ async function streamCompletion(agent,apiMessages,meta={}){
     // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
       ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature"].filter(k=>meta[k]!==undefined).map(k=>[k,meta[k]]))};
-    const res=await fetchWithRetry(()=>backgroundFetch(store.base+"/chat/completions",{
+    const res=await fetchWithRetry(()=>backgroundFetch(request.url,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer "+store.k},
+      headers:request.headers,
       body:JSON.stringify(payload),
       signal,
     },jobMeta),signal);
@@ -1429,7 +1530,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
         if(finish!=="content_filter")bot.truncated=true;
       }
       if(j.usage)bot.usage={prompt:j.usage.prompt_tokens||0,completion:j.usage.completion_tokens||0};
-      if(d.reasoning_content) bot.reasoning+=d.reasoning_content;
+      const thought=d.reasoning_content||d.reasoning;if(typeof thought==="string")bot.reasoning+=thought;
       if(d.content) bot.content+=d.content;
       scheduleStreamPaint(bot);
     };
@@ -1650,9 +1751,9 @@ async function withBusy(task){
   finally{controller=null;setSending(false);renderResponders();}
 }
 async function quickCompletion(apiMessages,signal,maxTokens){
-  const res=await fetch(store.base+"/chat/completions",{method:"POST",signal,
-    headers:{"Content-Type":"application/json","Authorization":"Bearer "+store.k},
-    body:JSON.stringify({model:store.model,messages:apiMessages,temperature:0.2,max_tokens:maxTokens,stream:false,thinking:{type:"disabled"}})});
+  const provider=helperProvider(),request=buildChatRequest(provider,{model:provider.model||store.model,think:"off",temp:0.2},apiMessages,store.model);
+  const body={...request.body,stream:false,max_tokens:maxTokens};delete body.stream_options;
+  const res=await fetch(request.url,{method:"POST",signal,headers:request.headers,body:JSON.stringify(body)});
   if(!res.ok)throw new Error("HTTP "+res.status);
   const data=await res.json();
   return String(data.choices?.[0]?.message?.content||"");
@@ -1769,7 +1870,7 @@ function workflowHistorySnapshot(){
 async function startWorkflowRun(task){
   const workflow=curWorkflow(),errors=validateWorkflow(workflow,agents);
   if(errors.length){toast(workflowErrorText[errors[0].code]||"Fix the workflow configuration");openWorkflowEditor(workflow.id);return;}
-  if(!store.k){toast("Add your API key in Settings");$("#setBtn").click();return;}
+  if(!anyProviderReady()){toast("Add your API key in Settings");$("#setBtn").click();return;}
   if(currentRun&&currentRun.status!=="complete"){toast("Finish or cancel the current run first");return;}
   const images=pendingImages.slice();
   const incompatible=workflow.roles.find(r=>!modelSeesImages(workflowAgent(r,agents)?.model||store.model));
@@ -1858,7 +1959,7 @@ function send(){
   if(controller||readingImages)return;
   const text=input.value.trim();
   if(!text&&!pendingImages.length)return;
-  if(!store.k){toast("Add your API key in Settings");$("#setBtn").click();return;}
+  if(!anyProviderReady()){toast("Add your API key in Settings");$("#setBtn").click();return;}
   if(isWorkflow()){startWorkflowRun(text);return;}
   if(!commitComposer())return;
   if(isGroup()){
@@ -1910,7 +2011,7 @@ async function autoRespond(){
 store.onWriteError=()=>toast("Browser storage refused the last save. Free space or export a backup.");
 store.init().finally(()=>{
   renderAgents();loadConv();refreshConnPill();
-  if(!store.k){setTimeout(()=>{$("#setBtn").click();},400);}
+  if(!anyProviderReady()){setTimeout(()=>{$("#setBtn").click();},400);}
   else remindBackup();
   recoverBackgroundReplies();
 });

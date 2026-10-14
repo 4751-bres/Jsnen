@@ -35,6 +35,8 @@ test("an in-flight response stays bound to its originating conversation", async 
     renderChat() {},
     modelSeesImages: () => true,
     replyTokenLimit: core.replyTokenLimit,
+    buildChatRequest: core.buildChatRequest,
+    isLocalBase: core.isLocalBase,
     friendlyApiError: core.friendlyApiError,
     isRetryableStatus: core.isRetryableStatus,
     scheduleStreamPaint() {},

@@ -9,10 +9,10 @@ const page=source();
 function streamHarness(responses){
   const calls=[],toasts=[],saved=[];
   const ctx={AbortController,TextDecoder,TextEncoder,setTimeout,clearTimeout,Response,ReadableStream,Error,
-    store:{k:'test',base:'https://example.invalid',model:'deepseek-flash',saveConv(id,list){saved.push(structuredClone(list));}},
+    store:{k:'test',base:'https://api.deepseek.com',model:'deepseek-flash',saveConv(id,list){saved.push(structuredClone(list));}},
     currentId:'chat',messages:[{role:'user',content:'Hi'}],controller:null,
     renderChat(){},scheduleStreamPaint(){},cancelStreamPaint(){},renderResponders(){},setSending(){},toast:t=>toasts.push(t),$:()=>({click(){}}),
-    modelSeesImages:()=>true,replyTokenLimit:core.replyTokenLimit,friendlyApiError:core.friendlyApiError,isRetryableStatus:core.isRetryableStatus,
+    modelSeesImages:()=>true,replyTokenLimit:core.replyTokenLimit,buildChatRequest:core.buildChatRequest,isLocalBase:core.isLocalBase,friendlyApiError:core.friendlyApiError,isRetryableStatus:core.isRetryableStatus,
     fetch:async(url,opts)=>{calls.push(JSON.parse(opts.body));const next=responses.shift();return typeof next==='function'?next(opts):next;}};
   vm.createContext(ctx);
   const code=page.match(/async function streamCompletion\(agent,apiMessages,meta=\{\}\)\{[\s\S]*?(?=\n\/\* ---------- Stream one response from a specific agent)/)[0];

@@ -59,7 +59,7 @@ function uiContext(options={}){
   const $=id=>{if(!elements.has(id))elements.set(id,{value:'',focus(){},click(){}});return elements.get(id);};
   const original=[{role:'user',content:'Hi'},{role:'assistant',content:'Original',agentId:'agent-a'},{role:'user',content:'Later'}];
   const state={saved:[],requests:[],toasts:[]};
-  const c=vm.createContext({$,messages:original,currentId:'chat-a',controller:null,isWorkflow:()=>false,isGroup:()=>true,
+  const c=vm.createContext({$,anyProviderReady:()=>true,messages:original,currentId:'chat-a',controller:null,isWorkflow:()=>false,isGroup:()=>true,
     agents:[{id:'agent-a'}],curAgent:()=>({id:'single'}),closeAll(){},openSheet(){},renderChat(){},renderResponders(){},refreshHeader(){},currentKind:'group',toast:(t,action)=>{state.toasts.push(t);state.action=action;},
     store:{k:'test-only',saveConv(id,list){if(options.full)throw Error('quota');state.saved.push({id,list});}},
     buildApiMessages:()=>c.messages.map(m=>({role:m.role,content:m.content})),prepareContext:async list=>list,moodOptions:()=>null,moodMeta:()=>({}),

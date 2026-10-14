@@ -102,6 +102,11 @@
       </datalist>
       <div class="hint"><b>deepseek-flash</b> = V4.1 Flash with image understanding. <b>deepseek-v4-pro</b> = older text-only Pro. Type any model name your key can access.</div>
 
+      <label>Other providers</label>
+      <div id="providerList"></div>
+      <button class="btn" id="addProvider" type="button" style="width:100%;margin-top:8px">＋ Add provider</button>
+      <div class="hint">OpenRouter, OpenAI, Gemini, Groq, Mistral, xAI, or any OpenAI-compatible server (Ollama, LM Studio). Choose a provider per agent in its editor. Keys stay in this browser and are never included in backups.</div>
+
       <label>Message buttons</label>
       <label class="toggle-row"><input id="showSpeak" type="checkbox" checked /> <span>Read aloud 🔊</span></label>
       <label class="toggle-row"><input id="showPin" type="checkbox" checked /> <span>Pin to story memory 📌</span></label>
@@ -198,6 +203,33 @@
     </div>
   </section>
 
+  <!-- Provider editor -->
+  <section class="sheet bottom" id="providerSheet">
+    <h3><span class="grow" id="pvTitle">Add provider</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body">
+      <div id="pvPresetRow">
+        <label for="pvPreset">Service</label>
+        <select class="field" id="pvPreset"></select>
+      </div>
+      <div class="hint" id="pvHint"></div>
+      <label for="pvName">Name</label>
+      <input class="field" id="pvName" autocomplete="off" />
+      <label for="pvBase">Base URL</label>
+      <input class="field" id="pvBase" placeholder="https://…/v1" autocomplete="off" inputmode="url" />
+      <label for="pvKey">API key</label>
+      <input class="field" id="pvKey" type="password" placeholder="Leave empty for local servers" autocomplete="off" />
+      <label for="pvModel">Default model</label>
+      <div class="voice-row"><input class="field" id="pvModel" list="pvModels" placeholder="Model id" autocomplete="off" />
+        <button class="btn" id="pvLoad" type="button">Load models</button></div>
+      <datalist id="pvModels"></datalist>
+      <div class="hint" id="pvStatus" aria-live="polite"></div>
+    </div>
+    <div class="foot">
+      <button class="btn primary" id="pvSave" type="button">Save provider</button>
+      <button class="btn danger" id="pvDelete" type="button" style="flex:0 0 auto">Delete</button>
+    </div>
+  </section>
+
   <!-- Moods sheet -->
   <section class="sheet bottom" id="moodSheet">
     <h3><span class="grow">Moods</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
@@ -223,8 +255,14 @@
       <input id="edAvatarFile" type="file" accept="image/jpeg,image/png,image/webp" hidden />
       <label for="edPrompt">Who this agent is</label>
       <textarea class="field" id="edPrompt" placeholder="Who they are, how they speak, what they know, and any rules for their replies."></textarea>
+      <div id="edProviderRow">
+        <label for="edProvider">Provider</label>
+        <select class="field" id="edProvider"></select>
+      </div>
       <label for="edModel">Model</label>
-      <input class="field" id="edModel" list="models" placeholder="Settings default (deepseek-flash)" />
+      <div class="voice-row"><input class="field" id="edModel" list="edModelList" placeholder="Settings default (deepseek-flash)" autocomplete="off" />
+        <button class="btn" id="edLoadModels" type="button">Load models</button></div>
+      <datalist id="edModelList"></datalist>
       <label for="edThink">Thinking</label>
           <select class="field" id="edThink">
             <option value="off">Off — non-thinking, fastest</option>
