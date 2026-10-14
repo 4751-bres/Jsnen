@@ -2,6 +2,9 @@
 const $ = s => document.querySelector(s);
 // Line icons (24px grid, stroke = currentColor); styled by svg.i in styles.css.
 const ICONS={
+  clapper:'<path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 9l1.2-4 14.6 0L21 9M9 5l-1.5 4M14 5l-1.5 4M19 5l-1.5 4"/>',
+  note:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
+  dice:'<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="15" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/>',
   globe:'<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.3 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.3-3.5-8.5s1.1-6.1 3.5-8.5z"/>',
   copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>',
   check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
@@ -279,6 +282,7 @@ function renderResponders(){
     chip(icon("discuss")+'<span>Discuss ×'+rounds+'</span>',"all",()=>discussRespond(),"Agents reply to each other for "+rounds+" round"+(rounds===1?"":"s"));
   }
   if(roleplay&&group.moods!==false&&mems.length)chip(icon("heart")+'<span>Moods</span>',"all",openMoodSheet,"See and set each character's mood");
+  if(roleplay&&mems.length)chip(icon("clapper")+'<span>Director</span>',"all",openDirector,"Steer the next reply or set an author's note");
   bar.scrollLeft=0;updateChipFade();
 }
 // Fade the right edge only while more chips are hidden off-screen.
@@ -1330,6 +1334,45 @@ $("#checkKey").onclick=async()=>{
     out.textContent="✗ "+friendlyApiError(res.status,detail);
   }catch(e){out.textContent="✗ Could not reach "+base+". Check the base URL and your connection.";}
 };
+/* ---------- Scene director: next-reply direction and author's note, per chat ---------- */
+function directionFor(id){try{return normalizeDirection(JSON.parse(localStorage.getItem("ds_dir_"+id)));}catch(e){return normalizeDirection(null);}}
+function saveDirection(id,d){
+  const v=normalizeDirection(d);
+  try{if(v.next||v.note)localStorage.setItem("ds_dir_"+id,JSON.stringify(v));else localStorage.removeItem("ds_dir_"+id);}catch(e){toast("Could not save the direction.");}
+}
+function renderDirectorBar(){
+  const bar=$("#directorBar"),d=currentId&&!isWorkflow()?directionFor(currentId):{next:"",note:""};
+  bar.hidden=!d.next&&!d.note;if(bar.hidden){bar.innerHTML="";return;}
+  bar.innerHTML=(d.next?'<button type="button" class="dir-pill next" data-open>'+icon("clapper")+'<span><b>Next reply:</b> '+esc(d.next)+'</span></button><button type="button" class="dir-x" data-clear-next aria-label="Remove next-reply direction">'+icon("x")+'</button>':"")+
+    (d.note?'<button type="button" class="dir-pill note" data-open>'+icon("note")+'<span><b>Author\'s note on</b></span></button>':"");
+  bar.querySelectorAll("[data-open]").forEach(b=>b.onclick=openDirector);
+  const x=bar.querySelector("[data-clear-next]");if(x)x.onclick=()=>{saveDirection(currentId,{...directionFor(currentId),next:""});renderDirectorBar();toast("Direction removed");};
+}
+function openDirector(){
+  if(isWorkflow()){toast("The director works in agent and group chats.");return;}
+  const d=directionFor(currentId);$("#dirNext").value=d.next;$("#dirNote").value=d.note;
+  $("#dirPresets").innerHTML=NOTE_PRESETS.map(([label],i)=>'<button type="button" class="chip-btn all" data-i="'+i+'"><span>'+esc(label)+'</span></button>').join("");
+  $("#dirPresets").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
+    const line=NOTE_PRESETS[Number(b.dataset.i)][1].replace("{{user}}",roleplay?.user?.name||"the user"),box=$("#dirNote");
+    if(!box.value.includes(line))box.value=(box.value.trim()?box.value.trim()+"\n":"")+line;
+  });
+  closeAll();openSheet("#directorSheet");
+}
+$("#dirSave").onclick=()=>{saveDirection(currentId,{next:$("#dirNext").value,note:$("#dirNote").value});closeAll();renderDirectorBar();toast("🎬 Direction saved");};
+$("#dirClear").onclick=()=>{$("#dirNext").value="";$("#dirNote").value="";saveDirection(currentId,{});renderDirectorBar();};
+$("#dirTwist").onclick=async()=>{
+  if(!anyProviderReady()){toast("Add your API key in Settings");return;}
+  const b=$("#dirTwist");b.disabled=true;const label=b.innerHTML;b.innerHTML=icon("dice")+"Thinking…";
+  try{
+    const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
+    const twist=(await quickCompletion(twistMessages(messages,roleplay?.user?.name),undefined,120)).trim().replace(/^["']|["']$/g,"");
+    if(twist)$("#dirNext").value=twist;else toast("No idea came back. Try again.");
+  }catch(e){toast("Could not get a twist: "+e.message);}
+  finally{b.disabled=false;b.innerHTML=label;}
+};
+$("#dirMenu").onclick=openDirector;
+
 /* ---------- Chat options menu: download as text / Markdown, share, duplicate, clear ---------- */
 function currentChatExport(){
   const item=isWorkflow()?curWorkflow():isGroup()?curGroup():curAgent();
@@ -1447,7 +1490,7 @@ function renderAttachments(){
     remove.onclick=()=>{pendingImages.splice(index,1);renderAttachments();};item.append(img,remove);tray.append(item);
   });
   $("#attachBtn").disabled=readingImages||!!controller;
-  $("#draftBtn").disabled=readingImages||!!controller;$("#draftBtn").hidden=isWorkflow();renderWebBtn();
+  $("#draftBtn").disabled=readingImages||!!controller;$("#draftBtn").hidden=isWorkflow();renderWebBtn();renderDirectorBar();
   $("#attachBtn").title="Attach images or paste a screenshot";
 }
 async function prepareImage(file){
@@ -1569,7 +1612,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
   controller=new AbortController();
   const signal=controller.signal;
   setSending(true);renderResponders();renderChat();acquireWakeLock();
-  let aborted=false;
+  let aborted=false,usedNext=false;
   try{
     if(search){
       try{
@@ -1580,6 +1623,12 @@ async function streamCompletion(agent,apiMessages,meta={}){
         }
       }catch(e){if(signal.aborted)throw e;toast("🌐 "+(e instanceof TypeError?"Could not reach Exa.":e.message)+" Replying without search.");}
       bot.searching=false;scheduleStreamPaint(bot);
+    }
+    // Scene director: the author's note always; the one-shot direction except when continuing a cut-off reply.
+    const direction=meta.workflowRoleId?null:directionFor(convId);
+    if(direction&&(direction.note||direction.next)){
+      payload.messages=withDirection(payload.messages,direction,{includeNext:!meta.noSearch});
+      usedNext=!meta.noSearch&&!!direction.next;
     }
     // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
@@ -1644,6 +1693,8 @@ async function streamCompletion(agent,apiMessages,meta={}){
     controller=null;setSending(false);
     renderChat();try{store.saveConv(convId,conversationMessages);}catch(error){toast("Response received, but browser storage is full. This reply is not saved.");}renderResponders();
   }
+  // A one-shot direction is used up once a reply has actually been written.
+  if(usedNext&&!aborted&&!bot.error&&bot.content&&!REPLY_PLACEHOLDERS.has(bot.content)){const d=directionFor(convId);saveDirection(convId,{...d,next:""});if(convId===currentId)renderDirectorBar();}
   return {ok:!aborted&&!bot.error&&!bot.interrupted,aborted,bot};
 }
 // Runs the request in the service worker when one controls the page, so the reply keeps streaming while the app

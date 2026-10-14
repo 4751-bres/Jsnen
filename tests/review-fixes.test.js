@@ -12,7 +12,7 @@ function streamHarness(responses){
     store:{k:'test',base:'https://api.deepseek.com',model:'deepseek-flash',saveConv(id,list){saved.push(structuredClone(list));}},
     currentId:'chat',messages:[{role:'user',content:'Hi'}],controller:null,
     renderChat(){},scheduleStreamPaint(){},cancelStreamPaint(){},renderResponders(){},setSending(){},toast:t=>toasts.push(t),$:()=>({click(){}}),
-    webSearchWanted:()=>false,modelSeesImages:()=>true,replyTokenLimit:core.replyTokenLimit,buildChatRequest:core.buildChatRequest,isLocalBase:core.isLocalBase,friendlyApiError:core.friendlyApiError,isRetryableStatus:core.isRetryableStatus,
+    webSearchWanted:()=>false,directionFor:()=>({next:'',note:''}),modelSeesImages:()=>true,replyTokenLimit:core.replyTokenLimit,buildChatRequest:core.buildChatRequest,isLocalBase:core.isLocalBase,friendlyApiError:core.friendlyApiError,isRetryableStatus:core.isRetryableStatus,
     fetch:async(url,opts)=>{calls.push(JSON.parse(opts.body));const next=responses.shift();return typeof next==='function'?next(opts):next;}};
   vm.createContext(ctx);
   const code=page.match(/async function streamCompletion\(agent,apiMessages,meta=\{\}\)\{[\s\S]*?(?=\n\/\* ---------- Stream one response from a specific agent)/)[0];

@@ -321,6 +321,20 @@ body[data-mood="fiction"] .msg:not(.show-actions) .reply-meta>.tok:first-child+*
 /* Optional message buttons (Settings → Message buttons) */
 body.hide-speak .act-speak,body.hide-pin .act-pin{display:none!important}
 
+/* Scene director */
+.director-bar{display:flex;gap:6px;align-items:center;padding:6px max(12px,calc((100% - var(--column)) / 2)) 0;background:var(--bg)}
+.director-bar[hidden]{display:none}
+.dir-pill{display:flex;align-items:center;gap:6px;min-width:0;min-height:36px;padding:4px 10px;border:1px solid var(--line);border-radius:var(--radius-pill);
+  background:var(--surface-1);color:var(--text-2);font:inherit;font-size:13px;cursor:pointer}
+.dir-pill.next{flex:1;border-color:var(--accent);background:var(--accent-soft)}
+.dir-pill span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dir-pill b{color:var(--text);font-weight:600}
+.dir-pill svg{flex:none;width:16px;height:16px;color:var(--accent)}
+.dir-x{flex:none;width:36px;height:36px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:transparent;color:var(--text-3);cursor:pointer}
+.dir-x svg{width:16px;height:16px}
+.dir-presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.dir-presets .chip-btn{min-height:36px}
+
 /* Chat options menu */
 .menu-list{display:flex;flex-direction:column;gap:6px}
 .menu-item{display:flex;align-items:center;gap:14px;width:100%;min-height:60px;padding:10px 14px;border:1px solid var(--line);border-radius:var(--radius-md);

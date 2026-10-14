@@ -37,6 +37,7 @@ test("an in-flight response stays bound to its originating conversation", async 
     replyTokenLimit: core.replyTokenLimit,
     buildChatRequest: core.buildChatRequest,
     webSearchWanted: () => false,
+    directionFor: () => ({ next: '', note: '' }),
     isLocalBase: core.isLocalBase,
     friendlyApiError: core.friendlyApiError,
     isRetryableStatus: core.isRetryableStatus,

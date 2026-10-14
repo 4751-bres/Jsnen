@@ -42,6 +42,7 @@
     </div>
   </div>
 
+  <div class="director-bar" id="directorBar" hidden></div>
   <div class="attachments" id="attachments" aria-live="polite"></div>
   <input id="imageFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
   <div class="composer">
@@ -234,6 +235,26 @@
     </div>
   </section>
 
+  <!-- Scene director -->
+  <section class="sheet bottom" id="directorSheet">
+    <h3><span class="grow">Scene director</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body">
+      <div class="hint" style="margin-top:0">Steer the story without writing it into the chat. Characters follow these quietly and never see them as your words.</div>
+      <label for="dirNext">Next reply only</label>
+      <textarea class="field" id="dirNext" rows="3" placeholder="e.g. She finally admits why she came back."></textarea>
+      <button class="btn" id="dirTwist" type="button" style="margin-top:8px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="15" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/></svg>Surprise me</button>
+      <div class="hint">Used once, then cleared. 🎲 Surprise me suggests a twist from the recent story (1 small request).</div>
+      <label for="dirNote">Author's note — every reply</label>
+      <textarea class="field" id="dirNote" rows="4" placeholder="e.g. Slow burn. Present tense. Keep replies under 200 words."></textarea>
+      <div class="dir-presets" id="dirPresets"></div>
+      <div class="hint">Stays on for this chat until you clear it. Sent after the latest message, where it has the most effect.</div>
+    </div>
+    <div class="foot">
+      <button class="btn primary" id="dirSave" type="button">Save</button>
+      <button class="btn ghost" id="dirClear" type="button" style="flex:0 0 auto">Clear</button>
+    </div>
+  </section>
+
   <!-- Chat options -->
   <section class="sheet bottom" id="chatMenu">
     <h3><span class="grow" id="chatMenuTitle">This chat</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
@@ -241,6 +262,7 @@
       <button class="menu-item" id="dlTxt" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><b>Download as text</b><small>A .txt file you can open anywhere</small></span></button>
       <button class="menu-item" id="shareTxt" type="button" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4M8.2 13.2l7.6 4"/></svg><span><b>Share as text</b><small>Send the .txt to another app</small></span></button>
       <button class="menu-item" id="dlMd" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg><span><b>Download as Markdown</b><small>Keeps formatting, for notes apps</small></span></button>
+      <button class="menu-item" id="dirMenu" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 9l1.2-4 14.6 0L21 9M9 5l-1.5 4M14 5l-1.5 4M19 5l-1.5 4"/></svg><span><b>Scene director</b><small>Steer the next reply, set an author's note</small></span></button>
       <button class="menu-item" id="duplicateChatBtn" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span><b>Duplicate chat</b><small>An independent copy with all messages</small></span></button>
       <button class="menu-item danger" id="clearBtn" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M6.5 16.5l8-8a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L13 18H8z"/></svg><span><b>Clear chat</b><small>You can undo for a few seconds</small></span></button>
     </div>

@@ -566,6 +566,42 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+
+/* director-core:start */
+// Scene director: a one-shot direction for the next reply and a standing author's note, both hidden from the story.
+const NOTE_PRESETS=[
+  ["Shorter replies","Keep replies short: one or two paragraphs."],
+  ["More detail","Write rich, sensory detail and inner thoughts."],
+  ["More dialogue","Favour spoken dialogue over narration."],
+  ["Slow burn","Let tension build slowly; do not rush intimacy or resolutions."],
+  ["Raise the stakes","Introduce complications and raise the stakes."],
+  ["Lighter tone","Keep the tone playful and light."],
+  ["Present tense","Narrate actions in present tense."],
+  ["No speaking for me","Never write {{user}}'s actions, words, or thoughts."]
+];
+function normalizeDirection(raw){
+  const d=raw&&typeof raw==="object"?raw:{};
+  return {next:String(d.next||"").trim().slice(0,1500),note:String(d.note||"").trim().slice(0,3000)};
+}
+function directionBlock(direction,{includeNext=true}={}){
+  const d=normalizeDirection(direction),parts=[];
+  if(d.note)parts.push("Author's note (standing direction for this whole story; follow it, never mention it):\n"+d.note);
+  if(includeNext&&d.next)parts.push("Director's instruction for your next reply only (make it happen naturally in the story; never mention the instruction or break character):\n"+d.next);
+  return parts.join("\n\n");
+}
+// Placed after the latest message, where models weigh it most.
+function withDirection(apiMessages,direction,options){
+  const block=directionBlock(direction,options);
+  return block?[...(apiMessages||[]),{role:"system",content:block}]:[...(apiMessages||[])];
+}
+// The prompt for the 🎲 Surprise me button: one fitting twist from the recent story.
+function twistMessages(list,userName){
+  const turns=(list||[]).filter(m=>(m.role==="user"||m.role==="assistant")&&!m.error&&m.content).slice(-8)
+    .map(m=>(m.role==="user"?(userName||"User"):(m.characterName||m.agentName||"Character"))+": "+String(m.content).slice(0,1000)).join("\n\n");
+  return [{role:"system",content:"You are the director of an ongoing interactive story. Suggest ONE surprising but believable development for the next reply, as a single short instruction (under 30 words) such as \"A stranger knocks at the door, soaked from the storm.\" Fit the tone and characters. Do not decide the user's actions. Reply with the instruction only."},
+    {role:"user",content:turns||"(The story has not started yet.)"}];
+}
+/* director-core:end */
 /* text-export:start */
 // A chat as plain text: readable anywhere (Notes, e-mail, any phone), with times, day breaks and sources.
 function pad2(n){return String(n).padStart(2,"0");}

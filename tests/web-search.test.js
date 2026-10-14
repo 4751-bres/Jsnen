@@ -46,7 +46,7 @@ test('a searching reply sends results in the prompt and saves its sources',async
     store:{k:'test',base:'https://api.deepseek.com',model:'deepseek-flash',saveConv(){}},
     currentId:'chat',messages:[],controller:null,
     renderChat(){},scheduleStreamPaint(){},cancelStreamPaint(){},renderResponders(){},setSending(){},toast(){},$:()=>({click(){}}),
-    webSearchWanted:()=>true,runWebSearch:async()=>({query:'paris weather',results:[{title:'Météo',url:'https://m.fr',date:'',text:'Sunny'}]}),
+    directionFor:()=>({next:'',note:''}),webSearchWanted:()=>true,runWebSearch:async()=>({query:'paris weather',results:[{title:'Météo',url:'https://m.fr',date:'',text:'Sunny'}]}),
     searchResultsBlock:core.searchResultsBlock,withSearchResults:core.withSearchResults,
     modelSeesImages:()=>true,replyTokenLimit:core.replyTokenLimit,friendlyApiError:core.friendlyApiError,isRetryableStatus:core.isRetryableStatus,
     buildChatRequest:core.buildChatRequest,isLocalBase:core.isLocalBase,
