@@ -668,7 +668,7 @@ function renderWorkflowUi(){
   $("#cancelWorkflow").style.display="block";
 }
 function loadConv(){
-  pendingImages=[];renderAttachments();$("#ideaRow").hidden=true;
+  pendingImages=[];renderAttachments();hideIdeas();
   messages=store.conv(currentId);currentRun=isWorkflow()?store.run(currentId):null;renderChatBg();
   try{input.value=localStorage.getItem(draftKey())||"";}catch(e){input.value="";}autoGrow();
   if(currentRun)store.saveRun(currentId,currentRun);
@@ -1253,7 +1253,7 @@ async function exaSearch(query,signal){
 function renderWebBtn(){
   const b=$("#webBtn");b.hidden=!store.exaKey||isWorkflow();
   b.classList.toggle("on",store.webOn);b.setAttribute("aria-pressed",String(store.webOn));
-  $("#webBtnLabel").textContent=store.webOn?"Web: on":"Web: off";
+  $("#webBtnLabel").textContent="Web";
   $("#toolsBtn").classList.toggle("web-on",!!store.exaKey&&store.webOn&&!isWorkflow());
   b.title=store.webOn?"Web search on: replies search the web first. Tap to turn off.":"Web search off. Tap to search the web before each reply.";
   b.disabled=!!controller;
@@ -1262,7 +1262,7 @@ function renderWebBtn(){
 function setToolsOpen(open){$("#composerTools").hidden=!open;$("#toolsBtn").setAttribute("aria-expanded",String(open));}
 $("#toolsBtn").onclick=()=>setToolsOpen($("#composerTools").hidden);
 // Any tool closes the tray; so does going back to typing.
-$("#composerTools").addEventListener("click",e=>{if(e.target.closest("button:not(:disabled)"))setTimeout(()=>setToolsOpen(false),0);});
+$("#composerTools").addEventListener("click",e=>{if(e.target.closest("button"))setTimeout(()=>setToolsOpen(false),0);});
 document.getElementById("input").addEventListener("focus",()=>{setToolsOpen(false);document.body.classList.add("typing");});
 document.getElementById("input").addEventListener("blur",()=>setTimeout(()=>{if(document.activeElement!==document.getElementById("input"))document.body.classList.remove("typing");},150));
 // Keep the whole app above the on-screen keyboard (iOS and browsers without interactive-widget support).
@@ -1967,22 +1967,23 @@ async function suggestIdeas(){
   const persona=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user:null;
   const name=persona?.name||"the user",other=isGroup()?"":curAgent().name;
   const transcript=usable.slice(-30).map(m=>"["+(m.role==="user"?name:(m.characterName||m.agentName||other||"Assistant"))+"]: "+messageText(historyText(m)||m.content)).join("\n\n");
-  const row=$("#ideaRow");row.hidden=false;row.innerHTML='<span class="typing"><i></i><i></i><i></i><span>Thinking of ideas…</span></span>';
+  const row=$("#ideaRow");row.hidden=false;document.body.classList.add("ideas-open");row.innerHTML='<span class="typing"><i></i><i></i><i></i><span>Thinking of ideas…</span></span>';
   try{
     const text=await withBusy(signal=>quickCompletion([{role:"system",content:ideaInstruction(name,persona?.description)},
       {role:"user",content:"Conversation so far:\n\n"+transcript+"\n\nThree options for "+name+"'s next message:"}],signal,500));
     const ideas=parseIdeas(text);
-    if(!ideas.length){row.hidden=true;toast("No ideas came back. Try again.");return;}
+    if(!ideas.length){hideIdeas();toast("No ideas came back. Try again.");return;}
     row.innerHTML="";
     for(const idea of ideas){
       const b=document.createElement("button");b.type="button";b.className="idea";b.innerHTML=md(idea);
-      b.onclick=()=>{input.value=idea;input.dispatchEvent(new Event("input"));row.hidden=true;input.focus();};
+      b.onclick=()=>{input.value=idea;input.dispatchEvent(new Event("input"));hideIdeas();input.focus();};
       row.appendChild(b);
     }
-    const close=document.createElement("button");close.type="button";close.className="idea-x";close.innerHTML=icon("x");close.setAttribute("aria-label","Hide ideas");close.onclick=()=>{row.hidden=true;};
+    const close=document.createElement("button");close.type="button";close.className="idea-x";close.innerHTML=icon("x");close.setAttribute("aria-label","Hide ideas");close.onclick=hideIdeas;
     row.appendChild(close);
-  }catch(error){row.hidden=true;if(error.name!=="AbortError")toast("Could not get ideas: "+(error.message||"try again"));}
+  }catch(error){hideIdeas();if(error.name!=="AbortError")toast("Could not get ideas: "+(error.message||"try again"));}
 }
+function hideIdeas(){$("#ideaRow").hidden=true;document.body.classList.remove("ideas-open");}
 $("#ideasBtn").onclick=suggestIdeas;
 
 
