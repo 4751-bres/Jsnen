@@ -1331,7 +1331,41 @@ function fitToViewport(){
   const vv=window.visualViewport;if(!vv)return;
   document.documentElement.style.setProperty("--app-h",Math.round(vv.height)+"px");
   if(window.scrollY)window.scrollTo(0,0);
+  // Without content resizing the browser may pan the visible area down to the focused box; follow it.
+  const top=Math.max(0,Math.round(vv.offsetTop));
+  document.body.style.transform=top?"translateY("+top+"px)":"";
 }
+// Pick the keyboard-resize mode this phone handles correctly: from Settings → Phone, or detected (saved per phone).
+function devicePref(){try{return localStorage.getItem("ds_device")||"auto";}catch(e){return "auto";}}
+function applyViewportMode(){
+  const meta=document.querySelector('meta[name="viewport"]');if(!meta)return;
+  let plain=false;try{plain=localStorage.getItem("ds_viewport_plain")==="1";}catch(e){}
+  meta.setAttribute("content",viewportFor(devicePref(),plain));
+  setTimeout(fitToViewport,50);
+}
+$("#deviceSelect").innerHTML=Object.entries(DEVICE_PROFILES).map(([k,p])=>'<option value="'+k+'">'+esc(p.name)+'</option>').join("");
+$("#deviceSelect").onchange=e=>{
+  try{localStorage.setItem("ds_device",e.target.value);if(e.target.value==="auto")localStorage.removeItem("ds_viewport_plain");}catch(err){}
+  applyViewportMode();toast("Saved for this phone: "+DEVICE_PROFILES[e.target.value].name);
+};
+(()=>{
+  const meta=document.querySelector('meta[name="viewport"]');if(!meta)return;
+  applyViewportMode();
+  if(devicePref()!=="auto")return;
+  let plain=false;try{plain=localStorage.getItem("ds_viewport_plain")==="1";}catch(e){}
+  if(plain)return;
+  const portraitNow=()=>matchMedia("(orientation: portrait)").matches;
+  let startWidth=innerWidth,startPortrait=portraitNow();
+  addEventListener("resize",()=>{
+    const portrait=portraitNow();
+    if(portrait!==startPortrait){startPortrait=portrait;startWidth=innerWidth;return;}
+    if(keyboardWidthBug(startWidth,innerWidth,startPortrait,portrait)){
+      meta.setAttribute("content",VIEWPORT_PLAIN);
+      try{localStorage.setItem("ds_viewport_plain","1");}catch(e){}
+      setTimeout(fitToViewport,50);
+    }
+  });
+})();
 if(window.visualViewport){visualViewport.addEventListener("resize",fitToViewport);visualViewport.addEventListener("scroll",fitToViewport);fitToViewport();}
 $("#webBtn").onclick=()=>{store.webOn=!store.webOn;renderWebBtn();toast(store.webOn?"🌐 Web search on — replies will search the web and cite sources":"Web search off");};
 // Folded by default: one small line at the end of the reply; tap it to see the list.
@@ -1958,7 +1992,7 @@ function downloadFile(name,text,type){
 function applyMessageButtons(){
   document.body.classList.toggle("hide-speak",!store.showSpeak);
   document.body.classList.toggle("hide-pin",!store.showPin);
-  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
+  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#deviceSelect").value=devicePref();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
 }
 $("#notifyReplies").onchange=async e=>{
   if(!e.target.checked){store.notifyReplies=false;return;}

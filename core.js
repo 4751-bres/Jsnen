@@ -663,6 +663,20 @@ function waitingLabel(name,providerName,keepAlives,elapsedMs){
   return (name||"Your agent")+" is typing…"+(secs>=10?" · "+secs+"s":"");
 }
 /* waiting-core:end */
+/* viewport-core:start */
+// Some browsers (Samsung Internet beta on some phones) change the page WIDTH when the keyboard opens if
+// interactive-widget=resizes-content is set. A width change without a rotation means that mode is broken here.
+const VIEWPORT_PLAIN="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover";
+const VIEWPORT_RESIZE=VIEWPORT_PLAIN+", interactive-widget=resizes-content";
+// Phone profiles chosen in Settings (saved per phone): which keyboard-resize mode to use.
+const DEVICE_PROFILES={auto:{name:"Automatic"},samsung:{name:"Samsung Galaxy S25+",viewport:"resize"},honor:{name:"Honor Magic 8 Lite",viewport:"plain"},other:{name:"Other phone",viewport:"plain"}};
+function viewportFor(profile,detectedPlain){
+  const p=DEVICE_PROFILES[profile]||DEVICE_PROFILES.auto;
+  const mode=p.viewport||(detectedPlain?"plain":"resize");
+  return mode==="plain"?VIEWPORT_PLAIN:VIEWPORT_RESIZE;
+}
+function keyboardWidthBug(startWidth,width,startPortrait,portrait){return startPortrait===portrait&&Math.abs(width-startWidth)>2;}
+/* viewport-core:end */
 /* drawer-swipe-core:start */
 // Edge swipe for the chat list: where a drag may start, and whether letting go opens or closes it.
 const EDGE_ZONE=44;
