@@ -2,6 +2,7 @@
 const $ = s => document.querySelector(s);
 // Line icons (24px grid, stroke = currentColor); styled by svg.i in styles.css.
 const ICONS={
+  star:'<path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.9l-5.3 2.7 1-5.8-4.2-4.1 5.9-.9z"/>',
   sparkle:'<path d="M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z"/>',
   clapper:'<path d="M4 11h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 11L3.2 7.6 18.6 3.8l.8 3.4z"/><path d="M8.2 6.6l2.4 3.1M13.2 5.4l2.4 3.1"/>',
   note:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
@@ -498,8 +499,9 @@ function updateChatRow(m,d){
   const note=m.interrupted?"⚠ connection lost — reply incomplete":m.finish?"⚠ "+(FINISH_NOTES[m.finish]||m.finish):m.truncated?"⚠ "+FINISH_NOTES.length:"";
   // Time only: the day divider above already shows the date.
   const time=messageTime(m.at,m.at);
+  if(d._star){d._star.classList.toggle("on",!!m.starred);const t=m.starred?"Remove bookmark":"Bookmark message";d._star.title=t;d._star.setAttribute("aria-label",t);}
   const bond=m.bond?'<span class="bond" title="'+esc(bondLabel(m.bond.level))+'">❤ '+m.bond.level+(m.bond.change?'<i class="'+(m.bond.change>0?"up":"down")+'">'+(m.bond.change>0?"+":"")+m.bond.change+'</i>':"")+'</span>':"";
-  const meta=bond+(time?'<span>'+time+'</span>':"")+(note?'<span class="w">'+esc(note)+'</span>':"")+
+  const meta=(m.starred?'<span class="star-mark" title="Bookmarked">★</span>':"")+bond+(time?'<span>'+time+'</span>':"")+(note?'<span class="w">'+esc(note)+'</span>':"")+
     (m.usage?'<span class="tok">'+formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+' out</span>':"");
   if(d._continue)d._continue.hidden=!(m.truncated&&!m.streaming&&messages.at(-1)===m);
   if(d._metaHtml!==meta){d._meta.innerHTML=meta;d._metaHtml=meta;}
@@ -634,6 +636,7 @@ function createChatRow(m){
         if(globalThis.speechSynthesis){const listen=actionButton("speaker","Read aloud",()=>speakMessage(m),"act-speak");actions.appendChild(listen);}
         const regenerate=actionButton("regen","Regenerate reply (uses API)",()=>regenerateMessage(m));regenerate.disabled=!!controller||!!m.streaming;actions.appendChild(regenerate);
       }
+      d._star=actionButton("star","Bookmark message",()=>toggleBookmark(m),"act-star");actions.appendChild(d._star);
       const pin=actionButton("pin","Add to story memory",()=>pinToMemory(m),"act-pin");actions.appendChild(pin);
       const edit=actionButton("pencil","Edit message",()=>openMessageEditor(m));edit.disabled=!!controller||!!m.streaming;actions.appendChild(edit);
       const remove=actionButton("trash","Delete message",()=>deleteMessage(m));remove.disabled=!!controller||!!m.streaming;actions.appendChild(remove);
@@ -1609,6 +1612,27 @@ $("#edExportCard").onclick=()=>{const a=agents.find(x=>x.id===editingId);if(a)ex
   });
   chat.addEventListener("touchcancel",()=>{if(start){start.row.style.transform="";start.row.classList.remove("swiping");start=null;}});
 })();
+
+/* ---------- Bookmarks: star messages and jump back to them ---------- */
+function toggleBookmark(m){
+  if(isWorkflow())return;
+  m.starred=!m.starred;if(!m.starred)delete m.starred;
+  try{store.saveConv(currentId,messages);}catch(e){toast("Could not save the bookmark.");return;}
+  renderChat();toast(m.starred?"★ Bookmarked · ⋯ → Bookmarks to find it again":"Bookmark removed");
+}
+function openBookmarks(){
+  if(isWorkflow()){toast("Bookmarks work in agent and group chats.");return;}
+  const list=bookmarkList(messages),user=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user.name:"You",other=isGroup()?"":curAgent()?.name;
+  $("#bookmarkList").innerHTML=list.length?"":'<div class="hint" style="margin:0">No bookmarks yet. Tap a message, then ☆ to bookmark it.</div>';
+  for(const b of list){
+    const row=document.createElement("button");row.type="button";row.className="world-row";
+    row.innerHTML='<span class="star-mark">★</span><span class="world-meta"><b>'+esc(b.role==="user"?user:(b.who||other||"Reply"))+(b.at?' · <small style="display:inline">'+esc(messageTime(b.at))+'</small>':"")+'</b><small style="white-space:normal">'+esc(b.preview)+'</small></span>';
+    row.onclick=()=>{closeAll();setTimeout(()=>focusMessage(b.index),250);};
+    $("#bookmarkList").appendChild(row);
+  }
+  closeAll();openSheet("#bookmarkSheet");
+}
+$("#bookmarkMenu").onclick=openBookmarks;
 
 /* ---------- Chapters: named breaks in long stories ---------- */
 function chaptersFor(id){try{return normalizeChapters(JSON.parse(localStorage.getItem("ds_chap_"+id)));}catch(e){return [];}}

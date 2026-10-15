@@ -384,6 +384,12 @@ body[data-mood="workflow"] header .title .sub::after{content:""}
 :root[data-theme="light"] .initials{color:var(--ini-l)}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .initials{color:var(--ini-l)}}
 
+/* Bookmarks */
+.star-mark{color:#fbbf24;font-size:13px;line-height:1}
+.world-row .star-mark{flex:none;font-size:16px}
+.copy-msg.act-star.on{color:#fbbf24}
+.copy-msg.act-star.on svg{fill:currentColor}
+
 /* App lock */
 .lock-screen{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
   padding:24px 16px calc(24px + var(--safe-b));background:var(--bg);text-align:center}

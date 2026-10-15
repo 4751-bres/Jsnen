@@ -573,6 +573,14 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* bookmarks-core:start */
+// Bookmarked messages in chat order, with a short preview for the list.
+function bookmarkList(list){
+  return (list||[]).map((m,index)=>({m,index})).filter(x=>x.m&&x.m.starred&&(x.m.role==="user"||x.m.role==="assistant"))
+    .map(({m,index})=>({index,at:m.at||0,role:m.role,who:m.role==="user"?"":(m.characterName||m.agentName||""),
+      preview:String(m.content||"").replace(/\s+/g," ").trim().slice(0,140)||(m.images?.length?"[image]":"")}));
+}
+/* bookmarks-core:end */
 /* lock-core:start */
 // App lock: a PIN screen for privacy from people around you (the data itself stays in this browser).
 function validPin(pin){return /^\d{4,8}$/.test(String(pin||""));}
