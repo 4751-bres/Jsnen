@@ -25,6 +25,7 @@
     <button class="icon-btn" id="setBtn" aria-label="Settings" title="Settings"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
   </header>
 
+  <div id="chatBg" aria-hidden="true"></div>
   <main id="chat"></main>
   <button id="jumpToLatest" type="button" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>Latest</button>
 
@@ -123,6 +124,19 @@
         <option value="dark">Dark</option>
         <option value="light">Light</option>
       </select>
+
+      <label>Accent colour</label>
+      <div class="swatch-row" id="accentRow" role="group" aria-label="Accent colour"></div>
+      <div class="appearance-grid">
+        <div><label for="textSize">Text size</label>
+          <select class="field" id="textSize"><option value="14">Small</option><option value="16">Default</option><option value="18">Large</option><option value="20">Larger</option><option value="22">Huge</option></select></div>
+        <div><label for="msgFont">Reading font</label>
+          <select class="field" id="msgFont"><option value="system">System</option><option value="serif">Book (serif)</option><option value="mono">Typewriter</option></select></div>
+      </div>
+      <label for="density">Message spacing</label>
+      <select class="field" id="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select>
+      <label class="toggle-row"><input id="bubbles" type="checkbox" /> <span>Show AI replies in bubbles</span></label>
+      <div class="hint" style="margin-top:-6px">Chat backgrounds: ⋯ → Chat background in any chat.</div>
 
       <label for="ctxLimit">History sent to the AI</label>
       <select class="field" id="ctxLimit">
@@ -235,6 +249,21 @@
     </div>
   </section>
 
+  <!-- Chat background -->
+  <section class="sheet bottom" id="bgSheet">
+    <h3><span class="grow">Chat background</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body">
+      <div class="bg-tiles" id="bgTiles"></div>
+      <div id="bgDimRow">
+        <label for="bgDim">Dim the background <span id="bgDimValue" class="dim-value">45%</span></label>
+        <input id="bgDim" type="range" min="0" max="85" step="5" value="45" class="range" />
+      </div>
+      <input id="bgFile" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+      <button class="btn" id="bgForAll" type="button" style="width:100%;margin-top:12px">Use this for every chat without its own</button>
+      <div class="hint">Photos are resized and kept in this browser with the chat (and in backups). AI replies switch to bubbles over a background so they stay readable.</div>
+    </div>
+  </section>
+
   <!-- Story memory -->
   <section class="sheet bottom" id="memorySheet">
     <h3><span class="grow" id="memTitle">Story memory</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
@@ -279,6 +308,7 @@
       <button class="menu-item" id="dlTxt" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><b>Download as text</b><small>A .txt file you can open anywhere</small></span></button>
       <button class="menu-item" id="shareTxt" type="button" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4M8.2 13.2l7.6 4"/></svg><span><b>Share as text</b><small>Send the .txt to another app</small></span></button>
       <button class="menu-item" id="dlMd" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg><span><b>Download as Markdown</b><small>Keeps formatting, for notes apps</small></span></button>
+      <button class="menu-item" id="bgMenu" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/></svg><span><b>Chat background</b><small>A photo or ambience behind this chat</small></span></button>
       <button class="menu-item" id="memMenu" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 4.6L19 8.2l-3.8 3.4 1.1 5L12 14.1 7.7 16.6l1.1-5L5 8.2l5.1-.6z"/></svg><span><b>Story memory</b><small>Facts the characters always remember; AI suggestions</small></span></button>
       <button class="menu-item" id="dirMenu" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 11L3.2 7.6 18.6 3.8l.8 3.4z"/><path d="M8.2 6.6l2.4 3.1M13.2 5.4l2.4 3.1"/></svg><span><b>Scene director</b><small>Steer the next reply, set an author's note</small></span></button>
       <button class="menu-item" id="duplicateChatBtn" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span><b>Duplicate chat</b><small>An independent copy with all messages</small></span></button>

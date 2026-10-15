@@ -54,6 +54,8 @@ const store = {
   get modelCache(){try{return JSON.parse(localStorage.getItem("ds_models"))||{}}catch(e){return {}}}, set modelCache(v){localStorage.setItem("ds_models",JSON.stringify(v))},
   get exaKey(){return localStorage.getItem("ds_exa_key")||""}, set exaKey(v){if(v)localStorage.setItem("ds_exa_key",v);else localStorage.removeItem("ds_exa_key")},
   get webOn(){return localStorage.getItem("ds_web_on")==="1"}, set webOn(v){localStorage.setItem("ds_web_on",v?"1":"0")},
+  get appearance(){try{return normalizeAppearance(JSON.parse(localStorage.getItem("ds_appearance")));}catch(e){return normalizeAppearance(null);}},
+  set appearance(v){localStorage.setItem("ds_appearance",JSON.stringify(normalizeAppearance(v)));},
   get sort(){return localStorage.getItem("ds_sort")||"recent"}, set sort(v){localStorage.setItem("ds_sort",v)},
   get activity(){try{return JSON.parse(localStorage.getItem("ds_activity"))||{}}catch(e){return {}}},
   touch(id){try{const a=this.activity;a[id]=Date.now();localStorage.setItem("ds_activity",JSON.stringify(a));}catch(e){/* Sorting hint only. */}},
@@ -61,7 +63,7 @@ const store = {
   // as JSON strings so reads stay synchronous); otherwise they fall back to localStorage.
   records:null,db:null,onWriteError:null,
   channel:typeof BroadcastChannel!=="undefined"?new BroadcastChannel("ds-agents"):null,
-  isBigKey(k){return /^ds_(conv|run|sum)_/.test(k);},
+  isBigKey(k){return /^ds_(conv|run|sum|bg)_/.test(k);},
   raw(k){return this.records?(this.records.has(k)?this.records.get(k):null):localStorage.getItem(k);},
   setRaw(k,v){
     if(!this.records){localStorage.setItem(k,v);return;}
@@ -648,7 +650,7 @@ function renderWorkflowUi(){
 }
 function loadConv(){
   pendingImages=[];renderAttachments();
-  messages=store.conv(currentId);currentRun=isWorkflow()?store.run(currentId):null;
+  messages=store.conv(currentId);currentRun=isWorkflow()?store.run(currentId):null;renderChatBg();
   try{input.value=localStorage.getItem(draftKey())||"";}catch(e){input.value="";}autoGrow();
   if(currentRun)store.saveRun(currentId,currentRun);
   renderChat();refreshHeader();renderResponders();renderWorkflowUi();
@@ -826,7 +828,7 @@ $("#delAgent").onclick=()=>{
   if(!editingId)return;
   const doomed=agents.find(a=>a.id===editingId);if(!confirmDelete(doomed?.name||"this agent",store.conv(editingId).length))return;
   forgetItem(editingId);
-  agents=agents.filter(a=>a.id!==editingId);store.agents=agents;store.clearConv(editingId);
+  agents=agents.filter(a=>a.id!==editingId);store.agents=agents;store.clearConv(editingId);store.removeRaw("ds_bg_"+editingId);try{localStorage.removeItem("ds_dir_"+editingId);}catch(e){}
   // drop the deleted agent from any group memberships
   groups=groups.map(g=>groupAfterAgentDelete(g,editingId));store.groups=groups;
   if(currentKind==="agent"&&currentId===editingId){currentId=agents[0].id;store.cur=currentId;}
@@ -1065,7 +1067,7 @@ $("#delGroup").onclick=()=>{
   if(!editingGroupId)return;
   const doomed=groups.find(g=>g.id===editingGroupId);if(!confirmDelete(doomed?.name||"this group",store.conv(editingGroupId).length))return;
   forgetItem(editingGroupId);
-  groups=groups.filter(g=>g.id!==editingGroupId);store.groups=groups;store.clearConv(editingGroupId);
+  groups=groups.filter(g=>g.id!==editingGroupId);store.groups=groups;store.clearConv(editingGroupId);store.removeRaw("ds_bg_"+editingGroupId);try{localStorage.removeItem("ds_dir_"+editingGroupId);}catch(e){}
   if(currentKind==="group"&&currentId===editingGroupId){currentKind="agent";currentId=agents[0].id;store.kind="agent";store.cur=currentId;}
   renderAgents();loadConv();closeAll();toast("Group deleted");
 };
@@ -1210,6 +1212,7 @@ function sourcesHtml(m){
     (m.sources.length?'<ol>'+m.sources.map(s=>'<li><a href="'+esc(s.url)+'" target="_blank" rel="noopener"><b>'+esc(s.title)+'</b><small>'+esc(sourceHost(s.url))+'</small></a></li>').join("")+'</ol>':"");
 }
 
+try{applyAppearance();}catch(e){}
 /* ---------- Providers: DeepSeek (default) plus any OpenAI-compatible API, chosen per agent ---------- */
 function defaultProvider(){return {id:"",name:providerKind(store.base)==="deepseek"?"DeepSeek":"Default",base:store.base,key:store.k,model:store.model};}
 function providerById(id){return (id&&store.providers.find(p=>p.id===id))||defaultProvider();}
@@ -1335,6 +1338,85 @@ $("#checkKey").onclick=async()=>{
     out.textContent="✗ "+friendlyApiError(res.status,detail);
   }catch(e){out.textContent="✗ Could not reach "+base+". Check the base URL and your connection.";}
 };
+/* ---------- Appearance: accent, text size, font, spacing, bubbles ---------- */
+function themeIsLight(){const t=document.documentElement.dataset.theme;return t==="light"||(!t&&matchMedia("(prefers-color-scheme: light)").matches);}
+function applyAppearance(){
+  const a=store.appearance,root=document.documentElement;
+  for(const k of ACCENT_VARS)root.style.removeProperty(k);
+  for(const [k,v] of Object.entries(accentVars(a.accent,themeIsLight())))root.style.setProperty(k,v);
+  root.style.setProperty("--msg-size",a.size+"px");
+  if(FONT_STACKS[a.font])root.style.setProperty("--msg-font",FONT_STACKS[a.font]);else root.style.removeProperty("--msg-font");
+  root.dataset.density=a.density;document.body.classList.toggle("bubbles",a.bubbles);
+}
+function renderAppearanceControls(){
+  const a=store.appearance;
+  $("#accentRow").innerHTML=Object.entries(ACCENT_PALETTES).map(([id,p])=>{
+    const color=p?p[themeIsLight()?"light":"dark"][1]:(themeIsLight()?"#3653d4":"#4363e6");
+    return '<button type="button" class="swatch'+(a.accent===id?" on":"")+'" data-accent="'+id+'" style="--sw:'+color+'" aria-label="'+(p?p.name:"Blue")+'" aria-pressed="'+(a.accent===id)+'"></button>';
+  }).join("");
+  $("#accentRow").querySelectorAll(".swatch").forEach(b=>b.onclick=()=>{store.appearance={...store.appearance,accent:b.dataset.accent};applyAppearance();renderAppearanceControls();});
+  $("#textSize").value=String(a.size);$("#msgFont").value=a.font;$("#density").value=a.density;$("#bubbles").checked=a.bubbles;
+}
+for(const [id,key,cast] of [["#textSize","size",Number],["#msgFont","font",String],["#density","density",String]])
+  $(id).onchange=e=>{store.appearance={...store.appearance,[key]:cast(e.target.value)};applyAppearance();};
+$("#bubbles").onchange=e=>{store.appearance={...store.appearance,bubbles:e.target.checked};applyAppearance();};
+try{matchMedia("(prefers-color-scheme: light)").addEventListener("change",()=>applyAppearance());}catch(e){}
+
+/* ---------- Chat backgrounds: a photo or a preset behind each chat ---------- */
+function chatBackground(id){
+  let own=null,all=null;
+  try{own=JSON.parse(store.raw("ds_bg_"+id)||"null");}catch(e){}
+  try{all=JSON.parse(store.raw("ds_bg__all")||"null");}catch(e){}
+  return effectiveBackground(own,all);
+}
+function renderChatBg(){
+  const bg=currentId&&!isWorkflow()?chatBackground(currentId):null,image=backgroundImage(bg),layer=$("#chatBg");
+  layer.style.backgroundImage=image;layer.style.setProperty("--bg-dim",String(bg?.dim??.45));
+  document.body.classList.toggle("has-bg",!!image);
+}
+function saveChatBg(value){
+  try{if(value)store.setRaw("ds_bg_"+currentId,JSON.stringify(value));else store.removeRaw("ds_bg_"+currentId);}
+  catch(e){toast("Not enough browser storage for this background.");}
+  renderChatBg();renderBgSheet();
+}
+function ownChatBg(){try{return normalizeBackground(JSON.parse(store.raw("ds_bg_"+currentId)||"null"));}catch(e){return null;}}
+function renderBgSheet(){
+  const own=ownChatBg(),current=chatBackground(currentId);
+  const tile=(key,label,style,on,inner="")=>'<button type="button" class="bg-tile'+(on?" on":"")+'" data-bg="'+key+'" aria-pressed="'+on+'"><span style="'+style+'">'+inner+'</span><small>'+esc(label)+'</small></button>';
+  $("#bgTiles").innerHTML=tile("default","Default","",!own)+tile("none","None","background:var(--bg)",own?.kind==="none")+
+    Object.entries(BG_PRESETS).map(([k,p])=>tile(k,p.name,"background:"+p.css,own?.kind==="preset"&&own.value===k)).join("")+
+    tile("photo",own?.kind==="photo"?"Your photo":"Choose photo…",own?.kind==="photo"?"background-image:url('"+own.value+"');background-size:cover;background-position:center":"",own?.kind==="photo",own?.kind==="photo"?"":icon("plus"));
+  $("#bgTiles").querySelectorAll(".bg-tile").forEach(b=>b.onclick=()=>{
+    const key=b.dataset.bg,dim=Number($("#bgDim").value)/100;
+    if(key==="photo"){$("#bgFile").click();return;}
+    saveChatBg(key==="default"?null:key==="none"?{kind:"none",dim}:{kind:"preset",value:key,dim});
+  });
+  $("#bgDim").value=String(Math.round((current?.dim??.45)*100));$("#bgDimValue").textContent=$("#bgDim").value+"%";
+  $("#bgDimRow").hidden=!current||current.kind==="none";
+}
+function openBgSheet(){
+  if(isWorkflow()){toast("Backgrounds work in agent and group chats.");return;}
+  renderBgSheet();closeAll();openSheet("#bgSheet");
+}
+$("#bgDim").oninput=e=>{$("#bgDimValue").textContent=e.target.value+"%";$("#chatBg").style.setProperty("--bg-dim",String(Number(e.target.value)/100));};
+$("#bgDim").onchange=e=>{
+  const own=ownChatBg(),dim=Number(e.target.value)/100;
+  if(own)saveChatBg({...own,dim});
+  else{const all=chatBackground(currentId);if(all){try{store.setRaw("ds_bg__all",JSON.stringify({...all,dim}));}catch(err){}renderChatBg();}}
+};
+$("#bgFile").onchange=async e=>{
+  const file=e.target.files?.[0];e.target.value="";if(!file)return;
+  try{const image=await prepareImage(file);if(!/^data:image\/(jpeg|png|webp);base64,/.test(image.url))throw new Error("Choose a JPEG, PNG or WebP photo.");
+    saveChatBg({kind:"photo",value:image.url,dim:Number($("#bgDim").value)/100||.45});toast("Background set");}
+  catch(err){toast(err.message||"Could not use this photo.");}
+};
+$("#bgForAll").onclick=()=>{
+  const own=ownChatBg();
+  try{if(own)store.setRaw("ds_bg__all",JSON.stringify(own));else store.removeRaw("ds_bg__all");}catch(e){toast("Could not save.");return;}
+  renderChatBg();renderBgSheet();toast(own?"Used for every chat without its own background":"Default background removed");
+};
+$("#bgMenu").onclick=openBgSheet;
+
 /* ---------- Story memory sheet: edit facts from the chat, and let the AI suggest new ones ---------- */
 function openMemorySheet(){
   const owner=memoryOwner();if(!owner){toast("Story memory works in agent and group chats.");return;}
@@ -1456,8 +1538,8 @@ function applyMessageButtons(){
 $("#showSpeak").onchange=e=>{try{store.showSpeak=e.target.checked;}catch(err){}applyMessageButtons();if(!e.target.checked)globalThis.speechSynthesis?.cancel();};
 $("#showPin").onchange=e=>{try{store.showPin=e.target.checked;}catch(err){}applyMessageButtons();};
 applyMessageButtons();
-$("#themeSelect").onchange=e=>{applyTheme(e.target.value);try{localStorage.setItem("ds_theme",e.target.value);}catch(err){}};
-$("#setBtn").onclick=()=>{renderProviderList();try{$("#themeSelect").value=localStorage.getItem("ds_theme")||"";}catch(e){}refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#exaKey").value=store.exaKey;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
+$("#themeSelect").onchange=e=>{applyTheme(e.target.value);try{localStorage.setItem("ds_theme",e.target.value);}catch(err){}applyAppearance();renderAppearanceControls();};
+$("#setBtn").onclick=()=>{renderProviderList();renderAppearanceControls();try{$("#themeSelect").value=localStorage.getItem("ds_theme")||"";}catch(e){}refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#exaKey").value=store.exaKey;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
 $("#saveSettings").onclick=()=>{
   store.k=$("#apiKey").value.trim();
   store.exaKey=$("#exaKey").value.trim();renderWebBtn();

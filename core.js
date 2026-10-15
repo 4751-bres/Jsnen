@@ -568,6 +568,57 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+
+/* appearance-core:start */
+// Appearance: accent colour, reading size/font/spacing, AI bubbles, and per-chat backgrounds.
+// Each palette: [accent, fill, soft, user bubble, user bubble text] for dark and light themes.
+const ACCENT_PALETTES={
+  blue:null,
+  violet:{name:"Violet",dark:["#b39dfa","#7c5cf0","rgba(179,157,250,.15)","#2e2357","#f3efff"],light:["#6a48d6","#6a48d6","rgba(106,72,214,.10)","#ece6ff","#1e1240"]},
+  rose:{name:"Rose",dark:["#f48fb1","#d6457a","rgba(244,143,177,.15)","#4a1f33","#ffeef4"],light:["#c2185b","#c2185b","rgba(194,24,91,.09)","#fde4ee","#3d0a1f"]},
+  crimson:{name:"Crimson",dark:["#f87171","#c53030","rgba(248,113,113,.14)","#4a1d1d","#fff0f0"],light:["#b42318","#b42318","rgba(180,35,24,.08)","#fde3e1","#3d0b07"]},
+  amber:{name:"Amber",dark:["#f2b880","#c26a1b","rgba(242,184,128,.15)","#43301c","#fff4e8"],light:["#a5520c","#a5520c","rgba(165,82,12,.09)","#fbebd9","#3a1d03"]},
+  teal:{name:"Teal",dark:["#5eead4","#0f9488","rgba(94,234,212,.13)","#123f3b","#e8fffb"],light:["#0e7469","#0e7469","rgba(14,116,105,.09)","#dcf5f0","#06302b"]},
+  green:{name:"Green",dark:["#6ee7a0","#15803d","rgba(110,231,160,.13)","#163d27","#ecfff3"],light:["#137a3b","#137a3b","rgba(19,122,59,.09)","#def5e6","#082d16"]}
+};
+const ACCENT_VARS=["--accent","--accent-fill","--accent-soft","--bubble-user","--bubble-user-text","--mark"];
+function accentVars(name,light){
+  const p=ACCENT_PALETTES[name];if(!p)return {};
+  const [accent,fill,soft,bubble,bubbleText]=p[light?"light":"dark"];
+  return {"--accent":accent,"--accent-fill":fill,"--accent-soft":soft,"--bubble-user":bubble,"--bubble-user-text":bubbleText,"--mark":soft};
+}
+const TEXT_SIZES=[14,16,18,20,22];
+const FONT_STACKS={system:"",serif:'"Iowan Old Style","Palatino Linotype",Palatino,"Noto Serif",Georgia,serif',mono:'ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace'};
+function normalizeAppearance(raw){
+  const a=raw&&typeof raw==="object"?raw:{};
+  return {accent:Object.prototype.hasOwnProperty.call(ACCENT_PALETTES,a.accent)?a.accent:"blue",
+    size:TEXT_SIZES.includes(Number(a.size))?Number(a.size):16,
+    font:Object.prototype.hasOwnProperty.call(FONT_STACKS,a.font)?a.font:"system",
+    density:a.density==="compact"?"compact":"comfortable",bubbles:!!a.bubbles};
+}
+const BG_PRESETS={
+  dusk:{name:"Dusk",css:"linear-gradient(160deg,#2b1d4e 0%,#5b2a5e 45%,#c0587e 80%,#f0a07a 100%)"},
+  ocean:{name:"Ocean",css:"linear-gradient(170deg,#06213a 0%,#0b4f6c 50%,#1fa2a5 100%)"},
+  forest:{name:"Forest",css:"linear-gradient(165deg,#0d1f16 0%,#1d4430 55%,#4f7a4a 100%)"},
+  ember:{name:"Ember",css:"radial-gradient(120% 80% at 50% 110%,#d9541e 0%,#6e1d14 45%,#1a0b0b 100%)"},
+  rose:{name:"Rose",css:"linear-gradient(160deg,#3a1426 0%,#8a2d55 55%,#e58fb0 100%)"},
+  night:{name:"Night sky",css:"radial-gradient(1.5px 1.5px at 20% 30%,#fff8,transparent),radial-gradient(1px 1px at 70% 20%,#fff8,transparent),radial-gradient(1.5px 1.5px at 40% 70%,#fff6,transparent),radial-gradient(1px 1px at 85% 60%,#fff7,transparent),linear-gradient(180deg,#050816 0%,#14183a 60%,#2a2350 100%)"}
+};
+function normalizeBackground(raw){
+  const b=raw&&typeof raw==="object"?raw:null;if(!b)return null;
+  const dim=Math.max(0,Math.min(.85,Number(b.dim)));const d=Number.isFinite(dim)?dim:.45;
+  if(b.kind==="none")return {kind:"none",dim:d};
+  if(b.kind==="preset"&&BG_PRESETS[b.value])return {kind:"preset",value:b.value,dim:d};
+  if(b.kind==="photo"&&/^data:image\/(jpeg|png|webp);base64,/.test(String(b.value||"")))return {kind:"photo",value:b.value,dim:d};
+  return null;
+}
+// A chat's own background wins; otherwise the default for all chats.
+function effectiveBackground(own,fallback){return normalizeBackground(own)||normalizeBackground(fallback);}
+function backgroundImage(bg){
+  if(!bg||bg.kind==="none")return "";
+  return bg.kind==="preset"?BG_PRESETS[bg.value].css:'url("'+bg.value+'")';
+}
+/* appearance-core:end */
 /* memory-suggest-core:start */
 // Story memory suggestions: the helper model reads the recent story and proposes new lasting facts.
 function memoryExtractMessages(list,existing,userName){
