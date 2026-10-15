@@ -54,6 +54,9 @@ body[data-mood="workflow"]{--mood:var(--violet)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 html,body{height:100%;margin:0}
+/* The root paints the same colour as the app, so browser dark modes (Samsung Internet) cannot recolour the sides. */
+html{background:var(--bg)}
+header,.composer,.responders,.composer-tools,.idea-row,.director-bar,.attachments{width:100%;max-width:none;margin-left:0;margin-right:0}
 body{
   background:var(--bg);color:var(--text);font:16px/1.5 var(--font);
   display:flex;flex-direction:column;height:var(--app-h,100dvh);overflow:hidden;
