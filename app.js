@@ -1989,7 +1989,7 @@ $("#showSpeak").onchange=e=>{try{store.showSpeak=e.target.checked;}catch(err){}a
 $("#showPin").onchange=e=>{try{store.showPin=e.target.checked;}catch(err){}applyMessageButtons();};
 applyMessageButtons();
 $("#themeSelect").onchange=e=>{applyTheme(e.target.value);try{localStorage.setItem("ds_theme",e.target.value);}catch(err){}applyAppearance();renderAppearanceControls();};
-$("#setBtn").onclick=()=>{renderProviderList();renderAppearanceControls();try{$("#themeSelect").value=localStorage.getItem("ds_theme")||"";}catch(e){}refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#exaKey").value=store.exaKey;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
+$("#setBtn").onclick=()=>{renderProviderList();$("#syncSummary").textContent=syncPrefs.ready?"Set up · tap to upload or get chats":"Not set up";renderAppearanceControls();try{$("#themeSelect").value=localStorage.getItem("ds_theme")||"";}catch(e){}refreshStorageInfo();$("#keyStatus").textContent="";$("#ctxLimit").value=String(store.ctxLimit);$("#ctxSummary").checked=store.ctxSummary;$("#apiKey").value=store.k;$("#exaKey").value=store.exaKey;$("#baseUrl").value=store.base;$("#defModel").value=store.model;refreshConnPill();closeAll();openSheet("#settings");};
 $("#saveSettings").onclick=()=>{
   store.k=$("#apiKey").value.trim();
   store.exaKey=$("#exaKey").value.trim();renderWebBtn();
@@ -2870,6 +2870,126 @@ function handleArrival(){
   else if(open==="library")setTimeout(()=>$("#openLibrary").click(),300);
   else if(open==="import")setTimeout(()=>$("#importCard").click(),300);
 }
+
+/* ---------- Sync between devices (encrypted, through a private GitHub Gist in the user's account) ---------- */
+const syncPrefs={
+  get token(){return localStorage.getItem("ds_sync_token")||"";},get pass(){return localStorage.getItem("ds_sync_pass")||"";},
+  get gist(){return localStorage.getItem("ds_sync_gist")||"";},get device(){return localStorage.getItem("ds_sync_device")||"";},
+  get ready(){return !!(this.token&&this.pass);}
+};
+function syncSet(key,value){try{if(value)localStorage.setItem(key,value);else localStorage.removeItem(key);}catch(e){}}
+async function gh(path,options={}){
+  const res=await fetch("https://api.github.com"+path,{...options,headers:{"Accept":"application/vnd.github+json","Authorization":"Bearer "+syncPrefs.token,...(options.body?{"Content-Type":"application/json"}:{})}});
+  if(res.status===401)throw new Error("GitHub did not accept the token. Check it in Sync settings.");
+  if(res.status===403||res.status===404&&path.startsWith("/gists?"))throw new Error("The token can't use Gists. Create it with the “gist” permission.");
+  if(res.status===422)throw new Error("GitHub refused the upload (it may be too large: remove big images from chats).");
+  if(!res.ok)throw new Error("GitHub error (HTTP "+res.status+").");
+  return res.status===204?null:res.json();
+}
+async function findSyncGist(){
+  if(syncPrefs.gist){try{return await gh("/gists/"+syncPrefs.gist);}catch(e){if(!/HTTP 404/.test(e.message))throw e;syncSet("ds_sync_gist","");}}
+  for(let page=1;page<=5;page++){
+    const list=await gh("/gists?per_page=100&page="+page);
+    const hit=(list||[]).find(g=>g.files&&g.files[SYNC_FILE]);
+    if(hit){syncSet("ds_sync_gist",hit.id);return gh("/gists/"+hit.id);}
+    if(!list||list.length<100)break;
+  }
+  return null;
+}
+async function readSyncFile(gist){
+  const f=gist?.files?.[SYNC_FILE];if(!f)return null;
+  const text=f.truncated||!f.content?await (await fetch(f.raw_url)).text():f.content;
+  return JSON.parse(text);
+}
+function localSyncData(){
+  const data={};
+  for(const k of store.bigKeys())if(isSyncKey(k)){const v=store.raw(k);if(typeof v==="string")data[k]=v;}
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(isSyncKey(k))data[k]=localStorage.getItem(k);}
+  data.ds_provider_list=JSON.stringify(store.providers.map(({key,...rest})=>rest));
+  return data;
+}
+function syncStatusText(file){
+  if(!syncPrefs.ready)return "Not set up on this device.";
+  if(!file)return "Set up. Nothing uploaded yet.";
+  return "Synced copy from "+(file.device||"a device")+", "+messageTime(file.at)+" · "+(file.chats??"?")+" chat"+(file.chats===1?"":"s")+".";
+}
+async function refreshSyncStatus(){
+  $("#syncStatus").textContent=syncStatusText(null);$("#syncSummary").textContent=syncStatusText(null);
+  $("#syncReady").hidden=!syncPrefs.ready;$("#syncSetup").hidden=syncPrefs.ready;$("#syForget").hidden=!syncPrefs.ready;
+  if(!syncPrefs.ready)return;
+  $("#syncStatus").textContent="Checking GitHub…";
+  try{const file=await readSyncFile(await findSyncGist());const t=syncStatusText(file);$("#syncStatus").textContent=t;$("#syncSummary").textContent=t;}
+  catch(e){$("#syncStatus").textContent="⚠ "+e.message;}
+}
+function openSyncSheet(){
+  $("#syDevice").value=syncPrefs.device||(localStorage.getItem("ds_device")==="honor"?"Honor Magic 8 Lite":localStorage.getItem("ds_device")==="samsung"?"Samsung Galaxy S25+":"");
+  $("#syToken").value="";$("#syPass").value="";$("#syChoice").hidden=true;
+  closeAll();openSheet("#syncSheet");refreshSyncStatus();
+}
+$("#syncOpen").onclick=openSyncSheet;
+$("#sySave").onclick=async()=>{
+  const device=$("#syDevice").value.trim(),token=$("#syToken").value.trim()||syncPrefs.token,pass=$("#syPass").value;
+  if(!device){toast("Give this device a name, e.g. Honor or Laptop.");return;}
+  if(!token){toast("Paste your GitHub token.");return;}
+  if(!pass&&!syncPrefs.pass){toast("Choose a sync password.");return;}
+  if(pass&&pass.length<8){toast("Use a sync password of at least 8 characters.");return;}
+  syncSet("ds_sync_device",device);syncSet("ds_sync_token",token);if(pass)syncSet("ds_sync_pass",pass);
+  $("#syToken").value="";$("#syPass").value="";
+  await refreshSyncStatus();
+  if(!/⚠/.test($("#syncStatus").textContent))toast("Sync is set up on this device");
+};
+$("#syUp").onclick=async()=>{
+  if(controller){toast("Wait for the reply to finish.");return;}
+  const b=$("#syUp");b.disabled=true;$("#syncStatus").textContent="Encrypting and uploading…";
+  try{
+    const data=localSyncData(),env=await sealSync({data},syncPrefs.pass);
+    const file={app:"DeepSeek Agents sync",device:syncPrefs.device||"A device",at:Date.now(),chats:countChats(data),env};
+    const body=JSON.stringify({description:"DeepSeek Agents sync (encrypted)",files:{[SYNC_FILE]:{content:JSON.stringify(file)}}});
+    const existing=await findSyncGist();
+    const saved=existing?await gh("/gists/"+existing.id,{method:"PATCH",body}):await gh("/gists",{method:"POST",body:JSON.stringify({...JSON.parse(body),public:false})});
+    syncSet("ds_sync_gist",saved.id);
+    $("#syncStatus").textContent=syncStatusText(file);$("#syncSummary").textContent=syncStatusText(file);
+    toast("⬆ Uploaded "+file.chats+" chat"+(file.chats===1?"":"s")+" (encrypted)");
+  }catch(e){$("#syncStatus").textContent="⚠ "+e.message;}
+  finally{b.disabled=false;}
+};
+let pendingSync=null;
+$("#syDown").onclick=async()=>{
+  if(controller){toast("Wait for the reply to finish.");return;}
+  $("#syncStatus").textContent="Downloading and decrypting…";
+  try{
+    const file=await readSyncFile(await findSyncGist());
+    if(!file){$("#syncStatus").textContent="Nothing uploaded yet. Upload from your other device first.";return;}
+    const opened=await openSync(file.env,syncPrefs.pass);
+    pendingSync={file,data:opened.data||{}};
+    $("#syncStatus").textContent=syncStatusText(file);
+    $("#syChoiceText").textContent="This device has "+countChats(localSyncData())+" chat(s); the synced copy has "+countChats(pendingSync.data)+".";
+    $("#syChoice").hidden=false;
+  }catch(e){$("#syncStatus").textContent="⚠ "+e.message;}
+};
+async function applySync(mode){
+  if(!pendingSync)return;
+  const local=localSyncData();
+  const target=mode==="replace"?Object.fromEntries(Object.entries(pendingSync.data).filter(([k,v])=>isSyncKey(k)&&typeof v==="string")):mergeSyncData(local,pendingSync.data).data;
+  if(mode==="replace"&&!confirm("Replace this device's chats, agents and groups with the synced copy? Anything only on this device will be gone."))return;
+  const plan=syncPlan(local,target);
+  try{
+    for(const [k,v] of Object.entries(plan.set)){if(k==="ds_provider_list")continue;if(store.isBigKey(k))store.setRaw(k,v);else localStorage.setItem(k,v);}
+    for(const k of plan.remove){if(k==="ds_provider_list")continue;if(store.isBigKey(k))store.removeRaw(k);else localStorage.removeItem(k);}
+    const listed=JSON.parse(target.ds_provider_list||"null");
+    if(Array.isArray(listed)){const current=store.providers;store.providers=listed.map(p=>({...p,key:current.find(c=>c.id===p.id)?.key||""}));}
+    localStorage.removeItem("ds_previews");
+  }catch(e){toast("Could not apply the synced copy: "+e.message);return;}
+  pendingSync=null;toast(mode==="replace"?"Replaced with the synced copy":"Merged");
+  setTimeout(()=>location.reload(),500);
+}
+$("#syMerge").onclick=()=>applySync("merge");
+$("#syReplace").onclick=()=>applySync("replace");
+$("#syForget").onclick=()=>{
+  if(!confirm("Turn off sync on this device? Your chats stay here, and the synced copy on GitHub is not deleted."))return;
+  for(const k of ["ds_sync_token","ds_sync_pass","ds_sync_gist","ds_sync_device"])syncSet(k,"");
+  refreshSyncStatus();toast("Sync turned off on this device");
+};
 
 /* ---------- Boot ---------- */
 store.onWriteError=()=>toast("Browser storage refused the last save. Free space or export a backup.");

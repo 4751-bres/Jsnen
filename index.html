@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css?v=20261015f" />
+<link rel="stylesheet" href="styles.css?v=20261015g" />
 </head>
 <body>
   <header>
@@ -183,6 +183,10 @@
       <label class="toggle-row"><input id="ctxSummary" type="checkbox" /> <span>Summarize older messages</span></label>
       <div class="hint">Default for every chat. Any agent, group, or workflow can override it in its editor — for example, keep a big chat Unlimited while others send less. Limiting history makes long chats cheaper; with summaries on, older messages are condensed by one short extra request about every 10 messages. Saved chats are never shortened. The model's own context window (1M tokens for DeepSeek V4) still applies.</div>
 
+      <label>Sync between devices</label>
+      <button class="btn" id="syncOpen" type="button" style="width:100%"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.3 4.9M4 12a8 8 0 0 1 14.3-4.9"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>Sync chats…</button>
+      <div class="hint" id="syncSummary">Not set up</div>
+
       <label>Backup</label>
       <div class="row2">
         <button class="btn" id="exportBackup" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
@@ -322,6 +326,39 @@
       </div>
     </div>
     <div class="foot"><button class="btn primary" id="qmSave" type="button">Save</button></div>
+  </section>
+
+  <!-- Sync between devices -->
+  <section class="sheet bottom" id="syncSheet">
+    <h3><span class="grow">Sync between devices</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body">
+      <div class="sync-status" id="syncStatus" aria-live="polite">Not set up on this device.</div>
+      <div id="syncReady" hidden>
+        <div class="row2" style="margin-top:12px">
+          <button class="btn primary" id="syUp" type="button">⬆ Upload this device</button>
+          <button class="btn" id="syDown" type="button">⬇ Get synced chats</button>
+        </div>
+        <div id="syChoice" class="sync-choice" hidden>
+          <div class="hint" id="syChoiceText" style="margin-top:0"></div>
+          <button class="btn primary" id="syMerge" type="button" style="width:100%">Merge: keep both, newest version of each chat wins</button>
+          <button class="btn danger" id="syReplace" type="button" style="width:100%;margin-top:8px">Replace this device with the synced copy</button>
+        </div>
+        <div class="hint">Upload when you finish on one device; Get synced chats on the other. Looks, text size, Phone, app lock and API keys stay per device.</div>
+      </div>
+      <div id="syncSetup">
+        <div class="hint" style="margin-top:0">Your chats travel through a private Gist in your own GitHub account, encrypted on this device with your sync password, so nobody, GitHub included, can read them.</div>
+      </div>
+      <label for="syDevice">This device's name</label>
+      <input class="field" id="syDevice" placeholder="e.g. Samsung S25+, Honor, Laptop" autocomplete="off" maxlength="40" />
+      <label for="syToken">GitHub token</label>
+      <input class="field" id="syToken" type="password" placeholder="Paste once per device (kept only here)" autocomplete="off" />
+      <div class="hint"><a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=DeepSeek%20Agents%20sync" target="_blank" rel="noopener">Create a token with only the “gist” permission ↗</a></div>
+      <label for="syPass">Sync password</label>
+      <input class="field" id="syPass" type="password" placeholder="At least 8 characters, same on every device" autocomplete="new-password" />
+      <div class="hint">If you forget it, the synced copy can't be opened (the chats on each device are not affected).</div>
+      <button class="btn ghost" id="syForget" type="button" style="width:100%;margin-top:10px">Turn off sync on this device</button>
+    </div>
+    <div class="foot"><button class="btn primary" id="sySave" type="button">Save</button></div>
   </section>
 
   <!-- Message actions (long-press) -->
@@ -650,7 +687,7 @@
     </div>
   </section>
 
-<script src="core.js?v=20261015f"></script>
-<script src="app.js?v=20261015f"></script>
+<script src="core.js?v=20261015g"></script>
+<script src="app.js?v=20261015g"></script>
 </body>
 </html>

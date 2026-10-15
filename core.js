@@ -458,7 +458,7 @@ function migrateEffortLevels(storage,agentList,workflowList){
 /* backup-core:start */
 const BACKUP_APP="deepseek-agents";
 // The API key stays on the device; everything else under the app prefix is portable.
-const SECRET_KEYS=["ds_key","ds_providers","ds_exa_key","ds_lock"];
+const SECRET_KEYS=["ds_key","ds_providers","ds_exa_key","ds_lock","ds_sync_token","ds_sync_pass"];
 function isBackupKey(key){return key.startsWith("ds_")&&!SECRET_KEYS.includes(key);}
 function makeBackup(storage,extra){
   const data={};
@@ -573,6 +573,83 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* sync-core:start */
+// Sync between devices: which keys travel (chats and the things that belong to them), how two copies merge,
+// and end-to-end encryption with a sync password. Per-device settings (looks, phone, lock, keys) never travel.
+const SYNC_FILE="deepseek-agents-sync.json";
+function isSyncKey(key){
+  return /^ds_(agents|groups|workflows|personas|pins|model|base|ctx_limit|ctx_summary|provider_list|bg__all)$/.test(key)||
+    /^ds_(conv|run|sum|bg|dir|chap)_.+$/.test(key);
+}
+function lastActivity(raw){
+  let list=[];try{list=JSON.parse(raw)||[];}catch(e){}
+  let t=0;for(const m of Array.isArray(list)?list:[])if(m&&Number(m.at)>t)t=Number(m.at);
+  return {t,n:Array.isArray(list)?list.length:0};
+}
+function mergeListById(localRaw,remoteRaw,winner,idKey){
+  const parse=r=>{try{const v=JSON.parse(r);return Array.isArray(v)?v:[];}catch(e){return [];}};
+  const local=parse(localRaw),remote=parse(remoteRaw),k=idKey||"id";
+  const byId=new Map(remote.filter(x=>x&&x[k]!==undefined).map(x=>[String(x[k]),x]));
+  const out=local.map(x=>{const id=String(x?.[k]);return byId.has(id)&&winner[id]==="remote"?byId.get(id):x;});
+  const have=new Set(local.map(x=>String(x?.[k])));
+  for(const x of remote)if(x&&!have.has(String(x[k])))out.push(x);
+  return JSON.stringify(out);
+}
+// Merge: everything from both sides; for a chat on both, the copy with the newer last message wins
+// (with its run, summary, background, director notes and chapters), and its agent/group settings come along.
+function mergeSyncData(local,remote){
+  const out={},winner={};
+  for(const [k,v] of Object.entries(local||{}))if(isSyncKey(k))out[k]=v;
+  const ids=new Set(Object.keys({...local,...remote}).filter(k=>k.startsWith("ds_conv_")).map(k=>k.slice(8)));
+  for(const id of ids){
+    const k="ds_conv_"+id,inL=k in (local||{}),inR=k in (remote||{});
+    if(!inL){winner[id]="remote";continue;}if(!inR){winner[id]="local";continue;}
+    const a=lastActivity(local[k]),b=lastActivity(remote[k]);
+    winner[id]=b.t>a.t||(b.t===a.t&&b.n>a.n)?"remote":"local";
+  }
+  for(const [k,v] of Object.entries(remote||{})){
+    if(!isSyncKey(k)||typeof v!=="string")continue;
+    const m=/^ds_(conv|run|sum|bg|dir|chap)_(.+)$/.exec(k);
+    if(m&&k!=="ds_bg__all"){if(winner[m[2]]==="remote"||!(k in out))out[k]=v;continue;}
+    if(k==="ds_agents"||k==="ds_groups"||k==="ds_workflows"){out[k]=k in out?mergeListById(out[k],v,winner):v;continue;}
+    if(k==="ds_personas"){out[k]=k in out?mergeListById(out[k],v,{},"name"):v;continue;}
+    if(k==="ds_provider_list"){out[k]=k in out?mergeListById(out[k],v,{}):v;continue;}
+    if(k==="ds_pins"){let a=[],b=[];try{a=JSON.parse(out[k]||"[]");b=JSON.parse(v);}catch(e){}out[k]=JSON.stringify([...new Set([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])])]);continue;}
+    if(!(k in out))out[k]=v; // other settings: this device's choice stays
+  }
+  return {data:out,winner};
+}
+// What to write and delete on this device to reach the target (sync keys only).
+function syncPlan(local,target){
+  const set={},remove=[];
+  for(const [k,v] of Object.entries(target))if(isSyncKey(k)&&local[k]!==v)set[k]=v;
+  for(const k of Object.keys(local))if(isSyncKey(k)&&!(k in target))remove.push(k);
+  return {set,remove};
+}
+function countChats(data){return Object.keys(data||{}).filter(k=>k.startsWith("ds_conv_")).length;}
+function bytesToB64(bytes){let s="";for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(s);}
+function b64ToBytes(b64){const s=atob(b64);const out=new Uint8Array(s.length);for(let i=0;i<s.length;i++)out[i]=s.charCodeAt(i);return out;}
+async function syncCryptoKey(pass,salt){
+  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(String(pass)),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:210000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function pipeBytes(bytes,stream){return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());}
+async function sealSync(obj,pass){
+  const plain=new TextEncoder().encode(JSON.stringify(obj));
+  const zipped=typeof CompressionStream==="function"?await pipeBytes(plain,new CompressionStream("gzip")):null;
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const cipher=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},await syncCryptoKey(pass,salt),zipped||plain));
+  return {v:1,z:!!zipped,salt:bytesToB64(salt),iv:bytesToB64(iv),data:bytesToB64(cipher)};
+}
+async function openSync(env,pass){
+  if(!env||env.v!==1||!env.data)throw new Error("The synced copy is in an unknown format.");
+  let plain;
+  try{plain=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv:b64ToBytes(env.iv)},await syncCryptoKey(pass,b64ToBytes(env.salt)),b64ToBytes(env.data)));}
+  catch(e){throw new Error("Wrong sync password, so the synced copy could not be opened.");}
+  if(env.z)plain=await pipeBytes(plain,new DecompressionStream("gzip"));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+/* sync-core:end */
 /* char-label-migration:start */
 // Older replies were saved with a leading "[char]:" speaker label; remove it from replies and their versions.
 const CHAR_LABEL=/^(?:\s*\[char\]\s*:\s*)+/i;
