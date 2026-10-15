@@ -478,7 +478,7 @@ function updateChatRow(m,d){
     const shown=m.role==="assistant"?cleanCharacterReply(m.moodTracked&&m.streaming?stripPartialMoodTag(live):live):m.content||"";
     const who=m.characterName||m.agentName||(!isGroup()&&!isWorkflow()?curAgent()?.name:"")||"";
     d._text.innerHTML=m.searching?'<span class="searching">'+icon("globe")+'Searching the web…</span>'
-      :waiting?'<span class="typing'+(m.keepAlives?" busy":"")+'"><i></i><i></i><i></i><span>'+esc(waitingLabel(who,m.waitingOn,m.keepAlives||0,Date.now()-(m.at||Date.now())))+'</span></span>'
+      :waiting?'<span class="typing-dots'+(m.keepAlives?" busy":"")+'"><i></i><i></i><i></i><span>'+esc(waitingLabel(who,m.waitingOn,m.keepAlives||0,Date.now()-(m.at||Date.now())))+'</span></span>'
       :linkCitations(md(shown),m.sources)+(m.streaming?'<span class="cursor"></span>':"");
     d._waitKey=waitKey;
     d._contentValue=m.content;d._streaming=!!m.streaming;d._searching=!!m.searching;
@@ -2191,7 +2191,7 @@ async function suggestIdeas(){
   const persona=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user:null;
   const name=persona?.name||"the user",other=isGroup()?"":curAgent().name;
   const transcript=usable.slice(-30).map(m=>"["+(m.role==="user"?name:(m.characterName||m.agentName||other||"Assistant"))+"]: "+messageText(historyText(m)||m.content)).join("\n\n");
-  const row=$("#ideaRow");row.hidden=false;document.body.classList.add("ideas-open");row.innerHTML='<span class="typing"><i></i><i></i><i></i><span>Thinking of ideas…</span></span>';
+  const row=$("#ideaRow");row.hidden=false;document.body.classList.add("ideas-open");row.innerHTML='<span class="typing-dots"><i></i><i></i><i></i><span>Thinking of ideas…</span></span>';
   try{
     const text=await withBusy(signal=>quickCompletion([{role:"system",content:ideaInstruction(name,persona?.description)},
       {role:"user",content:"Conversation so far:\n\n"+transcript+"\n\nThree options for "+name+"'s next message:"}],signal,500));
