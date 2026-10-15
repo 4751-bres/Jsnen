@@ -996,3 +996,48 @@ function cardToChat(card,options,idFactory,now){
   return {agent,group,conversationId:group.id,messages};
 }
 /* card-import:end */
+/* card-export:start */
+// Character cards out: a V2 "chara_card_v2" JSON, base64 in a PNG tEXt chunk named "chara" (Tavern, SillyTavern, Janitor…).
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(bytes){let c=0xFFFFFFFF;for(let i=0;i<bytes.length;i++)c=CRC_TABLE[(c^bytes[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function utf8ToBase64(text){
+  const bytes=new TextEncoder().encode(String(text));let binary="";
+  for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+  return btoa(binary);
+}
+// Returns a new PNG with one tEXt chunk (replacing older card chunks) placed before IEND.
+function pngWithTextChunk(bytes,keyword,text){
+  const signature=[137,80,78,71,13,10,26,10];
+  if(bytes.length<8||signature.some((b,i)=>bytes[i]!==b))throw new Error("The card image is not a PNG.");
+  const kept=[];let p=8,iend=-1;
+  while(p+12<=bytes.length){
+    const len=((bytes[p]<<24)|(bytes[p+1]<<16)|(bytes[p+2]<<8)|bytes[p+3])>>>0,type=String.fromCharCode(bytes[p+4],bytes[p+5],bytes[p+6],bytes[p+7]);
+    const end=p+12+len;
+    if(type==="IEND"){iend=p;break;}
+    const data=bytes.subarray(p+8,p+8+len),zero=data.indexOf(0);
+    const key=zero>0?String.fromCharCode(...data.subarray(0,zero)).toLowerCase():"";
+    if(!(/^(tEXt|iTXt|zTXt)$/.test(type)&&(key==="chara"||key==="ccv3"||key===keyword.toLowerCase())))kept.push(bytes.subarray(p,end));
+    p=end;
+  }
+  if(iend<0)throw new Error("The card image is incomplete.");
+  const payload=new Uint8Array(keyword.length+1+text.length);
+  for(let i=0;i<keyword.length;i++)payload[i]=keyword.charCodeAt(i)&255;
+  for(let i=0;i<text.length;i++)payload[keyword.length+1+i]=text.charCodeAt(i)&255;
+  const chunk=new Uint8Array(12+payload.length),view=new DataView(chunk.buffer);
+  view.setUint32(0,payload.length);chunk.set([116,69,88,116],4);chunk.set(payload,8);
+  view.setUint32(8+payload.length,crc32(chunk.subarray(4,8+payload.length)));
+  const parts=[bytes.subarray(0,8),...kept,chunk,bytes.subarray(iend)],out=new Uint8Array(parts.reduce((n,x)=>n+x.length,0));
+  let q=0;for(const x of parts){out.set(x,q);q+=x.length;}
+  return out;
+}
+function agentToCard(agent,greeting){
+  const entries=(agent.lorebook?.entries||[]).map((e,i)=>({id:i,keys:[...(e.keys||[])],content:e.content,name:e.name||"",comment:e.name||"",
+    enabled:e.enabled!==false,constant:!!(e.constant||e.always),insertion_order:i,extensions:{}}));
+  return {spec:"chara_card_v2",spec_version:"2.0",data:{
+    name:String(agent.name||"Character"),description:String(agent.prompt||""),personality:"",scenario:"",
+    first_mes:String(greeting||""),mes_example:"",creator_notes:"Exported from DeepSeek Agents.",system_prompt:"",post_history_instructions:"",
+    alternate_greetings:[],tags:[...(agent.card?.tags||[])],creator:String(agent.card?.creator||""),character_version:"1",
+    extensions:{"deepseek-agents":{emoji:agent.emoji||"",temp:agent.temp,think:agent.think||"off",moods:!!agent.moods,thoughts:!!agent.thoughts}},
+    ...(entries.length?{character_book:{name:agent.lorebook?.name||agent.name||"",entries,extensions:{}}}:{})}};
+}
+/* card-export:end */

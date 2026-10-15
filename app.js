@@ -781,7 +781,7 @@ function newAgentThink(value){return !value||value==="off"?NEW_AGENT_MIN_THINK:v
 function openEditor(id){
   editingId=id;
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
-  $("#edTitle").textContent=id?"Edit agent":"New agent";
+  $("#edTitle").textContent=id?"Edit agent":"New agent";$("#edExportCard").hidden=!id;
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
   $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;editingColor=a.color||"";renderColorRow();$("#edThoughts").checked=!!a.thoughts;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
@@ -1533,6 +1533,33 @@ $("#qmSave").onclick=()=>{
 };
 $(".title").addEventListener("click",openQuickModel);
 $(".title").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openQuickModel();}});
+
+/* ---------- Export an agent as a character card (PNG) ---------- */
+async function cardImageBytes(agent){
+  const canvas=document.createElement("canvas");canvas.width=512;canvas.height=768;const g=canvas.getContext("2d");
+  const grad=g.createLinearGradient(0,0,0,768);grad.addColorStop(0,"#1b2140");grad.addColorStop(1,"#4a2350");g.fillStyle=grad;g.fillRect(0,0,512,768);
+  if(agent.avatar){
+    try{const img=new Image();img.src=agent.avatar;await img.decode();
+      const s=Math.max(512/img.width,768/img.height),w=img.width*s,h=img.height*s;g.drawImage(img,(512-w)/2,(768-h)/2,w,h);}
+    catch(e){}
+  }else{
+    g.textAlign="center";g.textBaseline="middle";g.font="220px system-ui, 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";g.fillText(agent.emoji||"🎭",256,330);
+    g.font="600 44px system-ui, sans-serif";g.fillStyle="#fff";g.fillText(String(agent.name||"").slice(0,22),256,560);
+  }
+  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Could not draw the card.")),"image/png"));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+async function exportAgentCard(agent){
+  try{
+    const first=store.conv(agent.id).find(m=>m.role==="assistant"&&m.content&&!m.error);
+    const card=agentToCard(agent,first?.content||"");
+    const png=pngWithTextChunk(await cardImageBytes(agent),"chara",utf8ToBase64(JSON.stringify(card)));
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([png],{type:"image/png"}));a.download=chatFileName(agent.name,"png").replace(/-\d{4}-\d{2}-\d{2}\.png$/,".png");
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    toast("Card saved · import it here or in SillyTavern / Janitor");
+  }catch(e){toast("Could not export the card: "+e.message);}
+}
+$("#edExportCard").onclick=()=>{const a=agents.find(x=>x.id===editingId);if(a)exportAgentCard(a);else toast("Save the agent first.");};
 
 /* ---------- Chapters: named breaks in long stories ---------- */
 function chaptersFor(id){try{return normalizeChapters(JSON.parse(localStorage.getItem("ds_chap_"+id)));}catch(e){return [];}}
