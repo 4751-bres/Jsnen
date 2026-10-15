@@ -1205,14 +1205,38 @@ async function runWebSearch(apiMessages,signal){
   let query=fallback;
   try{query=cleanSearchQuery(await quickCompletion(searchQueryMessages(apiMessages),signal,60),fallback);}
   catch(e){if(signal?.aborted)throw e;}
-  const res=await fetch("https://api.exa.ai/search",{method:"POST",signal,headers:{"Content-Type":"application/json","x-api-key":store.exaKey},body:JSON.stringify(exaSearchBody(query,5))});
-  if(!res.ok){
-    let detail="";try{detail=(await res.json()).error||"";}catch(e){}
-    throw new Error(res.status===401||res.status===403?"Exa rejected the key. Check it in Settings.":res.status===402?"Your Exa credits have run out.":"Exa search failed (HTTP "+res.status+")"+(detail?": "+detail:""));
-  }
-  const found={query,results:exaResults(await res.json())};
+  const found={query,results:await exaSearch(query,signal)};
   lastWebSearch={key,at:Date.now(),found};
   return found;
+}
+// Direct API first; when the browser blocks it (Exa's CORS allow-list), use Exa's MCP endpoint and remember that.
+let exaViaMcp=false;try{exaViaMcp=sessionStorage.getItem("ds_exa_mcp")==="1";}catch(e){}
+async function exaSearch(query,signal){
+  if(!exaViaMcp){
+    try{
+      const res=await fetch("https://api.exa.ai/search",{method:"POST",signal,headers:{"Content-Type":"application/json","x-api-key":store.exaKey},body:JSON.stringify(exaSearchBody(query,5))});
+      if(!res.ok){
+        let detail="";try{detail=(await res.json()).error||"";}catch(e){}
+        throw new Error(res.status===401||res.status===403?"Exa rejected the key. Check it in Settings.":res.status===402?"Your Exa credits have run out.":"Exa search failed (HTTP "+res.status+")"+(detail?": "+detail:""));
+      }
+      return exaResults(await res.json());
+    }catch(e){
+      if(!(e instanceof TypeError)||signal?.aborted)throw e;
+      exaViaMcp=true;try{sessionStorage.setItem("ds_exa_mcp","1");}catch(err){}
+    }
+  }
+  const call=async url=>{
+    const res=await fetch(url,{method:"POST",signal,headers:{"Content-Type":"application/json","Accept":"application/json, text/event-stream","x-api-key":store.exaKey},body:JSON.stringify(exaMcpRequest(query,5))});
+    if(res.status===401||res.status===403)throw new Error("Exa rejected the key. Check it in Settings.");
+    if(!res.ok)throw new Error("Exa search failed (HTTP "+res.status+")");
+    return exaMcpResults(await res.text());
+  };
+  try{return await call("https://mcp.exa.ai/mcp");}
+  catch(e){
+    // Older MCP deployments read the key only from the URL.
+    if(signal?.aborted||!/rate limit/i.test(e.message))throw e;
+    return call("https://mcp.exa.ai/mcp?exaApiKey="+encodeURIComponent(store.exaKey));
+  }
 }
 function renderWebBtn(){
   const b=$("#webBtn");b.hidden=!store.exaKey||isWorkflow();

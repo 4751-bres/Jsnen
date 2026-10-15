@@ -791,6 +791,29 @@ function searchResultsBlock(query,results,now){
     "Cite facts taken from them inline with their number in square brackets, like [1] or [2][3]. Do not invent sources or numbers. "+
     "If the results do not answer the question, say so briefly and answer from what you know. Stay in character if you are playing one.\n\n"+list;
 }
+// Exa's REST API only accepts browsers on its own allow-list (not GitHub Pages), so the app falls back to Exa's hosted
+// MCP endpoint, which allows any site. Its search tool answers with text blocks: "Title: …\nURL: …\nPublished: …\nHighlights:\n…".
+function exaMcpRequest(query,count){
+  return {jsonrpc:"2.0",id:Date.now(),method:"tools/call",params:{name:"web_search_exa",arguments:{query:String(query||"").slice(0,400),numResults:Math.max(1,Math.min(10,count||5))}}};
+}
+function parseExaMcpText(text){
+  return String(text||"").split(/\n(?=Title: )/).map(block=>{
+    const field=name=>(block.match(new RegExp("^"+name+": ?(.*)$","m"))||[])[1]?.trim()||"";
+    const url=field("URL");if(!/^https?:\/\//.test(url))return null;
+    const body=block.replace(/^(Title|URL|Published|Author|Image|Favicon|ID): ?.*$/gm,"").replace(/^(Highlights|Text|Summary):[ 	]*/gm,"").replace(/^-{3,}\s*$/gm,"");
+    return {title:(field("Title")||url).slice(0,200),url,date:/^\d{4}-\d{2}-\d{2}/.test(field("Published"))?field("Published").slice(0,10):"",text:body.replace(/\s+/g," ").trim().slice(0,1800)};
+  }).filter(Boolean);
+}
+// The MCP endpoint streams one JSON-RPC message as server-sent events, or returns plain JSON.
+function exaMcpResults(raw){
+  const body=String(raw||"").trim();
+  const json=body.startsWith("{")?JSON.parse(body):JSON.parse((body.split("\n").filter(l=>l.startsWith("data:")).pop()||"data: {}").slice(5));
+  if(json.error)throw new Error("Exa: "+(json.error.message||"search failed"));
+  const text=(json.result?.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("\n");
+  const results=parseExaMcpText(text);
+  if(!results.length&&/rate limit|api key|unauthori|invalid/i.test(text))throw new Error(/rate limit/i.test(text)?"Exa did not accept the key (free rate limit reached). Check the key in Settings.":/invalid api key|401/i.test(text)?"Exa rejected the key. Check it in Settings.":"Exa: "+text.slice(0,160));
+  return results;
+}
 // Adds the results to the system prompt (or as a new first system message).
 function withSearchResults(apiMessages,block){
   const list=[...(apiMessages||[])];

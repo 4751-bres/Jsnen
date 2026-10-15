@@ -59,3 +59,17 @@ test('a searching reply sends results in the prompt and saves its sources',async
   assert.equal(r.bot.content,'Sunny [1]');assert.equal(r.bot.searchQuery,'paris weather');
   assert.deepEqual(JSON.parse(JSON.stringify(r.bot.sources)),[{title:'Météo',url:'https://m.fr'}]);assert.equal(r.bot.searching,false);
 });
+
+test('Exa MCP fallback: request shape, text parsing, SSE body and key errors',()=>{
+  const req=core.exaMcpRequest('paris',20);
+  assert.equal(req.method,'tools/call');assert.equal(req.params.name,'web_search_exa');assert.equal(req.params.arguments.numResults,10);
+  const text='Title: Paris Weather\nURL: https://exa.ai/w/paris\nPublished: 2026-10-15T00:11:59Z\nAuthor: N/A\nHighlights:\n# Weather\n\nMainly clear.\n\nTitle: BBC\nURL: https://bbc.com/w\nPublished: N/A\nText: Light winds.';
+  const r=core.parseExaMcpText(text);
+  assert.deepEqual(JSON.parse(JSON.stringify(r)),[{title:'Paris Weather',url:'https://exa.ai/w/paris',date:'2026-10-15',text:'# Weather Mainly clear.'},{title:'BBC',url:'https://bbc.com/w',date:'',text:'Light winds.'}]);
+  const sse='event: message\ndata: '+JSON.stringify({result:{content:[{type:'text',text}]}})+'\n\n';
+  assert.equal(core.exaMcpResults(sse).length,2);
+  assert.equal(core.exaMcpResults(JSON.stringify({result:{content:[{type:'text',text}]}})).length,2);
+  assert.throws(()=>core.exaMcpResults('data: '+JSON.stringify({result:{content:[{type:'text',text:"You've hit Exa's free MCP rate limit."}]}})),/did not accept the key/);
+  assert.throws(()=>core.exaMcpResults(JSON.stringify({error:{message:'bad'}})),/Exa: bad/);
+  assert.throws(()=>core.exaMcpResults('data: '+JSON.stringify({result:{content:[{type:'text',text:'web_search_exa error (401): Invalid API key.'}]}})),/Exa rejected the key/);
+});
