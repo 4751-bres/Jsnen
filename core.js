@@ -569,6 +569,27 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+
+/* thoughts-core:start */
+// Inner thoughts: a hidden [thoughts: …] line the app lifts out of the reply and shows under it.
+const THOUGHTS_INSTRUCTION="INNER THOUGHTS: After your reply (and before any [mood] line), add one line in exactly this form: [thoughts: …] with your character's private thoughts in first person, 1–2 sentences: what they really feel, want, or are hiding. Nobody else in the story hears these thoughts; never refer to them in the story itself.";
+const THOUGHT_TAG=/\[\s*(?:inner\s+)?thoughts?\s*:\s*([^\]]*)\]/gi;
+function parseThoughtsTag(text){
+  const source=String(text||"");let thoughts="";
+  const cleaned=source.replace(THOUGHT_TAG,(all,inner)=>{thoughts=String(inner).trim();return "";});
+  if(cleaned===source)return {text:source,thoughts:""};
+  return {text:cleaned.replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim(),thoughts};
+}
+// While streaming: hide finished tags and one still arriving at the end ("[tho", "[thoughts: She wo").
+function stripThoughtsWhileStreaming(text){
+  return String(text||"").replace(THOUGHT_TAG,"").replace(/\s*\[\s*(?:inner\s*)?(?:t(?:h(?:o(?:u(?:g(?:h(?:t(?:s)?)?)?)?)?)?)?)?\s*(?::[^\]]*)?$/i,"");
+}
+function applyThoughtsTag(bot){
+  const parsed=parseThoughtsTag(bot.content);
+  if(parsed.thoughts){bot.thoughts=parsed.thoughts.slice(0,1200);bot.content=parsed.text||bot.content;}
+  return bot;
+}
+/* thoughts-core:end */
 /* appearance-core:start */
 // Appearance: accent colour, reading size/font/spacing, AI bubbles, and per-chat backgrounds.
 // Each palette: [accent, fill, soft, user bubble, user bubble text] for dark and light themes.
@@ -704,6 +725,7 @@ function chatToText(title,list,options={}){
     out.push("",(m.at?"["+clockTime(m.at)+"] ":"")+who+":");
     if(m.content)out.push(String(m.content).replace(/\r\n/g,"\n").trim());
     if(m.images?.length)out.push("["+m.images.length+" image"+(m.images.length===1?"":"s")+"]");
+    if(m.thoughts)out.push("(thoughts: "+m.thoughts+")");
     if(m.sources?.length)out.push("Sources:",...m.sources.map((s,i)=>"  ["+(i+1)+"] "+s.title+" — "+s.url));
   }
   return out.join("\n")+"\n";

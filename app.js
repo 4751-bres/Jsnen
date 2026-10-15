@@ -468,11 +468,16 @@ function updateChatRow(m,d){
     if(details.open&&text.textContent!==m.reasoning)text.textContent=m.reasoning||"";
   }
   if(d._contentValue!==m.content||d._streaming!==!!m.streaming||d._searching!==!!m.searching){
-    const shown=m.role==="assistant"?cleanCharacterReply(m.moodTracked&&m.streaming?stripPartialMoodTag(m.content):m.content):m.content||"";
+    const live=m.thoughtsTracked&&m.streaming?stripThoughtsWhileStreaming(m.content):m.content;
+    const shown=m.role==="assistant"?cleanCharacterReply(m.moodTracked&&m.streaming?stripPartialMoodTag(live):live):m.content||"";
     d._text.innerHTML=m.searching?'<span class="searching">'+icon("globe")+'Searching the web…</span>':linkCitations(md(shown),m.sources)+(m.streaming?'<span class="cursor"></span>':"");
     d._contentValue=m.content;d._streaming=!!m.streaming;d._searching=!!m.searching;
     if(!m.streaming)for(const pre of d._text.querySelectorAll("pre")){const b=document.createElement("button");b.type="button";b.className="code-copy";b.innerHTML=icon("copy")+"Copy";b.setAttribute("aria-label","Copy code");pre.prepend(b);}
   }
+  if(m.thoughts&&!m.streaming){
+    if(!d._thoughts){d._thoughts=document.createElement("details");d._thoughts.className="thoughts";d._text.after(d._thoughts);}
+    if(d._thoughtsValue!==m.thoughts){d._thoughts.innerHTML='<summary>💭 <span>'+esc((m.characterName||m.agentName||"Their")+(m.characterName||m.agentName?"'s":"")+" thoughts")+'</span></summary><p>'+esc(m.thoughts)+'</p>';d._thoughtsValue=m.thoughts;}
+  }else if(d._thoughts){d._thoughts.remove();d._thoughts=null;d._thoughtsValue=null;}
   if(m.sources&&!m.searching){
     if(!d._sources){d._sources=document.createElement("div");d._sources.className="sources";d._text.after(d._sources);}
     const key=m.searchQuery+"|"+m.sources.length;
@@ -772,7 +777,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;$("#edThoughts").checked=!!a.thoughts;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);syncTempState();
   $("#delAgent").hidden=!(id&&agents.length>1);
@@ -803,7 +808,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,memory:memoryLines($("#edMemory").value)};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,memory:memoryLines($("#edMemory").value)};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -812,7 +817,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,memory:memoryLines($("#edMemory").value)};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,memory:memoryLines($("#edMemory").value)};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -924,7 +929,7 @@ function openGroupEditor(id){
   $("#grRoleplay").checked=groupRoleplayDraft.enabled;$("#grRpSetting").value=groupRoleplayDraft.setting;
   $("#grRpOpening").value=groupRoleplayDraft.opening;$("#grRpUserName").value=groupRoleplayDraft.user.name;
   $("#grRpUserDescription").value=groupRoleplayDraft.user.description;renderPersonaChoices();$("#grRpMature").checked=groupRoleplayDraft.mature;
-  $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;
+  $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;$("#grRpThoughts").checked=!!g.thoughts;
   $("#grRoleplay").onchange=renderRoleplayEditor;
   $("#grRpMature").onchange=()=>{$("#grRpAdultRow").style.display=$("#grRpMature").checked?"flex":"none";if(!$("#grRpMature").checked)$("#grRpAdult").checked=false;};
   renderRoleplayEditor();$("#delGroup").style.display=id?"":"none";
@@ -1058,7 +1063,7 @@ $("#saveGroup").onclick=()=>{
   const roleplay=collectRoleplayEditor(members),errors=validateRoleplay(roleplay,members,$("#grRpAdult").checked);
   if(errors.includes("adult-confirmation")){toast("Confirm that you are an adult");return;}
   if(errors.length){toast("Complete the roleplay character details");return;}
-  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),memory:memoryLines($("#grMemory").value),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked};
+  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),memory:memoryLines($("#grMemory").value),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked,thoughts:$("#grRpThoughts").checked||undefined};
   if(editingGroupId){Object.assign(groups.find(g=>g.id===editingGroupId),data);}
   else{const g={id:uid(),...data};groups.push(g);currentKind="group";currentId=g.id;store.kind="group";store.cur=g.id;}
   store.groups=groups;renderAgents();loadConv();closeAll();toast("Group saved");
@@ -1338,6 +1343,13 @@ $("#checkKey").onclick=async()=>{
     out.textContent="✗ "+friendlyApiError(res.status,detail);
   }catch(e){out.textContent="✗ Could not reach "+base+". Check the base URL and your connection.";}
 };
+/* ---------- Inner thoughts (roleplay groups and single agents that opt in) ---------- */
+function thoughtsWanted(agent,meta){
+  if(meta.workflowRoleId||meta.noSearch||isWorkflow())return false;
+  if(isGroup()){const g=curGroup();return !!(g&&isRoleplayGroup(g)&&g.thoughts);}
+  return !!agent?.thoughts;
+}
+
 /* ---------- Appearance: accent, text size, font, spacing, bubbles ---------- */
 function themeIsLight(){const t=document.documentElement.dataset.theme;return t==="light"||(!t&&matchMedia("(prefers-color-scheme: light)").matches);}
 function applyAppearance(){
@@ -1722,6 +1734,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
   const search=webSearchWanted(agent,meta);
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,at:Date.now(),...meta};
   delete bot.noSearch;if(search)bot.searching=true;
+  if(typeof thoughtsWanted==="function"&&thoughtsWanted(agent,meta))bot.thoughtsTracked=true;
   messages.push(bot);
   renderChat();
 
@@ -1743,6 +1756,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
       }catch(e){if(signal.aborted)throw e;toast("🌐 "+(e instanceof TypeError?"Could not reach Exa.":e.message)+" Replying without search.");}
       bot.searching=false;scheduleStreamPaint(bot);
     }
+    if(bot.thoughtsTracked)payload.messages=[...payload.messages,{role:"system",content:THOUGHTS_INSTRUCTION}];
     // Scene director: the author's note always; the one-shot direction except when continuing a cut-off reply.
     const direction=meta.workflowRoleId?null:directionFor(convId);
     if(direction&&(direction.note||direction.next)){
@@ -1751,7 +1765,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     }
     // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
-      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
+      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
     const res=await fetchWithRetry(()=>backgroundFetch(request.url,{
       method:"POST",
       headers:request.headers,
@@ -1807,6 +1821,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     else if(bot.content){bot.interrupted=String(err.message||"Connection lost");bot.truncated=true;}
     else{bot.error=true;bot.content="⚠️ "+err.message;}
   }finally{
+    if(bot.thoughtsTracked&&!bot.error)applyThoughtsTag(bot);
     if(bot.moodTracked&&!bot.error)applyMoodTag(bot);
     cancelStreamPaint();releaseWakeLock();
     controller=null;setSending(false);
@@ -2292,6 +2307,7 @@ function adoptJob(job,interrupted){
   if(r.usage)bot.usage=r.usage;
   if(r.finish){if(r.finish!=="length")bot.finish=r.finish;if(r.finish!=="content_filter")bot.truncated=true;}
   if(interrupted||job.status!=="done"){bot.interrupted="The app was closed before this reply finished";bot.truncated=true;}
+  if(bot.thoughtsTracked)applyThoughtsTag(bot);
   if(bot.moodTracked)applyMoodTag(bot);
   try{store.saveConv(meta.convId,[...list,bot]);}catch(e){return false;}
   return meta.convId;

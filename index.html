@@ -375,6 +375,7 @@
           <button class="btn" id="edVoiceTest" type="button">Test</button></div>
         <div class="hint">Uses this device's built-in voices. Automatic gives each character its own voice.</div>
       </div>
+      <label class="toggle-row"><input id="edThoughts" type="checkbox" /> <span>Reveal inner thoughts 💭 under each reply</span></label>
       <label class="toggle-row"><input id="edWebSearch" type="checkbox" /> <span>Always search the web before replying (needs an Exa key)</span></label>
       <label class="toggle-row"><input id="edMoods" type="checkbox" /> <span>Track mood (for character agents)</span></label>
       <div class="hint" style="margin-top:-6px">The agent reports its mood after each reply; the heart button in the header shows the history and sets its mood for the next reply.</div>
@@ -445,6 +446,8 @@
         <label class="toggle-row"><input id="grRpMature" type="checkbox" /> <span>Mature roleplay</span></label>
         <label class="toggle-row" id="grRpAdultRow" style="display:none"><input id="grRpAdult" type="checkbox" /> <span>I confirm I am an adult</span></label>
         <label class="toggle-row"><input id="grRpMoods" type="checkbox" checked /> <span>Track character moods</span></label>
+        <label class="toggle-row"><input id="grRpThoughts" type="checkbox" /> <span>Reveal inner thoughts 💭</span></label>
+        <div class="hint" style="margin-top:-6px">Each reply carries the character's private thoughts, shown folded under the message. Other characters never hear them.</div>
         <div class="hint" style="margin-top:-6px">Each reply ends with a hidden mood tag the app reads; set a character's mood from the Moods button in the chat. With Mature roleplay on, mature moods are included: flirty, teasing, passionate, horny, needy, dominant, submissive, satisfied.</div>
         <div class="sect-label">AI characters</div>
         <div id="grRpCharacters"></div>
