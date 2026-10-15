@@ -479,7 +479,7 @@ function updateChatRow(m,d){
     if(d._thoughtsValue!==m.thoughts){d._thoughts.innerHTML='<summary>💭 <span>'+esc((m.characterName||m.agentName||"Their")+(m.characterName||m.agentName?"'s":"")+" thoughts")+'</span></summary><p>'+esc(m.thoughts)+'</p>';d._thoughtsValue=m.thoughts;}
   }else if(d._thoughts){d._thoughts.remove();d._thoughts=null;d._thoughtsValue=null;}
   if(m.sources&&!m.searching){
-    if(!d._sources){d._sources=document.createElement("div");d._sources.className="sources";d._text.after(d._sources);}
+    if(!d._sources){d._sources=document.createElement("details");d._sources.className="sources";d._text.after(d._sources);}
     const key=m.searchQuery+"|"+m.sources.length;
     if(d._sourcesKey!==key){d._sources.innerHTML=sourcesHtml(m);d._sourcesKey=key;}
   }else if(d._sources){d._sources.remove();d._sources=null;d._sourcesKey=null;}
@@ -1245,9 +1245,12 @@ function renderWebBtn(){
   b.disabled=!!controller;
 }
 $("#webBtn").onclick=()=>{store.webOn=!store.webOn;renderWebBtn();toast(store.webOn?"🌐 Web search on — replies will search the web and cite sources":"Web search off");};
+// Folded by default: one small line at the end of the reply; tap it to see the list.
 function sourcesHtml(m){
-  return '<div class="sources-head">'+icon("globe")+'<span>'+esc(m.sources.length?"Sources":"No web results")+(m.searchQuery?' · <i>'+esc(m.searchQuery)+'</i>':"")+'</span></div>'+
-    (m.sources.length?'<ol>'+m.sources.map(s=>'<li><a href="'+esc(s.url)+'" target="_blank" rel="noopener"><b>'+esc(s.title)+'</b><small>'+esc(sourceHost(s.url))+'</small></a></li>').join("")+'</ol>':"");
+  const n=m.sources.length;
+  return '<summary>'+icon("globe")+'<span>'+(n?n+" source"+(n===1?"":"s"):"No web results")+'</span></summary>'+
+    (m.searchQuery?'<div class="sources-query">Searched: '+esc(m.searchQuery)+'</div>':"")+
+    (n?'<ol>'+m.sources.map(s=>'<li><a href="'+esc(s.url)+'" target="_blank" rel="noopener"><b>'+esc(s.title)+'</b><small>'+esc(sourceHost(s.url))+'</small></a></li>').join("")+'</ol>':"");
 }
 
 try{applyAppearance();}catch(e){}
