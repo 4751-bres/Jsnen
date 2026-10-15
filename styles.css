@@ -481,6 +481,13 @@ body.has-bg .chapter-divider{text-shadow:0 1px 3px var(--bg)}
 .dir-presets .chip-btn{min-height:36px}
 
 /* Chat options menu */
+.menu-sect{margin:10px 2px 6px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
+.menu-sect:first-child{margin-top:0}
+.menu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.menu-grid .menu-item{flex-direction:column;justify-content:center;gap:6px;min-height:76px;padding:10px 6px;text-align:center}
+.menu-grid .menu-item span{align-items:center}
+.menu-grid .menu-item b{font-size:13.5px;line-height:1.2}
+.menu-grid .menu-item svg{width:22px;height:22px}
 .menu-list{display:flex;flex-direction:column;gap:6px}
 .menu-item{display:flex;align-items:center;gap:14px;width:100%;min-height:60px;padding:10px 14px;border:1px solid var(--line);border-radius:var(--radius-md);
   background:var(--surface-2);color:var(--text);text-align:left;font:inherit;cursor:pointer}
