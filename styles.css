@@ -54,10 +54,6 @@ body[data-mood="workflow"]{--mood:var(--violet)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 html,body{height:100%;margin:0}
-/* The root paints the same colour as the app, so browser dark modes (Samsung Internet) cannot recolour the sides. */
-html{background:var(--bg);-webkit-text-size-adjust:100%;text-size-adjust:100%}
-header,.composer,.responders,.composer-tools,.idea-row,.director-bar,.attachments,main{width:100%!important;min-width:100%;max-width:none!important;align-self:stretch!important;margin-left:0!important;margin-right:0!important;box-sizing:border-box}
-body{align-items:stretch!important}
 body{
   background:var(--bg);color:var(--text);font:16px/1.5 var(--font);
   display:flex;flex-direction:column;height:var(--app-h,100dvh);overflow:hidden;
@@ -549,7 +545,6 @@ body.has-bg .chapter-divider{text-shadow:0 1px 3px var(--bg)}
 #draftBtn:disabled{opacity:.4}
 #webBtn.on{background:var(--accent-fill);border-color:transparent;color:var(--on-accent)}
 /* While typing with the keyboard up (short screen), chips and strips step aside so the text and the chat stay visible. */
-@media (max-width:400px){.composer{gap:6px;padding-left:8px;padding-right:8px}#toolsBtn,.send{width:42px;height:42px}}
 @media (max-height:560px){body.typing #responders,body.typing #directorBar{display:none!important}}
 /* One ＋ button keeps the message box wide; photo, web search and Write my reply live in a small tray above it. */
 #toolsBtn{

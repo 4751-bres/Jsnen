@@ -34,9 +34,6 @@ function applyTheme(value){
   if(value)root.dataset.theme=value;else delete root.dataset.theme;
   const light=value==="light"||(!value&&matchMedia("(prefers-color-scheme: light)").matches);
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content",light?"#f5f6fa":"#0b0f17");
-  // Declare exactly the scheme in use: browsers with their own dark mode (Samsung Internet) then leave the app alone.
-  document.querySelector('meta[name="color-scheme"]')?.setAttribute("content",light?"light only":"dark only");
-  root.style.colorScheme=light?"light only":"dark only";
 }
 try{applyTheme(localStorage.getItem("ds_theme")||"");}catch(e){applyTheme("");}
 const store = {
@@ -1331,41 +1328,7 @@ function fitToViewport(){
   const vv=window.visualViewport;if(!vv)return;
   document.documentElement.style.setProperty("--app-h",Math.round(vv.height)+"px");
   if(window.scrollY)window.scrollTo(0,0);
-  // Without content resizing the browser may pan the visible area down to the focused box; follow it.
-  const top=Math.max(0,Math.round(vv.offsetTop));
-  document.body.style.transform=top?"translateY("+top+"px)":"";
 }
-// Pick the keyboard-resize mode this phone handles correctly: from Settings → Phone, or detected (saved per phone).
-function devicePref(){try{return localStorage.getItem("ds_device")||"auto";}catch(e){return "auto";}}
-function applyViewportMode(){
-  const meta=document.querySelector('meta[name="viewport"]');if(!meta)return;
-  let plain=false;try{plain=localStorage.getItem("ds_viewport_plain")==="1";}catch(e){}
-  meta.setAttribute("content",viewportFor(devicePref(),plain));
-  setTimeout(fitToViewport,50);
-}
-$("#deviceSelect").value=devicePref();
-$("#deviceSelect").onchange=e=>{
-  try{localStorage.setItem("ds_device",e.target.value);if(e.target.value==="auto")localStorage.removeItem("ds_viewport_plain");}catch(err){}
-  applyViewportMode();toast("Saved for this phone: "+DEVICE_PROFILES[e.target.value].name);
-};
-(()=>{
-  const meta=document.querySelector('meta[name="viewport"]');if(!meta)return;
-  applyViewportMode();
-  if(devicePref()!=="auto")return;
-  let plain=false;try{plain=localStorage.getItem("ds_viewport_plain")==="1";}catch(e){}
-  if(plain)return;
-  const portraitNow=()=>matchMedia("(orientation: portrait)").matches;
-  let startWidth=innerWidth,startPortrait=portraitNow();
-  addEventListener("resize",()=>{
-    const portrait=portraitNow();
-    if(portrait!==startPortrait){startPortrait=portrait;startWidth=innerWidth;return;}
-    if(keyboardWidthBug(startWidth,innerWidth,startPortrait,portrait)){
-      meta.setAttribute("content",VIEWPORT_PLAIN);
-      try{localStorage.setItem("ds_viewport_plain","1");}catch(e){}
-      setTimeout(fitToViewport,50);
-    }
-  });
-})();
 if(window.visualViewport){visualViewport.addEventListener("resize",fitToViewport);visualViewport.addEventListener("scroll",fitToViewport);fitToViewport();}
 $("#webBtn").onclick=()=>{store.webOn=!store.webOn;renderWebBtn();toast(store.webOn?"🌐 Web search on — replies will search the web and cite sources":"Web search off");};
 // Folded by default: one small line at the end of the reply; tap it to see the list.
@@ -1992,7 +1955,7 @@ function downloadFile(name,text,type){
 function applyMessageButtons(){
   document.body.classList.toggle("hide-speak",!store.showSpeak);
   document.body.classList.toggle("hide-pin",!store.showPin);
-  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#deviceSelect").value=devicePref();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
+  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
 }
 $("#notifyReplies").onchange=async e=>{
   if(!e.target.checked){store.notifyReplies=false;return;}
