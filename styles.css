@@ -548,6 +548,7 @@ body.has-bg .chapter-divider{text-shadow:0 1px 3px var(--bg)}
 #draftBtn:disabled{opacity:.4}
 #webBtn.on{background:var(--accent-fill);border-color:transparent;color:var(--on-accent)}
 /* While typing with the keyboard up (short screen), chips and strips step aside so the text and the chat stay visible. */
+@media (max-width:400px){.composer{gap:6px;padding-left:8px;padding-right:8px}#toolsBtn,.send{width:42px;height:42px}}
 @media (max-height:560px){body.typing #responders,body.typing #directorBar{display:none!important}}
 /* One ＋ button keeps the message box wide; photo, web search and Write my reply live in a small tray above it. */
 #toolsBtn{

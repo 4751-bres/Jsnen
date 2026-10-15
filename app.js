@@ -34,6 +34,9 @@ function applyTheme(value){
   if(value)root.dataset.theme=value;else delete root.dataset.theme;
   const light=value==="light"||(!value&&matchMedia("(prefers-color-scheme: light)").matches);
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content",light?"#f5f6fa":"#0b0f17");
+  // Declare exactly the scheme in use: browsers with their own dark mode (Samsung Internet) then leave the app alone.
+  document.querySelector('meta[name="color-scheme"]')?.setAttribute("content",light?"light only":"dark only");
+  root.style.colorScheme=light?"light only":"dark only";
 }
 try{applyTheme(localStorage.getItem("ds_theme")||"");}catch(e){applyTheme("");}
 const store = {
