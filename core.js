@@ -649,6 +649,22 @@ function waitingLabel(name,providerName,keepAlives,elapsedMs){
   return (name||"Your agent")+" is typing…";
 }
 /* waiting-core:end */
+/* drawer-swipe-core:start */
+// Edge swipe for the chat list: where a drag may start, and whether letting go opens or closes it.
+const EDGE_ZONE=44;
+function drawerSwipeStart(x,y,{open,headerBottom,width}){
+  if(width>=900)return null;                       // wide screens show the list as a sidebar
+  if(open)return "close";
+  if(x<=EDGE_ZONE)return "open";                   // from the left edge (beyond Android's back-gesture strip)
+  if(y<=headerBottom)return "open";                // or anywhere on the header bar
+  return null;
+}
+function drawerSwipeEnd(kind,dx,velocity,drawerWidth){
+  const travel=kind==="open"?dx:-dx,threshold=Math.min(110,drawerWidth*0.35);
+  const passed=travel>threshold||(travel>24&&velocity>0.45);
+  return kind==="open"?passed:!passed;             // true = drawer ends open
+}
+/* drawer-swipe-core:end */
 /* swipe-core:start */
 // What a horizontal swipe on a reply does: older/newer version, or a fresh reply past the newest one.
 function swipeAction(message,isLast,dx,dy){

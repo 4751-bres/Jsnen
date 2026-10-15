@@ -1584,13 +1584,53 @@ async function exportAgentCard(agent){
 }
 $("#edExportCard").onclick=()=>{const a=agents.find(x=>x.id===editingId);if(a)exportAgentCard(a);else toast("Save the agent first.");};
 
+/* ---------- Edge swipe: drag the chat list in from the left, drag it back to close ---------- */
+(()=>{
+  const drawer=document.getElementById("drawer"),scrim=document.getElementById("scrim");
+  let drag=null;
+  const width=()=>drawer.offsetWidth||Math.min(innerWidth*0.88,320);
+  document.addEventListener("touchstart",e=>{
+    if(e.touches.length!==1||!document.getElementById("lockScreen").hidden)return;
+    const open=drawer.classList.contains("on");
+    if(!open&&document.querySelector(".sheet.on"))return;      // another sheet is up
+    const t=e.touches[0],header=document.querySelector("header");
+    const kind=drawerSwipeStart(t.clientX,t.clientY,{open,headerBottom:header?header.getBoundingClientRect().bottom:0,width:innerWidth});
+    if(!kind)return;
+    if(e.target.closest("input,select,textarea"))return;
+    if(kind==="close"&&!e.target.closest("#drawer,#scrim"))return;
+    drag={kind,x:t.clientX,y:t.clientY,t:Date.now(),dx:0,active:false};
+  },{passive:true});
+  document.addEventListener("touchmove",e=>{
+    if(!drag)return;
+    const t=e.touches[0],dx=t.clientX-drag.x,dy=t.clientY-drag.y;
+    if(!drag.active){
+      if(Math.abs(dy)>14&&Math.abs(dy)>Math.abs(dx)){drag=null;return;}  // a scroll, not a swipe
+      if(Math.abs(dx)<10)return;
+      if(drag.kind==="open"&&dx<0||drag.kind==="close"&&dx>0){drag=null;return;}
+      drag.active=true;drawer.style.transition="none";scrim.style.transition="none";
+      if(drag.kind==="open"){$("#drawerSort").value=store.sort;renderAgents();scrim.classList.add("on");}
+    }
+    drag.dx=dx;
+    const w=width(),offset=drag.kind==="open"?Math.min(0,-w+dx):Math.min(0,dx);
+    drawer.style.transform="translateX("+offset+"px)";scrim.style.opacity=String(Math.max(0,Math.min(1,1+offset/w)));
+  },{passive:true});
+  const finish=e=>{
+    if(!drag)return;const d=drag;drag=null;
+    if(!d.active)return;
+    const velocity=Math.abs(d.dx)/Math.max(1,Date.now()-d.t),open=drawerSwipeEnd(d.kind,d.dx,velocity,width());
+    drawer.style.transition="";scrim.style.transition="";drawer.style.transform="";scrim.style.opacity="";
+    if(open){closeAll();openSheet("#drawer");}else closeAll();
+  };
+  document.addEventListener("touchend",finish);document.addEventListener("touchcancel",finish);
+})();
+
 /* ---------- Swipe replies (phones): left = next version or a new reply, right = previous version ---------- */
 (()=>{
   let start=null;
   const chat=document.getElementById("chat");
   chat.addEventListener("touchstart",e=>{
     const row=e.target.closest(".msg.bot");
-    if(!row||e.touches.length!==1||controller||isWorkflow()||e.target.closest("button,a,details,summary,pre,input,textarea")){start=null;return;}
+    if(!row||e.touches.length!==1||controller||isWorkflow()||e.touches[0].clientX<=EDGE_ZONE||e.target.closest("button,a,details,summary,pre,input,textarea")){start=null;return;}
     start={x:e.touches[0].clientX,y:e.touches[0].clientY,row,decided:false,horizontal:false};
   },{passive:true});
   chat.addEventListener("touchmove",e=>{
