@@ -384,6 +384,16 @@ body[data-mood="workflow"] header .title .sub::after{content:""}
 :root[data-theme="light"] .initials{color:var(--ini-l)}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .initials{color:var(--ini-l)}}
 
+/* 💡 Ideas */
+.idea-row{display:flex;flex-direction:column;gap:6px;padding:8px max(10px,calc((100% - var(--column)) / 2)) 0;background:var(--bg);position:relative}
+.idea-row[hidden]{display:none}
+.idea{text-align:left;padding:9px 40px 9px 12px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-1);color:var(--text);font:inherit;font-size:14px;line-height:1.4;cursor:pointer}
+.idea p{margin:0}
+.idea em{color:var(--action-text)}
+.idea:active{background:var(--surface-2)}
+.idea-x{position:absolute;top:10px;right:max(12px,calc((100% - var(--column)) / 2 + 2px));width:32px;height:32px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:transparent;color:var(--text-3);cursor:pointer}
+.idea-x svg{width:16px;height:16px}
+
 /* Typing indicator */
 .typing{display:inline-flex;align-items:center;gap:4px;color:var(--text-3);font-size:14px;font-style:italic}
 .typing i{width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.35;animation:typing 1.2s infinite}
@@ -486,7 +496,7 @@ body.has-bg .chapter-divider{text-shadow:0 1px 3px var(--bg)}
 #toolsBtn.web-on::after{content:"";position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg)}
 .composer-tools{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:8px max(10px,calc((100% - var(--column)) / 2)) 0;background:var(--bg)}
 .composer-tools[hidden]{display:none}
-.composer-tools button#attachBtn,.composer-tools button#webBtn,.composer-tools button#draftBtn{
+.composer-tools button#attachBtn,.composer-tools button#webBtn,.composer-tools button#draftBtn,.composer-tools button#ideasBtn{
   width:auto;height:40px;flex:none;display:inline-flex;align-items:center;gap:6px;padding:0 12px;white-space:nowrap;font:inherit;font-size:14px;font-weight:550;
   border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface-1);color:var(--text)}
 .composer-tools button#webBtn.on{background:var(--accent-fill);border-color:transparent;color:var(--on-accent)}

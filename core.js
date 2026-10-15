@@ -573,6 +573,19 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* ideas-core:start */
+// 💡 Ideas: three different next moves for the user, in their own voice, to tap and edit.
+function ideaInstruction(name,description){
+  return "You suggest what "+name+" could say or do next in an ongoing conversation."+(description?" About "+name+": "+description:"")+
+    " Give exactly three different options, one per line, numbered 1. 2. 3.: one bold or forward, one careful or curious, one playful or surprising."+
+    " Each is "+name+"'s own words and *actions* only (never anyone else's), matching how "+name+" writes, under 30 words. No explanations, no quotes, no name labels.";
+}
+function parseIdeas(text){
+  return String(text||"").split("\n").map(l=>l.trim()).filter(l=>/^(\d[.)]|[-*•])\s+/.test(l))
+    .map(l=>l.replace(/^(\d[.)]|[-*•])\s+/,"").replace(/^\*\*(bold|careful|playful|curious|surprising)[^*]*\*\*:?\s*/i,"").replace(/^\[[^\]]{1,40}\]:\s*/,"").replace(/^"([\s\S]*)"$/,"$1").trim())
+    .filter(Boolean).slice(0,3);
+}
+/* ideas-core:end */
 /* icon-core:start */
 // Chats and agents can go without an emoji: an empty icon shows the name's initials, and letters typed as the
 // icon ("NY", "Dr") are shown as a text badge. Colours come from the name, so each one stays recognisable.

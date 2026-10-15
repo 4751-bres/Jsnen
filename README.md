@@ -62,6 +62,7 @@ That's it — it now behaves like a native app with its own icon.
 - **Swipe replies** — on a phone, swipe an AI reply left to see the next version, or, on the newest reply, to generate a new one; swipe right to go back. A tiny vibration confirms it (like SillyTavern/Janitor swipes).
 - **Icons without emoji** — clear the emoji box in any agent, group or workflow editor and it shows the name's initials ("GA") in a colour picked from the name; or type letters ("Dev", "NY") to use them as the icon. Emoji still work as before.
 - **Typing indicator** — while a reply hasn't started, the bubble shows "Nadia is typing…" with animated dots; if the provider is only sending keep-alives (busy servers), it says "DeepSeek is busy — still waiting · 45s" instead of an empty bubble.
+- **💡 Ideas** — ＋ → Ideas suggests three different next moves in your own voice (one bold, one careful, one playful) above the message box; tap one to put it in the box and edit or send it. One small request.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator, and Sexual-health Therapist. The therapist is a fictional adult AI character for sexual-health and relationship conversations, not a licensed clinician. It is also added once for existing users without replacing their agents or chats. Like other agents, it can be edited or deleted. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).

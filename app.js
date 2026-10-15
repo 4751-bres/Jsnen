@@ -668,7 +668,7 @@ function renderWorkflowUi(){
   $("#cancelWorkflow").style.display="block";
 }
 function loadConv(){
-  pendingImages=[];renderAttachments();
+  pendingImages=[];renderAttachments();$("#ideaRow").hidden=true;
   messages=store.conv(currentId);currentRun=isWorkflow()?store.run(currentId):null;renderChatBg();
   try{input.value=localStorage.getItem(draftKey())||"";}catch(e){input.value="";}autoGrow();
   if(currentRun)store.saveRun(currentId,currentRun);
@@ -1902,7 +1902,8 @@ function renderAttachments(){
     remove.onclick=()=>{pendingImages.splice(index,1);renderAttachments();};item.append(img,remove);tray.append(item);
   });
   $("#attachBtn").disabled=readingImages||!!controller;
-  $("#draftBtn").disabled=readingImages||!!controller;$("#draftBtn").hidden=isWorkflow();renderWebBtn();renderDirectorBar();
+  $("#draftBtn").disabled=readingImages||!!controller;$("#draftBtn").hidden=isWorkflow();
+  $("#ideasBtn").disabled=readingImages||!!controller;$("#ideasBtn").hidden=isWorkflow();renderWebBtn();renderDirectorBar();
   $("#attachBtn").title="Attach images or paste a screenshot";
 }
 async function prepareImage(file){
@@ -1957,6 +1958,34 @@ async function draftMyReply(){
   }catch(error){if(error.name!=="AbortError")toast("Could not draft a reply: "+(error.message||"try again"));}
 }
 $("#draftBtn").onclick=draftMyReply;
+/* ---------- 💡 Ideas: three suggested replies above the message box ---------- */
+async function suggestIdeas(){
+  if(controller||readingImages||isWorkflow())return;
+  if(!anyProviderReady()){toast("Add your API key in Settings");$("#setBtn").click();return;}
+  const usable=messages.filter(isContextMessage);
+  if(!usable.length){toast("Start the conversation first, then ask for ideas.");return;}
+  const persona=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user:null;
+  const name=persona?.name||"the user",other=isGroup()?"":curAgent().name;
+  const transcript=usable.slice(-30).map(m=>"["+(m.role==="user"?name:(m.characterName||m.agentName||other||"Assistant"))+"]: "+messageText(historyText(m)||m.content)).join("\n\n");
+  const row=$("#ideaRow");row.hidden=false;row.innerHTML='<span class="typing"><i></i><i></i><i></i><span>Thinking of ideas…</span></span>';
+  try{
+    const text=await withBusy(signal=>quickCompletion([{role:"system",content:ideaInstruction(name,persona?.description)},
+      {role:"user",content:"Conversation so far:\n\n"+transcript+"\n\nThree options for "+name+"'s next message:"}],signal,500));
+    const ideas=parseIdeas(text);
+    if(!ideas.length){row.hidden=true;toast("No ideas came back. Try again.");return;}
+    row.innerHTML="";
+    for(const idea of ideas){
+      const b=document.createElement("button");b.type="button";b.className="idea";b.innerHTML=md(idea);
+      b.onclick=()=>{input.value=idea;input.dispatchEvent(new Event("input"));row.hidden=true;input.focus();};
+      row.appendChild(b);
+    }
+    const close=document.createElement("button");close.type="button";close.className="idea-x";close.innerHTML=icon("x");close.setAttribute("aria-label","Hide ideas");close.onclick=()=>{row.hidden=true;};
+    row.appendChild(close);
+  }catch(error){row.hidden=true;if(error.name!=="AbortError")toast("Could not get ideas: "+(error.message||"try again"));}
+}
+$("#ideasBtn").onclick=suggestIdeas;
+
+
 $("#imageFiles").onchange=e=>addImages(Array.from(e.target.files));
 input.addEventListener("paste",e=>{
   const files=Array.from(e.clipboardData?.files||[]).filter(f=>f.type.startsWith("image/"));
