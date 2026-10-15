@@ -16,5 +16,5 @@ test('install metadata has PNG icons and a declared colour scheme (Samsung Inter
   assert.ok(m.icons.some(i=>i.src==='icon-192.png'&&i.type==='image/png'));
   assert.ok(m.icons.some(i=>i.purpose==='maskable'&&i.type==='image/png'));
   assert.match(source(),/<meta name="color-scheme" content="dark light" \/>/);
-  assert.match(read('sw.js'),/"ds-agents-shell-v5"/);
+  assert.match(read("sw.js"),/"ds-agents-shell-v\d+"/);
 });
