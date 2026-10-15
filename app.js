@@ -1852,7 +1852,7 @@ $("#dirTwist").onclick=async()=>{
   const b=$("#dirTwist");b.disabled=true;const label=b.innerHTML;b.innerHTML=icon("dice")+"Thinking…";
   try{
     const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
-    const twist=(await quickCompletion(twistMessages(messages,roleplay?.user?.name),undefined,120)).trim().replace(/^["']|["']$/g,"");
+    const twist=(await quickCompletion(twistMessages(messages,roleplay?.user?.name,(chaptersFor(currentId).at(-1)||{}).title||""),undefined,120)).trim().replace(/^["']|["']$/g,"");
     if(twist)$("#dirNext").value=twist;else toast("No idea came back. Try again.");
   }catch(e){toast("Could not get a twist: "+e.message);}
   finally{b.disabled=false;b.innerHTML=label;}
@@ -2476,6 +2476,7 @@ function renderMoodSheet(){
     const card=document.createElement("div");card.className="mood-card";
     card.innerHTML='<div class="mood-head"><span class="av">'+avatarInner(agent)+'</span><b>'+esc(name)+'</b>'+(now?moodChip(now):'<span class="hint" style="margin:0">No mood yet</span>')+'</div>'+
       (history.length>1?'<div class="mood-trail" aria-label="Recent moods, oldest first">'+history.slice(-8).map(m=>moodChip(m)).join('<span aria-hidden="true">›</span>')+'</div>':"")+
+      bondPanel(bondHistory(messages,isGroup()?agent.id:null))+
       '<label>'+(steer?"Set for the next reply: "+esc(moodLabel(steer)):"Set a mood for the next reply")+'</label>'+
       '<div class="mood-steer"><select class="field" aria-label="Mood">'+moodNames(s.mature).map(n=>'<option value="'+n+'"'+((steer||now)?.mood===n?" selected":"")+'>'+n.charAt(0).toUpperCase()+n.slice(1)+'</option>').join("")+'</select>'+
       '<input type="range" min="1" max="10" step="1" aria-label="Intensity" value="'+((steer||now)?.level||5)+'"><output>'+((steer||now)?.level||5)+'</output></div>'+
@@ -2492,6 +2493,14 @@ function renderMoodSheet(){
     list.appendChild(card);
   }
   if(!list.children.length)list.innerHTML='<div class="hint">Mood tracking is off for this chat. Turn it on in the agent or group editor.</div>';
+}
+// ❤ closeness: current level, what it means, the change since the start, and a small line of how it moved.
+function bondPanel(levels){
+  if(!levels.length)return "";
+  const now=levels.at(-1),change=now-levels[0],points=sparkPoints(levels,120,28);
+  return '<div class="bond-panel"><span class="bond-now">❤ '+now+'</span><span class="bond-text"><b>'+esc(bondLabel(now))+'</b><small>'+
+    (levels.length>1?(change>0?"+":"")+change+" since the first reply":"First impression")+'</small></span>'+
+    (points?'<svg class="bond-spark" viewBox="0 0 120 28" aria-hidden="true"><polyline points="'+points+'"/></svg>':"")+'</div>';
 }
 function openMoodSheet(){if(controller){toast("Wait for the reply to finish.");return;}renderMoodSheet();closeAll();openSheet("#moodSheet");}
 

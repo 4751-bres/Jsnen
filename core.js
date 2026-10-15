@@ -749,6 +749,15 @@ function stripBondWhileStreaming(text){
   return String(text||"").replace(BOND_TAG,"").replace(/\s*\[\s*(?:b(?:o(?:n(?:d)?)?)?)?\s*(?::[^\]]*)?$/i,"");
 }
 function bondLabel(level){return level>=90?"Devoted":level>=75?"Close":level>=60?"Warm":level>=40?"Neutral":level>=25?"Wary":level>=10?"Cold":"Hostile";}
+// Closeness over time for one character (all replies in single-agent chats), oldest first.
+function bondHistory(list,agentId){
+  return (list||[]).filter(m=>m&&m.role==="assistant"&&m.bond&&(!agentId||m.agentId===agentId)).map(m=>m.bond.level);
+}
+// SVG polyline points for a small 0–100 sparkline.
+function sparkPoints(values,width,height){
+  const v=(values||[]).slice(-24);if(v.length<2)return "";
+  return v.map((n,i)=>(i*(width/(v.length-1))).toFixed(1)+","+(height-(Math.max(0,Math.min(100,n))/100)*height).toFixed(1)).join(" ");
+}
 /* bond-core:end */
 /* appearance-core:start */
 // Appearance: accent colour, reading size/font/spacing, AI bubbles, and per-chat backgrounds.
@@ -866,11 +875,24 @@ function withDirection(apiMessages,direction,options){
   return block?[...(apiMessages||[]),{role:"system",content:block}]:[...(apiMessages||[])];
 }
 // The prompt for the 🎲 Surprise me button: one fitting twist from the recent story.
-function twistMessages(list,userName){
+// Each character's latest mood and closeness (❤) from the chat, newest first wins.
+function storyState(list){
+  const seen=new Map();
+  for(let i=(list||[]).length-1;i>=0;i--){
+    const m=list[i];if(!m||m.role!=="assistant"||m.error)continue;
+    const name=m.characterName||m.agentName||"Character",s=seen.get(name)||{name};
+    if(!s.mood&&m.mood)s.mood=m.mood;
+    if(s.bond===undefined&&m.bond)s.bond=m.bond.level;
+    seen.set(name,s);
+  }
+  return [...seen.values()].filter(s=>s.mood||s.bond!==undefined).reverse();
+}
+function twistMessages(list,userName,chapter){
   const turns=(list||[]).filter(m=>(m.role==="user"||m.role==="assistant")&&!m.error&&m.content).slice(-8)
     .map(m=>(m.role==="user"?(userName||"User"):(m.characterName||m.agentName||"Character"))+": "+String(m.content).slice(0,1000)).join("\n\n");
-  return [{role:"system",content:"You are the director of an ongoing interactive story. Suggest ONE surprising but believable development for the next reply, as a single short instruction (under 30 words) such as \"A stranger knocks at the door, soaked from the storm.\" Fit the tone and characters. Do not decide the user's actions. Reply with the instruction only."},
-    {role:"user",content:turns||"(The story has not started yet.)"}];
+  const state=storyState(list).map(s=>"- "+s.name+": "+[s.mood&&"feels "+s.mood.mood+" ("+s.mood.level+"/10)",s.bond!==undefined&&"closeness to "+(userName||"the user")+" "+s.bond+"/100"].filter(Boolean).join(", ")).join("\n");
+  return [{role:"system",content:"You are the director of an ongoing interactive story. Suggest ONE surprising but believable development for the next reply, as a single short instruction (under 30 words) such as \"A stranger knocks at the door, soaked from the storm.\" Fit the tone and characters"+(state?", and use where the characters stand emotionally: a twist that tests, deepens or shakes those feelings works best":"")+". Do not decide the user's actions. Reply with the instruction only."},
+    {role:"user",content:(chapter?"Current chapter: "+chapter+"\n\n":"")+(state?"Where the characters stand now:\n"+state+"\n\n":"")+(turns?"Recent story:\n\n"+turns:"(The story has not started yet.)")}];
 }
 /* director-core:end */
 /* text-export:start */

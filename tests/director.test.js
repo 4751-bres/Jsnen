@@ -17,7 +17,16 @@ test('direction blocks hold the author note and the one-shot instruction',()=>{
 });
 test('twist prompt uses the recent story with names',()=>{
   const m=core.twistMessages([{role:'user',content:'Hi'},{role:'assistant',characterName:'Elise',content:'Hello'},{role:'assistant',error:true,content:'bad'}],'Rin');
-  assert.equal(m[1].content,'Rin: Hi\n\nElise: Hello');
+  assert.equal(m[1].content,'Recent story:\n\nRin: Hi\n\nElise: Hello');
+});
+test('twists know where the characters stand (mood, closeness) and the chapter',()=>{
+  const list=[{role:'assistant',characterName:'Nadia',content:'a',mood:{mood:'calm',level:3},bond:{level:50}},
+    {role:'user',content:'b'},{role:'assistant',characterName:'Nadia',content:'c',mood:{mood:'jealous',level:7}},
+    {role:'assistant',characterName:'Mara',content:'d',bond:{level:85}}];
+  assert.deepEqual(JSON.parse(JSON.stringify(core.storyState(list))),[{name:'Nadia',mood:{mood:'jealous',level:7},bond:50},{name:'Mara',bond:85}]);
+  const m=core.twistMessages(list,'Rin','The storm');
+  assert.match(m[0].content,/tests, deepens or shakes those feelings/);
+  assert.match(m[1].content,/^Current chapter: The storm\n\nWhere the characters stand now:\n- Nadia: feels jealous \(7\/10\), closeness to Rin 50\/100\n- Mara: closeness to Rin 85\/100\n\nRecent story:/);
   assert.match(core.twistMessages([])[1].content,/not started/);
 });
 
