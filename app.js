@@ -2006,7 +2006,7 @@ function buildApiMessages(agent,options={}){
   const instructions=agentInstructions(agent)+(memory?"\n\n"+memory:"")+(options.mood?.track?"\n"+moodInstruction(options.mood.current,options.mood.mature):"");
   const grounded=groundSystem(instructions,messages);
   if(grounded) sys.push({role:"system",content:grounded});
-  const hist=messages.filter(m=>(m.role==="user"||m.role==="assistant")&&isContextMessage(m)).map(m=>({role:m.role,content:speakerContent(m.role==="user"?"user":"char",m.content,m.role==="user"?m.images:undefined)}));
+  const hist=messages.filter(m=>(m.role==="user"||m.role==="assistant")&&isContextMessage(m)).map(m=>({role:m.role,content:speakerContent(m.role==="user"?"user":"char",m.role==="user"?m.content:historyText(m),m.role==="user"?m.images:undefined)}));
   return [...sys,...hist];
 }
 

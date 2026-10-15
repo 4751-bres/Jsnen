@@ -17,6 +17,9 @@ function isContextMessage(m){return !!m&&!m.streaming&&!m.error&&!(m.role==="ass
 // DeepSeek only accepts images on Flash models; other OpenAI-compatible providers decide for themselves.
 function modelSeesImages(model){const name=String(model||"").toLowerCase();return !name.includes("deepseek")||name.includes("flash");}
 function cleanCharacterReply(text){return (text||"").replace(/^(?:\s*\[char\]\s*:\s*)+/i,"");}
+// Replies with web sources keep their [1] [2] markers on screen, but the source list is not sent back as history;
+// stripping the markers there stops the model from imitating them in later replies.
+function historyText(m){return m?.sources?.length?String(m.content||"").replace(/ ?\[\d{1,2}\](?!\()/g,""):m?.content;}
 function speakerContent(tag,text,images){return imageContent("["+tag+"]: "+((tag==="char"?cleanCharacterReply(text):text)||(images?.length?"Shared an image.":"")),images);}
 function messagesHaveImages(list){const latest=(list||[]).filter(m=>m.role==="user"&&!m.streaming).at(-1);return !!latest?.images?.length;}
 function groundSystem(text,list){
@@ -58,8 +61,8 @@ function buildGroupApiMessages(group,agent,messages,options={}){
     const system=base+"You are \""+agent.name+"\" in a group chat with a human user and other AI agents. Messages from other participants are prefixed with their name in square brackets, e.g. \"[Coder]: ...\". Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name."+discussion+(options.memory?"\n\n"+options.memory:"");
     const history=messages.filter(isContextMessage).map(m=>m.role==="user"
       ?{role:"user",content:imageContent(m.content,m.images)}
-      :m.agentId===agent.id?{role:"assistant",content:m.content}
-      :{role:"user",content:"["+(m.agentName||"Agent")+"]: "+m.content});
+      :m.agentId===agent.id?{role:"assistant",content:historyText(m)}
+      :{role:"user",content:"["+(m.agentName||"Agent")+"]: "+historyText(m)});
     return [{role:"system",content:groundSystem(system,messages)},...history];
   }
   const rp=group.roleplay,character=roleplayCharacter(group,agent);
@@ -74,8 +77,8 @@ function buildGroupApiMessages(group,agent,messages,options={}){
     if(m.role==="user"){
       return {role:"user",content:speakerContent("user",m.content,m.images)};
     }
-    if(m.agentId===agent.id)return {role:"assistant",content:speakerContent("char",m.content)};
-    return {role:"user",content:speakerContent("character: "+(m.characterName||m.agentName||"Character"),m.content)};
+    if(m.agentId===agent.id)return {role:"assistant",content:speakerContent("char",historyText(m))};
+    return {role:"user",content:speakerContent("character: "+(m.characterName||m.agentName||"Character"),historyText(m))};
   });
   return [{role:"system",content:groundSystem(system,messages)},...history];
 }
