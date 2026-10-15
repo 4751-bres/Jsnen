@@ -48,6 +48,7 @@ const store = {
   get ctxSummary(){return localStorage.getItem("ds_ctx_summary")==="1"}, set ctxSummary(v){localStorage.setItem("ds_ctx_summary",v?"1":"0")},
   get pins(){try{return JSON.parse(localStorage.getItem("ds_pins"))||[]}catch(e){return []}}, set pins(v){localStorage.setItem("ds_pins",JSON.stringify(v))},
   get personas(){try{const p=JSON.parse(localStorage.getItem("ds_personas"));return Array.isArray(p)?p:[]}catch(e){return []}}, set personas(v){localStorage.setItem("ds_personas",JSON.stringify(v))},
+  get autoSpeak(){return localStorage.getItem("ds_auto_speak")==="1"}, set autoSpeak(v){localStorage.setItem("ds_auto_speak",v?"1":"0")},
   get showSpeak(){return localStorage.getItem("ds_show_speak")!=="0"}, set showSpeak(v){localStorage.setItem("ds_show_speak",v?"1":"0")},
   get showPin(){return localStorage.getItem("ds_show_pin")!=="0"}, set showPin(v){localStorage.setItem("ds_show_pin",v?"1":"0")},
   get providers(){try{const p=JSON.parse(localStorage.getItem("ds_providers"));return Array.isArray(p)?p:[]}catch(e){return []}}, set providers(v){localStorage.setItem("ds_providers",JSON.stringify(v))},
@@ -1679,8 +1680,9 @@ function downloadFile(name,text,type){
 function applyMessageButtons(){
   document.body.classList.toggle("hide-speak",!store.showSpeak);
   document.body.classList.toggle("hide-pin",!store.showPin);
-  $("#showSpeak").checked=store.showSpeak;$("#showPin").checked=store.showPin;
+  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;$("#showPin").checked=store.showPin;
 }
+$("#autoSpeak").onchange=e=>{try{store.autoSpeak=e.target.checked;}catch(err){}if(!e.target.checked)globalThis.speechSynthesis?.cancel();else toast("New replies will be read aloud");};
 $("#showSpeak").onchange=e=>{try{store.showSpeak=e.target.checked;}catch(err){}applyMessageButtons();if(!e.target.checked)globalThis.speechSynthesis?.cancel();};
 $("#showPin").onchange=e=>{try{store.showPin=e.target.checked;}catch(err){}applyMessageButtons();};
 applyMessageButtons();
@@ -1961,6 +1963,9 @@ async function streamCompletion(agent,apiMessages,meta={}){
     controller=null;setSending(false);
     renderChat();try{store.saveConv(convId,conversationMessages);}catch(error){toast("Response received, but browser storage is full. This reply is not saved.");}renderResponders();
   }
+  // Auto-read: new replies in the open chat are read aloud with the character's voice.
+  if(store.autoSpeak&&!aborted&&!bot.error&&bot.content&&!REPLY_PLACEHOLDERS.has(bot.content)&&convId===currentId&&!meta.workflowRoleId&&!meta.noSearch&&globalThis.document?.visibilityState!=="hidden")
+    try{speakMessage(bot,true);}catch(e){}
   // A one-shot direction is used up once a reply has actually been written.
   if(usedNext&&!aborted&&!bot.error&&bot.content&&!REPLY_PLACEHOLDERS.has(bot.content)){const d=directionFor(convId);saveDirection(convId,{...d,next:""});if(convId===currentId)renderDirectorBar();}
   return {ok:!aborted&&!bot.error&&!bot.interrupted,aborted,bot};
@@ -2066,12 +2071,13 @@ function voiceFor(agent){
   const base=local.length?local:voices,women=base.filter(v=>female.test(v.name)),pool=women.length?women:base,hash=[...String(agent?.id||agent?.name||"x")].reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,7);
   return pool[hash%pool.length];
 }
-function speakMessage(m){
-  const synth=globalThis.speechSynthesis;if(!synth){toast("This browser can't read aloud.");return;}
-  if(speakingMessage===m){synth.cancel();speakingMessage=null;return;}
-  synth.cancel();
+function speakMessage(m,queued=false){
+  const synth=globalThis.speechSynthesis;if(!synth){if(!queued)toast("This browser can't read aloud.");return;}
+  if(!queued&&speakingMessage===m){synth.cancel();speakingMessage=null;return;}
+  // Auto-read queues behind a reply that is still being read (several characters in a row).
+  if(!queued)synth.cancel();
   const text=cleanCharacterReply(m.content||"").replace(/```[\s\S]*?```/g," (code) ").replace(/[*_#>`|]/g,"").replace(/\s+/g," ").trim();
-  if(!text){toast("Nothing to read in this message.");return;}
+  if(!text){if(!queued)toast("Nothing to read in this message.");return;}
   const utterance=new SpeechSynthesisUtterance(text),agent=isGroup()?agentById(m.agentId):curAgent(),voice=voiceFor(agent);
   if(voice){utterance.voice=voice;utterance.lang=voice.lang;}
   utterance.onend=utterance.onerror=()=>{if(speakingMessage===m)speakingMessage=null;};

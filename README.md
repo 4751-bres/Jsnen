@@ -51,6 +51,7 @@ That's it — it now behaves like a native app with its own icon.
 - **World info editor** — ⋯ → World info adds keyword-triggered lore to any agent or group (places, families, history, secrets). An entry is sent only when one of its keywords appears in the last few messages, or always if you choose; a green dot shows what the next reply will receive. Group chats combine the group's world info with each character's own (including lorebooks from imported cards).
 - **Quick model switch** — tap the chat title to change the agent's provider, model, thinking level and temperature on the spot; in groups, pick the character first.
 - **Character colours** — in group chats every character gets their own name colour (and a coloured edge on bubbles), picked automatically or chosen in the agent editor, with variants tuned for dark and light themes.
+- **Auto-read replies** — ⚙️ Settings → *Read new replies aloud automatically* reads each new reply in the open chat with that character's voice; several characters in a row are queued, not cut off.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator, and Sexual-health Therapist. The therapist is a fictional adult AI character for sexual-health and relationship conversations, not a licensed clinician. It is also added once for existing users without replacing their agents or chats. Like other agents, it can be edited or deleted. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).
