@@ -985,7 +985,8 @@ function memoryOwner(){return isWorkflow()?null:isGroup()?curGroup():curAgent();
 function memoryFor(agent){
   const owner=memoryOwner();if(!owner)return "";
   const recent=messages.filter(isContextMessage).slice(-6).map(m=>messageText(m.content));
-  return memoryBlock(owner.memory,activeLore(agent?.lorebook,recent));
+  const lore=[...activeLore(agent?.lorebook,recent),...(owner!==agent?activeLore(owner.lorebook,recent):[])];
+  return memoryBlock(owner.memory,[...new Set(lore)]);
 }
 function pinToMemory(m){
   const owner=memoryOwner();if(!owner)return;
@@ -1428,6 +1429,54 @@ $("#bgForAll").onclick=()=>{
   renderChatBg();renderBgSheet();toast(own?"Used for every chat without its own background":"Default background removed");
 };
 $("#bgMenu").onclick=openBgSheet;
+
+/* ---------- World info: keyword-triggered lore for an agent or a group ---------- */
+let worldEditIndex=-1;
+function worldOwner(){return memoryOwner();}
+function worldBook(){const o=worldOwner();return o?.lorebook?.entries?o.lorebook:{name:"",entries:[]};}
+function saveWorld(book){
+  const o=worldOwner();if(!o)return false;
+  o.lorebook=book.entries.length?book:undefined;
+  try{if(isGroup())store.groups=groups;else store.agents=agents;return true;}catch(e){toast("Could not save world info.");return false;}
+}
+function renderWorldList(){
+  const book=worldBook(),recent=messages.filter(isContextMessage).slice(-6).map(m=>messageText(m.content)).join("\n").toLowerCase();
+  $("#worldList").innerHTML=book.entries.length?"":'<div class="hint" style="margin:0">No entries yet. Add places, factions, history or secrets; each is sent only when one of its keywords comes up in the last few messages.</div>';
+  book.entries.forEach((e,i)=>{
+    const live=e.always||(!e.constant&&(e.keys||[]).some(k=>recent.includes(k.toLowerCase())));
+    const row=document.createElement("button");row.type="button";row.className="world-row";
+    row.innerHTML='<span class="world-dot'+(live?" live":"")+'" title="'+(live?"Sent with the next reply":"Waiting for a keyword")+'"></span><span class="world-meta"><b>'+esc(e.name||"Entry")+'</b><small>'+
+      esc(e.always?"Always included":e.constant?"From the character card (in the prompt)":(e.keys||[]).join(", "))+'</small></span>';
+    row.onclick=()=>openWorldEntry(i);$("#worldList").appendChild(row);
+  });
+  const o=worldOwner();$("#worldTitle").textContent="World info · "+(o?.name||"chat");
+}
+function openWorldSheet(){
+  if(!worldOwner()){toast("World info works in agent and group chats.");return;}
+  renderWorldList();closeAll();openSheet("#worldSheet");
+}
+function openWorldEntry(index){
+  worldEditIndex=index;const e=index>=0?worldBook().entries[index]:null;
+  $("#weName").value=e?.name||"";$("#weKeys").value=(e?.keys||[]).join(", ");$("#weContent").value=e?.content||"";$("#weAlways").checked=!!e?.always;
+  $("#weTitle").textContent=e?"Edit entry":"New entry";$("#weDelete").hidden=!e;
+  closeAll();openSheet("#worldEntrySheet");setTimeout(()=>$(e?"#weContent":"#weName").focus(),250);
+}
+$("#weSave").onclick=()=>{
+  const book=worldBook(),old=worldEditIndex>=0?book.entries[worldEditIndex]:null;
+  let entry;try{entry=makeWorldEntry({name:$("#weName").value,keys:$("#weKeys").value,content:$("#weContent").value,always:$("#weAlways").checked,constant:old?.constant&&!$("#weAlways").checked&&!parseKeywords($("#weKeys").value).length});}
+  catch(e){toast(e.message);return;}
+  const entries=[...book.entries];if(old)entries[worldEditIndex]=entry;else entries.push(entry);
+  if(saveWorld({...book,entries})){renderWorldList();closeAll();openSheet("#worldSheet");toast("Saved");}
+};
+$("#weDelete").onclick=()=>{
+  const book=worldBook();if(worldEditIndex<0)return;
+  if(!confirm("Delete this entry?"))return;
+  const entries=book.entries.filter((_,i)=>i!==worldEditIndex);
+  if(saveWorld({...book,entries})){renderWorldList();closeAll();openSheet("#worldSheet");}
+};
+$("#weBack").onclick=()=>{renderWorldList();closeAll();openSheet("#worldSheet");};
+$("#worldAdd").onclick=()=>openWorldEntry(-1);
+$("#worldMenu").onclick=openWorldSheet;
 
 /* ---------- Story memory sheet: edit facts from the chat, and let the AI suggest new ones ---------- */
 function openMemorySheet(){

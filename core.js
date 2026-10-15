@@ -282,7 +282,7 @@ function parseSseText(raw){
 function activeLore(book,texts){
   if(!book?.entries?.length)return [];
   const hay=(texts||[]).join("\n").toLowerCase();
-  return book.entries.filter(e=>!e.constant&&e.keys.some(k=>k.trim()&&hay.includes(k.trim().toLowerCase()))).map(e=>e.content);
+  return book.entries.filter(e=>e.enabled!==false&&(e.always||!e.constant&&(e.keys||[]).some(k=>k.trim()&&hay.includes(k.trim().toLowerCase())))).map(e=>e.content);
 }
 // Pinned facts plus triggered lore, as one block for the system prompt ("" when there is nothing).
 function memoryBlock(facts,lore){
@@ -570,6 +570,16 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* world-core:start */
+// World info entries written in the app: keywords (comma separated) trigger the text; "always" sends it every reply.
+function parseKeywords(text){return [...new Set(String(text||"").split(/[,\n]/).map(k=>k.trim()).filter(Boolean))].slice(0,30);}
+function makeWorldEntry(fields){
+  const content=String(fields.content||"").trim().slice(0,4000);if(!content)throw new Error("Write what the entry says.");
+  const keys=parseKeywords(fields.keys),always=!!fields.always;
+  if(!keys.length&&!always)throw new Error("Add at least one keyword, or turn on Always include.");
+  return {name:String(fields.name||"").trim().slice(0,80)||keys[0]||"Entry",keys,content,always,...(fields.constant?{constant:true}:{})};
+}
+/* world-core:end */
 /* thoughts-core:start */
 // Inner thoughts: a hidden [thoughts: …] line the app lifts out of the reply and shows under it.
 const THOUGHTS_INSTRUCTION="INNER THOUGHTS: After your reply (and before any [mood] line), add one line in exactly this form: [thoughts: …] with your character's private thoughts in first person, 1–2 sentences: what they really feel, want, or are hiding. Nobody else in the story hears these thoughts; never refer to them in the story itself.";
