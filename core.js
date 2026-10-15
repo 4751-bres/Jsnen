@@ -623,6 +623,28 @@ function applyThoughtsTag(bot){
   return bot;
 }
 /* thoughts-core:end */
+/* bond-core:start */
+// Relationship meter: a hidden [bond: N] line (0–100) for how close the character feels to the user.
+function bondInstruction(previous,userName){
+  const who=userName||"the user";
+  return "RELATIONSHIP: After your reply, add one line in exactly this form: [bond: N], where N from 0 to 100 is how close your character now feels to "+who+
+    " (0 hostile, 25 wary, 50 neutral, 75 close, 100 devoted). "+(Number.isFinite(previous)?"It was "+previous+" before this reply. Move it only by what happened (usually 1–5 points; more for big moments). ":"Start from your character's honest first impression. ")+
+    "Let this level shape how warm or guarded you are. The app reads and hides this line; never mention it in the story.";
+}
+const BOND_TAG=/\[\s*(?:bond|relationship|affection)\s*:\s*(-?\d{1,3})\s*(?:\/\s*100)?\s*\]/gi;
+function applyBondTag(bot,previous){
+  let value=null;
+  const cleaned=String(bot.content||"").replace(new RegExp("\n?[ \t]*"+BOND_TAG.source,"gi"),(all,n)=>{value=Math.max(0,Math.min(100,Math.round(Number(n))));return "";});
+  if(value===null)return bot;
+  bot.content=cleaned.replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim()||bot.content;
+  bot.bond={level:value,...(Number.isFinite(previous)?{change:value-previous}:{})};
+  return bot;
+}
+function stripBondWhileStreaming(text){
+  return String(text||"").replace(BOND_TAG,"").replace(/\s*\[\s*(?:b(?:o(?:n(?:d)?)?)?)?\s*(?::[^\]]*)?$/i,"");
+}
+function bondLabel(level){return level>=90?"Devoted":level>=75?"Close":level>=60?"Warm":level>=40?"Neutral":level>=25?"Wary":level>=10?"Cold":"Hostile";}
+/* bond-core:end */
 /* appearance-core:start */
 // Appearance: accent colour, reading size/font/spacing, AI bubbles, and per-chat backgrounds.
 // Each palette: [accent, fill, soft, user bubble, user bubble text] for dark and light themes.

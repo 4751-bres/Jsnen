@@ -332,6 +332,12 @@ body.bubbles .msg.bot.tinted .msg-body,body.has-bg .msg.bot.tinted .msg-body{bor
 #edColorRow .swatch{width:30px;height:30px}
 .swatch.auto{background:conic-gradient(#f2b880,#8fa8ff,#f48fb1,#5eead4,#c4b0ff,#fcd34d,#86efac,#fca5a5,#f2b880)}
 
+/* Relationship meter */
+.reply-meta .bond{display:inline-flex;align-items:center;gap:3px;padding:1px 8px;border-radius:var(--radius-pill);background:color-mix(in srgb,#f472b6 14%,transparent);color:#f472b6;font-weight:650}
+.reply-meta .bond i{font-style:normal;font-size:11px;font-weight:700}
+.reply-meta .bond i.up{color:var(--ok)}
+.reply-meta .bond i.down{color:var(--danger)}
+
 /* Inner thoughts */
 .thoughts{margin-top:8px;border-left:3px solid var(--accent-soft);padding:2px 0 2px 10px}
 .thoughts summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;min-height:32px;font-size:13px;color:var(--text-3);font-weight:550}

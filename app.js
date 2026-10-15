@@ -469,7 +469,8 @@ function updateChatRow(m,d){
     if(details.open&&text.textContent!==m.reasoning)text.textContent=m.reasoning||"";
   }
   if(d._contentValue!==m.content||d._streaming!==!!m.streaming||d._searching!==!!m.searching){
-    const live=m.thoughtsTracked&&m.streaming?stripThoughtsWhileStreaming(m.content):m.content;
+    let live=m.thoughtsTracked&&m.streaming?stripThoughtsWhileStreaming(m.content):m.content;
+    if(m.bondTracked&&m.streaming)live=stripBondWhileStreaming(live);
     const shown=m.role==="assistant"?cleanCharacterReply(m.moodTracked&&m.streaming?stripPartialMoodTag(live):live):m.content||"";
     d._text.innerHTML=m.searching?'<span class="searching">'+icon("globe")+'Searching the web…</span>':linkCitations(md(shown),m.sources)+(m.streaming?'<span class="cursor"></span>':"");
     d._contentValue=m.content;d._streaming=!!m.streaming;d._searching=!!m.searching;
@@ -491,7 +492,8 @@ function updateChatRow(m,d){
   const note=m.interrupted?"⚠ connection lost — reply incomplete":m.finish?"⚠ "+(FINISH_NOTES[m.finish]||m.finish):m.truncated?"⚠ "+FINISH_NOTES.length:"";
   // Time only: the day divider above already shows the date.
   const time=messageTime(m.at,m.at);
-  const meta=(time?'<span>'+time+'</span>':"")+(note?'<span class="w">'+esc(note)+'</span>':"")+
+  const bond=m.bond?'<span class="bond" title="'+esc(bondLabel(m.bond.level))+'">❤ '+m.bond.level+(m.bond.change?'<i class="'+(m.bond.change>0?"up":"down")+'">'+(m.bond.change>0?"+":"")+m.bond.change+'</i>':"")+'</span>':"";
+  const meta=bond+(time?'<span>'+time+'</span>':"")+(note?'<span class="w">'+esc(note)+'</span>':"")+
     (m.usage?'<span class="tok">'+formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+' out</span>':"");
   if(d._continue)d._continue.hidden=!(m.truncated&&!m.streaming&&messages.at(-1)===m);
   if(d._metaHtml!==meta){d._meta.innerHTML=meta;d._metaHtml=meta;}
@@ -783,7 +785,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";$("#edExportCard").hidden=!id;
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;editingColor=a.color||"";renderColorRow();$("#edThoughts").checked=!!a.thoughts;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;editingColor=a.color||"";renderColorRow();$("#edThoughts").checked=!!a.thoughts;$("#edBond").checked=!!a.bond;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);syncTempState();
   $("#delAgent").hidden=!(id&&agents.length>1);
@@ -819,7 +821,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -828,7 +830,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -940,7 +942,7 @@ function openGroupEditor(id){
   $("#grRoleplay").checked=groupRoleplayDraft.enabled;$("#grRpSetting").value=groupRoleplayDraft.setting;
   $("#grRpOpening").value=groupRoleplayDraft.opening;$("#grRpUserName").value=groupRoleplayDraft.user.name;
   $("#grRpUserDescription").value=groupRoleplayDraft.user.description;renderPersonaChoices();$("#grRpMature").checked=groupRoleplayDraft.mature;
-  $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;$("#grRpThoughts").checked=!!g.thoughts;
+  $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;$("#grRpThoughts").checked=!!g.thoughts;$("#grRpBond").checked=!!g.bond;
   $("#grRoleplay").onchange=renderRoleplayEditor;
   $("#grRpMature").onchange=()=>{$("#grRpAdultRow").style.display=$("#grRpMature").checked?"flex":"none";if(!$("#grRpMature").checked)$("#grRpAdult").checked=false;};
   renderRoleplayEditor();$("#delGroup").style.display=id?"":"none";
@@ -1075,7 +1077,7 @@ $("#saveGroup").onclick=()=>{
   const roleplay=collectRoleplayEditor(members),errors=validateRoleplay(roleplay,members,$("#grRpAdult").checked);
   if(errors.includes("adult-confirmation")){toast("Confirm that you are an adult");return;}
   if(errors.length){toast("Complete the roleplay character details");return;}
-  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),memory:memoryLines($("#grMemory").value),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked,thoughts:$("#grRpThoughts").checked||undefined};
+  const data={emoji:$("#grEmoji").value.trim()||"👥",name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),memory:memoryLines($("#grMemory").value),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked,thoughts:$("#grRpThoughts").checked||undefined,bond:$("#grRpBond").checked||undefined};
   if(editingGroupId){Object.assign(groups.find(g=>g.id===editingGroupId),data);}
   else{const g={id:uid(),...data};groups.push(g);currentKind="group";currentId=g.id;store.kind="group";store.cur=g.id;}
   store.groups=groups;renderAgents();loadConv();closeAll();toast("Group saved");
@@ -1398,6 +1400,17 @@ $("#checkKey").onclick=async()=>{
     out.textContent="✗ "+friendlyApiError(res.status,detail);
   }catch(e){out.textContent="✗ Could not reach "+base+". Check the base URL and your connection.";}
 };
+/* ---------- Relationship meter ---------- */
+function bondWanted(agent,meta){
+  if(meta.workflowRoleId||meta.noSearch||isWorkflow())return false;
+  if(isGroup()){const g=curGroup();return !!(g&&isRoleplayGroup(g)&&g.bond);}
+  return !!agent?.bond;
+}
+function lastBond(list,agentId){
+  for(let i=list.length-1;i>=0;i--){const m=list[i];if(m.role==="assistant"&&m.bond&&(!agentId||m.agentId===agentId))return m.bond.level;}
+  return undefined;
+}
+
 /* ---------- Inner thoughts (roleplay groups and single agents that opt in) ---------- */
 function thoughtsWanted(agent,meta){
   if(meta.workflowRoleId||meta.noSearch||isWorkflow())return false;
@@ -1963,6 +1976,8 @@ async function streamCompletion(agent,apiMessages,meta={}){
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,at:Date.now(),...meta};
   delete bot.noSearch;if(search)bot.searching=true;
   if(typeof thoughtsWanted==="function"&&thoughtsWanted(agent,meta))bot.thoughtsTracked=true;
+  let bondBefore;
+  if(typeof bondWanted==="function"&&bondWanted(agent,meta)){bot.bondTracked=true;bondBefore=lastBond(conversationMessages,isGroup()?agent.id:null);}
   messages.push(bot);
   renderChat();
 
@@ -1985,6 +2000,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
       bot.searching=false;scheduleStreamPaint(bot);
     }
     if(bot.thoughtsTracked)payload.messages=[...payload.messages,{role:"system",content:THOUGHTS_INSTRUCTION}];
+    if(bot.bondTracked){const rp=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;payload.messages=[...payload.messages,{role:"system",content:bondInstruction(bondBefore,rp?.user?.name)}];}
     const chapterLine=!meta.workflowRoleId&&typeof chaptersFor==="function"?chapterNote(chaptersFor(convId)):"";
     if(chapterLine)payload.messages=[...payload.messages,{role:"system",content:chapterLine}];
     // Scene director: the author's note always; the one-shot direction except when continuing a cut-off reply.
@@ -1995,7 +2011,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     }
     // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
-      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
+      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","bondTracked","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
     const res=await fetchWithRetry(()=>backgroundFetch(request.url,{
       method:"POST",
       headers:request.headers,
@@ -2052,6 +2068,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     else{bot.error=true;bot.content="⚠️ "+err.message;}
   }finally{
     if(bot.thoughtsTracked&&!bot.error)applyThoughtsTag(bot);
+    if(bot.bondTracked&&!bot.error)applyBondTag(bot,bondBefore);
     if(bot.moodTracked&&!bot.error)applyMoodTag(bot);
     cancelStreamPaint();releaseWakeLock();
     controller=null;setSending(false);
@@ -2542,6 +2559,7 @@ function adoptJob(job,interrupted){
   if(r.finish){if(r.finish!=="length")bot.finish=r.finish;if(r.finish!=="content_filter")bot.truncated=true;}
   if(interrupted||job.status!=="done"){bot.interrupted="The app was closed before this reply finished";bot.truncated=true;}
   if(bot.thoughtsTracked)applyThoughtsTag(bot);
+  if(bot.bondTracked)applyBondTag(bot,lastBond(list,bot.agentId));
   if(bot.moodTracked)applyMoodTag(bot);
   try{store.saveConv(meta.convId,[...list,bot]);}catch(e){return false;}
   return meta.convId;
