@@ -1852,8 +1852,8 @@ $("#dirTwist").onclick=async()=>{
   const b=$("#dirTwist");b.disabled=true;const label=b.innerHTML;b.innerHTML=icon("dice")+"Thinking…";
   try{
     const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
-    const twist=(await quickCompletion(twistMessages(messages,roleplay?.user?.name,(chaptersFor(currentId).at(-1)||{}).title||""),undefined,120)).trim().replace(/^["']|["']$/g,"");
-    if(twist)$("#dirNext").value=twist;else toast("No idea came back. Try again.");
+    const twist=(await quickCompletion(twistMessages(messages,roleplay?.user?.name,(chaptersFor(currentId).at(-1)||{}).title||"",isGroup()?"":curAgent()?.name),undefined,120));
+    if(cleanTwist(twist))$("#dirNext").value=cleanTwist(twist);else toast("No idea came back. Try again.");
   }catch(e){toast("Could not get a twist: "+e.message);}
   finally{b.disabled=false;b.innerHTML=label;}
 };

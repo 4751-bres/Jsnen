@@ -876,23 +876,27 @@ function withDirection(apiMessages,direction,options){
 }
 // The prompt for the 🎲 Surprise me button: one fitting twist from the recent story.
 // Each character's latest mood and closeness (❤) from the chat, newest first wins.
-function storyState(list){
+function storyState(list,assistantName){
   const seen=new Map();
   for(let i=(list||[]).length-1;i>=0;i--){
     const m=list[i];if(!m||m.role!=="assistant"||m.error)continue;
-    const name=m.characterName||m.agentName||"Character",s=seen.get(name)||{name};
+    const name=m.characterName||m.agentName||assistantName||"Character",s=seen.get(name)||{name};
     if(!s.mood&&m.mood)s.mood=m.mood;
     if(s.bond===undefined&&m.bond)s.bond=m.bond.level;
     seen.set(name,s);
   }
   return [...seen.values()].filter(s=>s.mood||s.bond!==undefined).reverse();
 }
-function twistMessages(list,userName,chapter){
+function twistMessages(list,userName,chapter,assistantName){
   const turns=(list||[]).filter(m=>(m.role==="user"||m.role==="assistant")&&!m.error&&m.content).slice(-8)
-    .map(m=>(m.role==="user"?(userName||"User"):(m.characterName||m.agentName||"Character"))+": "+String(m.content).slice(0,1000)).join("\n\n");
-  const state=storyState(list).map(s=>"- "+s.name+": "+[s.mood&&"feels "+s.mood.mood+" ("+s.mood.level+"/10)",s.bond!==undefined&&"closeness to "+(userName||"the user")+" "+s.bond+"/100"].filter(Boolean).join(", ")).join("\n");
+    .map(m=>(m.role==="user"?(userName||"User"):(m.characterName||m.agentName||assistantName||"Character"))+": "+String(m.content).slice(0,1000)).join("\n\n");
+  const state=storyState(list,assistantName).map(s=>"- "+s.name+": "+[s.mood&&"feels "+s.mood.mood+" ("+s.mood.level+"/10)",s.bond!==undefined&&"closeness to "+(userName||"the user")+" "+s.bond+"/100"].filter(Boolean).join(", ")).join("\n");
   return [{role:"system",content:"You are the director of an ongoing interactive story. Suggest ONE surprising but believable development for the next reply, as a single short instruction (under 30 words) such as \"A stranger knocks at the door, soaked from the storm.\" Fit the tone and characters"+(state?", and use where the characters stand emotionally: a twist that tests, deepens or shakes those feelings works best":"")+". Do not decide the user's actions. Reply with the instruction only."},
     {role:"user",content:(chapter?"Current chapter: "+chapter+"\n\n":"")+(state?"Where the characters stand now:\n"+state+"\n\n":"")+(turns?"Recent story:\n\n"+turns:"(The story has not started yet.)")}];
+}
+function cleanTwist(text){
+  const t=String(text||"").trim().split("\n").map(s=>s.trim()).find(Boolean)||"";
+  return /^(["“'])[\s\S]*(["”'])$/.test(t)&&!/^["“'][^"“”']*["”'][^"“”']+/.test(t)?t.slice(1,-1).trim():t;
 }
 /* director-core:end */
 /* text-export:start */
