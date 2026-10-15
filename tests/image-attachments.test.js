@@ -39,7 +39,7 @@ test('legacy text conversations keep their string content',()=>{
 });
 test('attachment submission keeps draft intact when storage is full',()=>{
   const ctx=context({readingImages:false,input:{value:'Read this'},pendingImages:[image],messages:[],currentId:'a',store:{saveConv(){throw Error('quota');}},toast(){}});
-  vm.runInContext(source.slice(source.indexOf('function commitComposer(){'),source.indexOf('function autoGrow()')),ctx);
+  vm.runInContext(source.slice(source.indexOf('function commitComposer('),source.indexOf('function autoGrow()')),ctx);
   assert.equal(ctx.commitComposer(),false);
   assert.equal(ctx.input.value,'Read this');assert.equal(ctx.pendingImages.length,1);assert.equal(ctx.messages.length,0);
 });

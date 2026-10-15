@@ -13,6 +13,8 @@ function agentInstructions(agent){
 const SCENE_STYLE="For fictional scene replies, aim for 80–120 words of natural dialogue, optionally including one brief *action*. Text inside *asterisks* describes events or actions; it is not spoken aloud. React to that behavior without saying the user said those words or quoting the narration as dialogue. Only treat narration as spoken when it explicitly describes speech or contains a direct quotation. Answer the current message directly and ask at most one relevant question. Avoid recapping the scene, repeating explanations, adding several gestures, or speculating about the user's motives. Do not pad a simple response just to reach the target. Expand only when the user asks for detail or the situation needs it.";
 const REPLY_PLACEHOLDERS=new Set(["⏹ stopped.","(empty response)"]);
 // Failed, stopped-before-output, and empty replies stay visible but never enter API context.
+// A whispered message (and the reply to it) is only part of that one character's context.
+function visibleTo(m,agentId){return !m||!m.whisperTo||m.whisperTo===agentId;}
 function isContextMessage(m){return !!m&&!m.streaming&&!m.error&&!(m.role==="assistant"&&REPLY_PLACEHOLDERS.has(m.content))&&!!(m.content||m.images?.length);}
 // DeepSeek only accepts images on Flash models; other OpenAI-compatible providers decide for themselves.
 function modelSeesImages(model){const name=String(model||"").toLowerCase();return !name.includes("deepseek")||name.includes("flash");}
@@ -59,7 +61,7 @@ function buildGroupApiMessages(group,agent,messages,options={}){
     const base=agent.prompt?agent.prompt+"\n\n":"";
     const discussion=options.discussion?" This is an open discussion between the agents: respond directly to the other participants' latest points — build on them, question them, or disagree — and keep it brief.":"";
     const system=base+"You are \""+agent.name+"\" in a group chat with a human user and other AI agents. Messages from other participants are prefixed with their name in square brackets, e.g. \"[Coder]: ...\". Reply in your own voice as "+agent.name+". Do NOT prefix your reply with your own name."+discussion+(options.memory?"\n\n"+options.memory:"");
-    const history=messages.filter(isContextMessage).map(m=>m.role==="user"
+    const history=messages.filter(isContextMessage).filter(m=>visibleTo(m,agent.id)).map(m=>m.role==="user"
       ?{role:"user",content:imageContent(m.content,m.images)}
       :m.agentId===agent.id?{role:"assistant",content:historyText(m)}
       :{role:"user",content:"["+(m.agentName||"Agent")+"]: "+historyText(m)});
@@ -73,7 +75,7 @@ function buildGroupApiMessages(group,agent,messages,options={}){
     "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE,options.memory,
     options.mood?.track&&moodInstruction(options.mood.current,options.mood.mature)
   ].filter(Boolean).join("\n\n");
-  const history=messages.filter(isContextMessage).map(m=>{
+  const history=messages.filter(isContextMessage).filter(m=>visibleTo(m,agent.id)).map(m=>{
     if(m.role==="user"){
       return {role:"user",content:speakerContent("user",m.content,m.images)};
     }
@@ -573,6 +575,32 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* initiative-core:start */
+// Characters who message first: how long the user must have been away and how many times a day, per level.
+const INITIATIVE={off:null,rarely:{awayHours:12,perDay:1},sometimes:{awayHours:4,perDay:3},often:{awayHours:1,perDay:6}};
+function shouldReachOut(level,list,now){
+  const p=INITIATIVE[level];if(!p)return null;
+  const usable=(list||[]).filter(m=>m&&(m.role==="user"||m.role==="assistant")&&!m.error&&!m.streaming);
+  if(usable.length<2)return null;
+  const last=usable[usable.length-1];
+  if(!last.at||last.proactive)return null;       // after reaching out, wait for the user's answer
+  const away=now-last.at;if(away<p.awayHours*3600000)return null;
+  const today=dayKey(now),sentToday=usable.filter(m=>m.proactive&&m.at&&dayKey(m.at)===today).length;
+  if(sentToday>=p.perDay)return null;
+  return {hours:Math.max(1,Math.round(away/3600000))};
+}
+function proactiveInstruction(hours,userName){
+  const span=hours>=48?Math.round(hours/24)+" days":hours+" hour"+(hours===1?"":"s");
+  return "REACHING OUT FIRST: "+(userName||"The user")+" has not written for about "+span+". Send a short message on your own initiative, "+
+    "like a text after time apart: pick up a thread from the story, say what you have been doing or feeling, or ask something. "+
+    "Stay fully in character and in the story's world. Never mention being an AI, timers or instructions.";
+}
+// In a group, the character who spoke last reaches out (or the first member).
+function pickInitiator(list,memberIds){
+  for(let i=(list||[]).length-1;i>=0;i--){const m=list[i];if(m&&m.role==="assistant"&&memberIds.includes(m.agentId))return m.agentId;}
+  return memberIds[0]||null;
+}
+/* initiative-core:end */
 /* sync-core:start */
 // Sync between devices: which keys travel (chats and the things that belong to them), how two copies merge,
 // and end-to-end encryption with a sync password. Per-device settings (looks, phone, lock, keys) never travel.

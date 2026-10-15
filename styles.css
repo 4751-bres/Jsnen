@@ -422,6 +422,14 @@ body[data-mood="workflow"] header .title .sub::after{content:""}
 :root.dev-safe .director-bar,:root.dev-safe .attachments,:root.dev-safe main{width:100%;max-width:none;align-self:stretch;margin-left:0;margin-right:0}
 :root.dev-safe body,:root.dev-safe input,:root.dev-safe textarea,:root.dev-safe select,:root.dev-safe button{font-style:normal;font-synthesis:none}
 
+/* Whisper and first messages */
+.msg.whispered .msg-body{border:1px dashed var(--line-strong);border-radius:16px;padding:8px 12px;opacity:.92}
+.msg.user.whispered .msg-body{background:color-mix(in srgb,var(--bubble-user) 60%,transparent)}
+.reply-meta .whisper-tag,.reply-meta .reach-tag{padding:1px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text-2);font-weight:600}
+.whisper-pill{flex:1;display:flex;align-items:center;min-height:36px;padding:4px 12px;border-radius:var(--radius-pill);border:1px dashed var(--accent);background:var(--accent-soft);color:var(--text);font-size:13px;font-weight:600}
+.whisper-pick{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-right:36px}
+.whisper-pick b{width:100%;font-size:13px;color:var(--text-2)}
+
 /* Sync */
 .sync-status{padding:10px 12px;border-radius:var(--radius-md);background:var(--surface-2);border:1px solid var(--line);font-size:14px;color:var(--text-2)}
 .sync-choice{margin-top:12px;padding:12px;border:1px solid var(--accent);border-radius:var(--radius-md);background:var(--accent-soft)}
@@ -565,7 +573,7 @@ body.has-bg .chapter-divider{text-shadow:0 1px 3px var(--bg)}
 #toolsBtn.web-on::after{content:"";position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg)}
 .composer-tools{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:8px max(10px,calc((100% - var(--column)) / 2)) 0;background:var(--bg)}
 .composer-tools[hidden]{display:none}
-.composer-tools button#attachBtn,.composer-tools button#webBtn,.composer-tools button#draftBtn,.composer-tools button#ideasBtn{
+.composer-tools button#attachBtn,.composer-tools button#webBtn,.composer-tools button#draftBtn,.composer-tools button#ideasBtn,.composer-tools button#whisperBtn{
   width:auto;height:40px;flex:none;display:inline-flex;align-items:center;gap:5px;padding:0 11px;white-space:nowrap;font:inherit;font-size:14px;font-weight:550;
   border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface-1);color:var(--text)}
 .composer-tools button#webBtn.on{background:var(--accent-fill);border-color:transparent;color:var(--on-accent)}

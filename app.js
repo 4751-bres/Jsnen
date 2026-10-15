@@ -495,6 +495,7 @@ function updateChatRow(m,d){
   }else if(d._sources){d._sources.remove();d._sources=null;d._sourcesKey=null;}
   d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
   if(d._tinted)d.classList.add("tinted");
+  if(m.whisperTo)d.classList.add("whispered");
   if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
   if(d._showActions)d.classList.add("show-actions");
   const note=m.interrupted?"⚠ connection lost — reply incomplete":m.finish?"⚠ "+(FINISH_NOTES[m.finish]||m.finish):m.truncated?"⚠ "+FINISH_NOTES.length:"";
@@ -502,7 +503,8 @@ function updateChatRow(m,d){
   const time=messageTime(m.at,m.at);
   if(d._star){d._star.classList.toggle("on",!!m.starred);const t=m.starred?"Remove bookmark":"Bookmark message";d._star.title=t;d._star.setAttribute("aria-label",t);}
   const bond=m.bond?'<span class="bond" title="'+esc(bondLabel(m.bond.level))+'">❤ '+m.bond.level+(m.bond.change?'<i class="'+(m.bond.change>0?"up":"down")+'">'+(m.bond.change>0?"+":"")+m.bond.change+'</i>':"")+'</span>':"";
-  const meta=(m.starred?'<span class="star-mark" title="Bookmarked">★</span>':"")+bond+(time?'<span>'+time+'</span>':"")+(note?'<span class="w">'+esc(note)+'</span>':"")+
+  const whisperName=m.whisperTo&&isGroup()?memberLabel(curGroup(),agentById(m.whisperTo)||{name:"one character"}):"";
+  const meta=(m.whisperTo?'<span class="whisper-tag">🤫 '+(m.role==="user"?"to ":"")+esc(whisperName)+' only</span>':"")+(m.proactive?'<span class="reach-tag" title="Messaged you first">💌 first</span>':"")+(m.starred?'<span class="star-mark" title="Bookmarked">★</span>':"")+bond+(time?'<span>'+time+'</span>':"")+(note?'<span class="w">'+esc(note)+'</span>':"")+
     (m.usage?'<span class="tok">'+formatTokens(m.usage.prompt)+" in · "+formatTokens(m.usage.completion)+' out</span>':"");
   if(d._continue)d._continue.hidden=!(m.truncated&&!m.streaming&&messages.at(-1)===m);
   if(d._metaHtml!==meta){d._meta.innerHTML=meta;d._metaHtml=meta;}
@@ -677,6 +679,7 @@ function loadConv(){
   try{input.value=localStorage.getItem(draftKey())||"";}catch(e){input.value="";}autoGrow();
   if(currentRun)store.saveRun(currentId,currentRun);
   renderChat();refreshHeader();renderResponders();renderWorkflowUi();
+  if(typeof renderWhisper==="function"){whisperTarget=null;renderWhisper();setTimeout(maybeReachOut,900);}
 }
 
 /* ---------- Duplicate a conversation ---------- */
@@ -849,7 +852,7 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";$("#edExportCard").hidden=!id;
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;editingColor=a.color||"";renderColorRow();$("#edThoughts").checked=!!a.thoughts;$("#edBond").checked=!!a.bond;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;editingColor=a.color||"";renderColorRow();$("#edThoughts").checked=!!a.thoughts;$("#edInitiative").value=a.initiative||"off";$("#edBond").checked=!!a.bond;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);syncTempState();
   $("#delAgent").hidden=!(id&&agents.length>1);
@@ -886,7 +889,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim(),name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,initiative:$("#edInitiative").value==="off"?undefined:$("#edInitiative").value,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -895,7 +898,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim(),name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,initiative:$("#edInitiative").value==="off"?undefined:$("#edInitiative").value,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -1007,7 +1010,7 @@ function openGroupEditor(id){
   $("#grRoleplay").checked=groupRoleplayDraft.enabled;$("#grRpSetting").value=groupRoleplayDraft.setting;
   $("#grRpOpening").value=groupRoleplayDraft.opening;$("#grRpUserName").value=groupRoleplayDraft.user.name;
   $("#grRpUserDescription").value=groupRoleplayDraft.user.description;renderPersonaChoices();$("#grRpMature").checked=groupRoleplayDraft.mature;
-  $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;$("#grRpThoughts").checked=!!g.thoughts;$("#grRpBond").checked=!!g.bond;
+  $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;$("#grRpThoughts").checked=!!g.thoughts;$("#grInitiative").value=g.initiative||"off";$("#grRpBond").checked=!!g.bond;
   $("#grRoleplay").onchange=renderRoleplayEditor;
   $("#grRpMature").onchange=()=>{$("#grRpAdultRow").style.display=$("#grRpMature").checked?"flex":"none";if(!$("#grRpMature").checked)$("#grRpAdult").checked=false;};
   renderRoleplayEditor();$("#delGroup").style.display=id?"":"none";
@@ -1142,7 +1145,7 @@ $("#saveGroup").onclick=()=>{
   const roleplay=collectRoleplayEditor(members),errors=validateRoleplay(roleplay,members,$("#grRpAdult").checked);
   if(errors.includes("adult-confirmation")){toast("Confirm that you are an adult");return;}
   if(errors.length){toast("Complete the roleplay character details");return;}
-  const data={emoji:$("#grEmoji").value.trim(),name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),memory:memoryLines($("#grMemory").value),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked,thoughts:$("#grRpThoughts").checked||undefined,bond:$("#grRpBond").checked||undefined};
+  const data={emoji:$("#grEmoji").value.trim(),name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),memory:memoryLines($("#grMemory").value),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked,thoughts:$("#grRpThoughts").checked||undefined,initiative:$("#grInitiative").value==="off"?undefined:$("#grInitiative").value,bond:$("#grRpBond").checked||undefined};
   if(editingGroupId){Object.assign(groups.find(g=>g.id===editingGroupId),data);}
   else{const g={id:uid(),...data};groups.push(g);currentKind="group";currentId=g.id;store.kind="group";store.cur=g.id;}
   store.groups=groups;renderAgents();loadConv();closeAll();toast("Group saved");
@@ -2060,7 +2063,8 @@ function renderAttachments(){
   });
   $("#attachBtn").disabled=readingImages||!!controller;
   $("#draftBtn").disabled=readingImages||!!controller;$("#draftBtn").hidden=isWorkflow();
-  $("#ideasBtn").disabled=readingImages||!!controller;$("#ideasBtn").hidden=isWorkflow();renderWebBtn();renderDirectorBar();
+  $("#ideasBtn").disabled=readingImages||!!controller;$("#ideasBtn").hidden=isWorkflow();
+  $("#whisperBtn").hidden=!isGroup();$("#whisperBtn").disabled=readingImages||!!controller;renderWebBtn();renderDirectorBar();
   $("#attachBtn").title="Attach images or paste a screenshot";
 }
 async function prepareImage(file){
@@ -2216,11 +2220,11 @@ input.addEventListener("paste",e=>{
   const files=Array.from(e.clipboardData?.files||[]).filter(f=>f.type.startsWith("image/"));
   if(files.length){e.preventDefault();addImages(files);}
 });
-function commitComposer(){
+function commitComposer(extra={}){
   if(readingImages){toast("Wait for the images to finish loading");return false;}
   const text=input.value.trim();
   if(!text&&!pendingImages.length)return false;
-  const message={role:"user",content:text,at:Date.now(),...(pendingImages.length?{images:pendingImages.slice()}:{})};
+  const message={role:"user",content:text,at:Date.now(),...(pendingImages.length?{images:pendingImages.slice()}:{}),...extra};
   try{store.saveConv(currentId,[...messages,message]);}
   catch(error){toast("Browser storage is full. Remove an attachment or clear an old chat first.");return false;}
   messages.push(message);pendingImages=[];input.value="";clearDraft();autoGrow();renderAttachments();renderChat();return true;
@@ -2272,7 +2276,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
   const convId=currentId,conversationMessages=messages;
   const search=webSearchWanted(agent,meta);
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,at:Date.now(),...meta};
-  delete bot.noSearch;if(search)bot.searching=true;
+  delete bot.noSearch;if(search)bot.searching=true;if(meta.proactive)bot.proactive=true;
   if(typeof thoughtsWanted==="function"&&thoughtsWanted(agent,meta))bot.thoughtsTracked=true;
   let bondBefore;
   if(typeof bondWanted==="function"&&bondWanted(agent,meta)){bot.bondTracked=true;bondBefore=lastBond(conversationMessages,isGroup()?agent.id:null);}
@@ -2299,6 +2303,8 @@ async function streamCompletion(agent,apiMessages,meta={}){
       bot.searching=false;scheduleStreamPaint(bot);
     }
     if(bot.thoughtsTracked)payload.messages=[...payload.messages,{role:"system",content:THOUGHTS_INSTRUCTION}];
+    if(meta.proactive){const rp=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;payload.messages=[...payload.messages,{role:"system",content:proactiveInstruction(meta.proactive.hours,rp?.user?.name)}];}
+    if(meta.whisperTo)payload.messages=[...payload.messages,{role:"system",content:"PRIVATE: the user just whispered to you alone; the others did not hear it. Answer quietly, just to them."}];
     if(bot.bondTracked){const rp=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;payload.messages=[...payload.messages,{role:"system",content:bondInstruction(bondBefore,rp?.user?.name)}];}
     const chapterLine=!meta.workflowRoleId&&typeof chaptersFor==="function"?chapterNote(chaptersFor(convId)):"";
     if(chapterLine)payload.messages=[...payload.messages,{role:"system",content:chapterLine}];
@@ -2445,7 +2451,7 @@ async function runAgent(agent,options={}){
 async function runAgentResult(agent,options={}){
   const character=isGroup()&&isRoleplayGroup(curGroup())?roleplayCharacter(curGroup(),agent):null;
   const mood=moodOptions(agent);
-  const meta={...(isGroup()?{agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,...(character?{characterName:character.name}:{})}:{}),...moodMeta(mood)};
+  const meta={...(isGroup()?{agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,...(character?{characterName:character.name}:{})}:{}),...moodMeta(mood),...(options.extraMeta||{})};
   const context=await prepareContext(buildApiMessages(agent,{...options,mood}));
   if(!context)return {ok:false,aborted:true};
   const result=await streamCompletion(agent,context,meta);
@@ -2799,6 +2805,11 @@ function send(){
   if(!text&&!pendingImages.length)return;
   if(!anyProviderReady()){toast("Add your API key in Settings");$("#setBtn").click();return;}
   if(isWorkflow()){startWorkflowRun(text);return;}
+  if(isGroup()&&whisperTarget){
+    const agent=agents.find(a=>a.id===whisperTarget);
+    if(agent&&commitComposer({whisperTo:agent.id}))runAgent(agent,{extraMeta:{whisperTo:agent.id}});
+    return;
+  }
   if(!commitComposer())return;
   if(isGroup()){
     // "@Name" picks responders directly; otherwise you choose who replies.
@@ -2810,6 +2821,41 @@ function send(){
   }
   runAgent(curAgent());
 }
+
+/* ---------- Characters who message first (when you come back after a while) ---------- */
+let reachingOut=false;
+async function maybeReachOut(){
+  if(reachingOut||controller||sequence||isWorkflow()||document.hidden||!anyProviderReady())return;
+  const owner=isGroup()?curGroup():curAgent();if(!owner||!owner.initiative)return;
+  const hit=shouldReachOut(owner.initiative,messages,Date.now());if(!hit)return;
+  const agent=isGroup()?agents.find(a=>a.id===pickInitiator(messages,(owner.members||[]).filter(id=>agents.some(a=>a.id===id)))):owner;
+  if(!agent)return;
+  reachingOut=true;
+  try{await runAgentResult(agent,{extraMeta:{proactive:hit}});refreshHeader();renderResponders();}
+  catch(e){/* Try again next time. */}
+  finally{reachingOut=false;}
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(maybeReachOut,900);});
+
+/* ---------- Whisper (groups): a private line to one character ---------- */
+let whisperTarget=null;
+function renderWhisper(){
+  const bar=$("#whisperBar"),agent=whisperTarget&&isGroup()?agents.find(a=>a.id===whisperTarget):null;
+  if(!agent){whisperTarget=null;bar.hidden=true;bar.innerHTML="";input.placeholder=isGroup()?(isRoleplayGroup(curGroup())?"Continue the scene, or @name…":"Message the group, or @name…"):input.placeholder;return;}
+  const name=memberLabel(curGroup(),agent);
+  bar.hidden=false;bar.innerHTML='<span class="whisper-pill">🤫 Only '+esc(name)+' hears this</span><button type="button" class="dir-x" aria-label="Stop whispering">'+icon("x")+'</button>';
+  bar.querySelector("button").onclick=()=>{whisperTarget=null;renderWhisper();};
+  input.placeholder="Whisper to "+name+"…";
+}
+function chooseWhisper(){
+  if(!isGroup()){toast("Whisper works in group chats.");return;}
+  const group=curGroup(),members=groupMembers(group);
+  const row=$("#ideaRow");row.hidden=false;document.body.classList.add("ideas-open");
+  row.innerHTML='<div class="whisper-pick"><b>🤫 Whisper to…</b>'+members.map(a=>'<button type="button" class="chip-btn" data-id="'+esc(a.id)+'"><span class="av">'+avatarInner(a)+'</span><span>'+esc(memberLabel(group,a))+'</span></button>').join("")+'</div>';
+  row.querySelectorAll("[data-id]").forEach(b=>b.onclick=()=>{whisperTarget=b.dataset.id;hideIdeas();renderWhisper();input.focus();});
+  const close=document.createElement("button");close.type="button";close.className="idea-x";close.innerHTML=icon("x");close.setAttribute("aria-label","Cancel");close.onclick=hideIdeas;row.appendChild(close);
+}
+$("#whisperBtn").onclick=chooseWhisper;
 
 /* ---------- Group: one agent replies ---------- */
 function groupRespond(agent){
