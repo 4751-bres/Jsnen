@@ -1242,9 +1242,25 @@ async function exaSearch(query,signal){
 function renderWebBtn(){
   const b=$("#webBtn");b.hidden=!store.exaKey||isWorkflow();
   b.classList.toggle("on",store.webOn);b.setAttribute("aria-pressed",String(store.webOn));
+  $("#webBtnLabel").textContent=store.webOn?"Web: on":"Web: off";
+  $("#toolsBtn").classList.toggle("web-on",!!store.exaKey&&store.webOn&&!isWorkflow());
   b.title=store.webOn?"Web search on: replies search the web first. Tap to turn off.":"Web search off. Tap to search the web before each reply.";
   b.disabled=!!controller;
 }
+/* ---------- Composer tools tray (＋) ---------- */
+function setToolsOpen(open){$("#composerTools").hidden=!open;$("#toolsBtn").setAttribute("aria-expanded",String(open));}
+$("#toolsBtn").onclick=()=>setToolsOpen($("#composerTools").hidden);
+// Any tool closes the tray; so does going back to typing.
+$("#composerTools").addEventListener("click",e=>{if(e.target.closest("button:not(:disabled)"))setTimeout(()=>setToolsOpen(false),0);});
+document.getElementById("input").addEventListener("focus",()=>{setToolsOpen(false);document.body.classList.add("typing");});
+document.getElementById("input").addEventListener("blur",()=>setTimeout(()=>{if(document.activeElement!==document.getElementById("input"))document.body.classList.remove("typing");},150));
+// Keep the whole app above the on-screen keyboard (iOS and browsers without interactive-widget support).
+function fitToViewport(){
+  const vv=window.visualViewport;if(!vv)return;
+  document.documentElement.style.setProperty("--app-h",Math.round(vv.height)+"px");
+  if(window.scrollY)window.scrollTo(0,0);
+}
+if(window.visualViewport){visualViewport.addEventListener("resize",fitToViewport);visualViewport.addEventListener("scroll",fitToViewport);fitToViewport();}
 $("#webBtn").onclick=()=>{store.webOn=!store.webOn;renderWebBtn();toast(store.webOn?"🌐 Web search on — replies will search the web and cite sources":"Web search off");};
 // Folded by default: one small line at the end of the reply; tap it to see the list.
 function sourcesHtml(m){
@@ -1829,7 +1845,11 @@ function commitComposer(){
 // Unsent text is kept per chat, so switching chats never carries a draft into the wrong conversation.
 function draftKey(){return "ds_draft_"+currentKind+":"+currentId;}
 function clearDraft(){try{localStorage.removeItem(draftKey());}catch(e){}}
-function autoGrow(){input.style.height="auto";input.style.height=Math.min(input.scrollHeight,window.innerHeight*0.38)+"px";}
+function autoGrow(){
+  const before=input.offsetHeight;
+  input.style.height="auto";input.style.height=Math.min(input.scrollHeight,window.innerHeight*0.38)+"px";
+  if(input.offsetHeight!==before&&typeof chatFollowing!=="undefined"&&chatFollowing){const chat=document.getElementById("chat");if(chat)chat.scrollTop=chat.scrollHeight;}
+}
 input.addEventListener("input",()=>{autoGrow();try{if(input.value)localStorage.setItem(draftKey(),input.value);else clearDraft();}catch(e){/* Draft is still in the box. */}});
 input.addEventListener("keydown",e=>{
   // Touch-first devices keep Enter for new lines; a hardware keyboard with a fine pointer sends.

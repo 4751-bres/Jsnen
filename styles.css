@@ -56,7 +56,7 @@ body[data-mood="workflow"]{--mood:var(--violet)}
 html,body{height:100%;margin:0}
 body{
   background:var(--bg);color:var(--text);font:16px/1.5 var(--font);
-  display:flex;flex-direction:column;height:100dvh;overflow:hidden;
+  display:flex;flex-direction:column;height:var(--app-h,100dvh);overflow:hidden;
 }
 button{font:inherit;color:inherit;cursor:pointer}
 button:disabled{cursor:default}
@@ -443,12 +443,24 @@ body[data-mood="workflow"] header .title .sub::after{content:""}
   border-radius:var(--radius-pill);background:var(--surface-1);color:var(--accent)
 }
 #draftBtn:disabled{opacity:.4}
-#webBtn{
-  width:44px;height:44px;flex:0 0 auto;display:grid;place-items:center;padding:0;border:1px solid var(--line);
-  border-radius:var(--radius-pill);background:var(--surface-1);color:var(--text-3)
-}
 #webBtn.on{background:var(--accent-fill);border-color:transparent;color:var(--on-accent)}
-#webBtn:disabled{opacity:.4}
+/* While typing with the keyboard up (short screen), chips and strips step aside so the text and the chat stay visible. */
+@media (max-height:560px){body.typing #responders,body.typing #directorBar{display:none!important}}
+/* One ＋ button keeps the message box wide; photo, web search and Write my reply live in a small tray above it. */
+#toolsBtn{
+  width:44px;height:44px;flex:0 0 auto;display:grid;place-items:center;padding:0;border:1px solid var(--line);position:relative;
+  border-radius:var(--radius-pill);background:var(--surface-1);color:var(--text-2);transition:transform var(--dur-fast)
+}
+#toolsBtn[aria-expanded="true"]{transform:rotate(45deg);color:var(--accent)}
+#toolsBtn.web-on::after{content:"";position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg)}
+.composer-tools{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:8px max(10px,calc((100% - var(--column)) / 2)) 0;background:var(--bg)}
+.composer-tools[hidden]{display:none}
+.composer-tools button#attachBtn,.composer-tools button#webBtn,.composer-tools button#draftBtn{
+  width:auto;height:40px;flex:none;display:inline-flex;align-items:center;gap:6px;padding:0 12px;white-space:nowrap;font:inherit;font-size:14px;font-weight:550;
+  border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface-1);color:var(--text)}
+.composer-tools button#webBtn.on{background:var(--accent-fill);border-color:transparent;color:var(--on-accent)}
+.composer-tools button svg{width:18px;height:18px}
+.composer-tools button:disabled{opacity:.4}
 .searching{display:inline-flex;align-items:center;gap:8px;color:var(--text-2);font-style:italic}
 .searching svg{animation:spin 2.4s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
