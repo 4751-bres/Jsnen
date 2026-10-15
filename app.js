@@ -425,7 +425,7 @@ function messageCopyButton(message){
 }
 const expandedReasoning=new WeakSet();
 const CHAT_BATCH=40;
-let chatDividers=new Map(),chatRows=new WeakMap(),chatViewId=null,chatVisibleStart=0,chatFollowing=true,streamPaintTimer=null,streamPaintTarget=null;
+let chatChapterEls=new Map(),chatDividers=new Map(),chatRows=new WeakMap(),chatViewId=null,chatVisibleStart=0,chatFollowing=true,streamPaintTimer=null,streamPaintTarget=null;
 function isChatNearBottom(c){return c.scrollHeight-c.clientHeight-c.scrollTop<100;}
 function updateLatestButton(){$("#jumpToLatest").hidden=chatFollowing;}
 $("#chat").addEventListener("scroll",()=>{chatFollowing=isChatNearBottom($("#chat"));updateLatestButton();},{passive:true});
@@ -522,7 +522,7 @@ function cancelStreamPaint(){if(streamPaintTimer!==null)clearTimeout(streamPaint
 function renderChat(){
   const c=$("#chat"),viewId=currentKind+":"+currentId;
   if(chatViewId!==viewId){
-    cancelStreamPaint();chatViewId=viewId;chatRows=new WeakMap();chatDividers=new Map();chatVisibleStart=Math.max(0,messages.length-CHAT_BATCH);chatFollowing=true;c.replaceChildren();
+    cancelStreamPaint();chatViewId=viewId;chatRows=new WeakMap();chatDividers=new Map();chatChapterEls=new Map();chatVisibleStart=Math.max(0,messages.length-CHAT_BATCH);chatFollowing=true;c.replaceChildren();
   }
   if(chatVisibleStart>=messages.length)chatVisibleStart=Math.max(0,messages.length-CHAT_BATCH);
   if(!messages.length){
@@ -548,8 +548,8 @@ function renderChat(){
     const older=c.querySelector(".older-messages")||document.createElement("button");older.className="older-messages";older.innerHTML=icon("up")+"Load earlier messages ("+chatVisibleStart+")";older.onclick=loadEarlierMessages;nodes.push(older);
   }
   // A divider goes before the first visible message of each calendar day (messages without a time are skipped).
-  let lastDay=null;const now=Date.now();
-  for(const m of messages.slice(chatVisibleStart)){
+  let lastDay=null;const now=Date.now(),placed=isWorkflow()?{byIndex:new Map(),pending:[]}:placeChapters(chaptersFor(currentId),messages);
+  for(const [offset,m] of messages.slice(chatVisibleStart).entries()){
     if(m.role==="system")continue;
     if(m.at){
       const key=dayKey(m.at);
@@ -560,11 +560,13 @@ function renderChat(){
         nodes.push(divider);lastDay=key;
       }
     }
+    for(const ch of placed.byIndex.get(chatVisibleStart+offset)||[])nodes.push(chapterDivider(ch));
     let d=chatRows.get(m);
     const retryKey=isWorkflow()?[currentRun?.id,currentRun?.status].join(":"):"";
     if(!d||d._retryKey!==retryKey){d=createChatRow(m);d._retryKey=retryKey;chatRows.set(m,d);}
     updateChatRow(m,d);nodes.push(d);
   }
+  for(const ch of placed.pending)nodes.push(chapterDivider(ch));
   // Reuse existing rows; appending a token never recreates old messages or images.
   let cursor=c.firstChild;
   for(const node of nodes){if(cursor===node)cursor=cursor.nextSibling;else c.insertBefore(node,cursor);}
@@ -842,7 +844,7 @@ $("#delAgent").onclick=()=>{
   if(!editingId)return;
   const doomed=agents.find(a=>a.id===editingId);if(!confirmDelete(doomed?.name||"this agent",store.conv(editingId).length))return;
   forgetItem(editingId);
-  agents=agents.filter(a=>a.id!==editingId);store.agents=agents;store.clearConv(editingId);store.removeRaw("ds_bg_"+editingId);try{localStorage.removeItem("ds_dir_"+editingId);}catch(e){}
+  agents=agents.filter(a=>a.id!==editingId);store.agents=agents;store.clearConv(editingId);store.removeRaw("ds_bg_"+editingId);try{localStorage.removeItem("ds_dir_"+editingId);localStorage.removeItem("ds_chap_"+editingId);}catch(e){}
   // drop the deleted agent from any group memberships
   groups=groups.map(g=>groupAfterAgentDelete(g,editingId));store.groups=groups;
   if(currentKind==="agent"&&currentId===editingId){currentId=agents[0].id;store.cur=currentId;}
@@ -1082,7 +1084,7 @@ $("#delGroup").onclick=()=>{
   if(!editingGroupId)return;
   const doomed=groups.find(g=>g.id===editingGroupId);if(!confirmDelete(doomed?.name||"this group",store.conv(editingGroupId).length))return;
   forgetItem(editingGroupId);
-  groups=groups.filter(g=>g.id!==editingGroupId);store.groups=groups;store.clearConv(editingGroupId);store.removeRaw("ds_bg_"+editingGroupId);try{localStorage.removeItem("ds_dir_"+editingGroupId);}catch(e){}
+  groups=groups.filter(g=>g.id!==editingGroupId);store.groups=groups;store.clearConv(editingGroupId);store.removeRaw("ds_bg_"+editingGroupId);try{localStorage.removeItem("ds_dir_"+editingGroupId);localStorage.removeItem("ds_chap_"+editingGroupId);}catch(e){}
   if(currentKind==="group"&&currentId===editingGroupId){currentKind="agent";currentId=agents[0].id;store.kind="agent";store.cur=currentId;}
   renderAgents();loadConv();closeAll();toast("Group deleted");
 };
@@ -1532,6 +1534,49 @@ $("#qmSave").onclick=()=>{
 $(".title").addEventListener("click",openQuickModel);
 $(".title").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openQuickModel();}});
 
+/* ---------- Chapters: named breaks in long stories ---------- */
+function chaptersFor(id){try{return normalizeChapters(JSON.parse(localStorage.getItem("ds_chap_"+id)));}catch(e){return [];}}
+function saveChapters(id,list){
+  try{if(list.length)localStorage.setItem("ds_chap_"+id,JSON.stringify(normalizeChapters(list)));else localStorage.removeItem("ds_chap_"+id);}catch(e){toast("Could not save chapters.");}
+}
+function chapterDivider(ch){
+  let el=chatChapterEls.get(ch.id);
+  if(!el){el=document.createElement("div");el.className="chapter-divider";el.setAttribute("role","separator");chatChapterEls.set(ch.id,el);}
+  const label=chapterLabel(ch);if(el._label!==label){el.innerHTML='<span>'+esc("Chapter "+ch.number)+'</span>'+(ch.title?'<b>'+esc(ch.title)+'</b>':"");el._label=label;}
+  return el;
+}
+function renderChapterSheet(){
+  const list=chaptersFor(currentId),placed=placeChapters(list,messages),index=new Map();
+  for(const [i,chs] of placed.byIndex)for(const ch of chs)index.set(ch.id,i);
+  $("#chapterList").innerHTML=list.length?"":'<div class="hint" style="margin:0">No chapters yet. Start one when the story moves on: a new day, a new place, a turning point.</div>';
+  list.forEach((ch,n)=>{
+    const i=index.get(ch.id),row=document.createElement("div");row.className="provider-row";
+    row.innerHTML='<div class="provider-meta"><b>'+esc("Chapter "+(n+1)+(ch.title?" · "+ch.title:""))+'</b><small>'+(i===undefined?"Starts with the next message":esc(messageTime(ch.at)))+'</small></div>'+
+      (i===undefined?"":'<button class="btn" type="button" data-jump>Go</button>')+'<button class="icon-btn" type="button" data-edit aria-label="Rename or delete">'+icon("pencil")+'</button>';
+    row.querySelector("[data-jump]")?.addEventListener("click",()=>{closeAll();setTimeout(()=>focusMessage(i),250);});
+    row.querySelector("[data-edit]").onclick=()=>{
+      const title=prompt("Rename this chapter (clear the name and tap OK to delete it):",ch.title);if(title===null)return;
+      const all=chaptersFor(currentId);
+      if(!title.trim()&&confirm("Delete Chapter "+(n+1)+"? Messages are not affected."))saveChapters(currentId,all.filter(c=>c.id!==ch.id));
+      else if(title.trim())saveChapters(currentId,all.map(c=>c.id===ch.id?{...c,title:title.trim()}:c));
+      renderChapterSheet();renderChat();
+    };
+    $("#chapterList").appendChild(row);
+  });
+}
+function openChapterSheet(){
+  if(isWorkflow()){toast("Chapters work in agent and group chats.");return;}
+  $("#chapterTitle").value="";renderChapterSheet();closeAll();openSheet("#chapterSheet");
+}
+$("#chapterStart").onclick=()=>{
+  const list=chaptersFor(currentId),pending=placeChapters(list,messages).pending;
+  if(pending.length){toast("Chapter "+pending[0].number+" is already waiting for the next message.");return;}
+  const at=Math.max(Date.now(),(messages.at(-1)?.at||0)+1);
+  saveChapters(currentId,[...list,{id:"ch-"+uid(),title:$("#chapterTitle").value.trim(),at}]);
+  closeAll();renderChat();toast("📖 Chapter "+(list.length+1)+" begins with the next message");
+};
+$("#chapterMenu").onclick=openChapterSheet;
+
 /* ---------- World info: keyword-triggered lore for an agent or a group ---------- */
 let worldEditIndex=-1;
 function worldOwner(){return memoryOwner();}
@@ -1661,7 +1706,7 @@ function currentChatExport(){
   const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
   return {item,title:((item.emoji||"")+" "+(item.name||"Chat")).trim(),userName:roleplay?.user?.name||"",assistantName:isGroup()||isWorkflow()?"":item.name,intro:roleplay?.opening?"Opening scene:\n"+roleplay.opening:""};
 }
-function chatAsText(){const c=currentChatExport();return {name:chatFileName(c.item.name,"txt"),text:chatToText(c.title,messages,{userName:c.userName,assistantName:c.assistantName,intro:c.intro})};}
+function chatAsText(){const c=currentChatExport();return {name:chatFileName(c.item.name,"txt"),text:chatToText(c.title,messages,{userName:c.userName,assistantName:c.assistantName,intro:c.intro,chapters:chaptersFor(currentId)})};}
 function textFileFor(){const {name,text}=chatAsText();try{return new File([text],name,{type:"text/plain"});}catch(e){return null;}}
 $("#chatMenuBtn").onclick=()=>{
   const c=currentChatExport();$("#chatMenuTitle").textContent=c.title;
@@ -1913,6 +1958,8 @@ async function streamCompletion(agent,apiMessages,meta={}){
       bot.searching=false;scheduleStreamPaint(bot);
     }
     if(bot.thoughtsTracked)payload.messages=[...payload.messages,{role:"system",content:THOUGHTS_INSTRUCTION}];
+    const chapterLine=!meta.workflowRoleId&&typeof chaptersFor==="function"?chapterNote(chaptersFor(convId)):"";
+    if(chapterLine)payload.messages=[...payload.messages,{role:"system",content:chapterLine}];
     // Scene director: the author's note always; the one-shot direction except when continuing a cut-off reply.
     const direction=meta.workflowRoleId?null:directionFor(convId);
     if(direction&&(direction.note||direction.next)){

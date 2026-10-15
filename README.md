@@ -53,6 +53,7 @@ That's it — it now behaves like a native app with its own icon.
 - **Character colours** — in group chats every character gets their own name colour (and a coloured edge on bubbles), picked automatically or chosen in the agent editor, with variants tuned for dark and light themes.
 - **Auto-read replies** — ⚙️ Settings → *Read new replies aloud automatically* reads each new reply in the open chat with that character's voice; several characters in a row are queued, not cut off.
 - **Roomy message box** — 📎 Photo, 🌐 Web search and ✨ Write for me live behind one ＋ button (a dot on ＋ shows web search is on), so the box gets the width. The app resizes above the phone keyboard, so new lines never slide under it, and character chips step aside while you type.
+- **Chapters** — ⋯ → Chapters starts a named chapter ("The storm") that begins with the next message, shown as a title break in the chat. The sheet lists every chapter with **Go** to jump there; the characters are told which chapter the story is in, and .txt downloads include the breaks.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator, and Sexual-health Therapist. The therapist is a fictional adult AI character for sexual-health and relationship conversations, not a licensed clinician. It is also added once for existing users without replacing their agents or chats. Like other agents, it can be edited or deleted. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).

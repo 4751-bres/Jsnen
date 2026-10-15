@@ -570,6 +570,29 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* chapters-core:start */
+// Chapters: named breaks stored as times; each shows before the first message written at or after it.
+function normalizeChapters(raw){
+  return (Array.isArray(raw)?raw:[]).filter(c=>c&&Number.isFinite(Number(c.at))).map(c=>({id:String(c.id||c.at),title:String(c.title||"").trim().slice(0,80),at:Number(c.at)}))
+    .sort((a,b)=>a.at-b.at);
+}
+// Map of message index -> chapters starting right before it, plus chapters that have no message yet.
+function placeChapters(chapters,list){
+  const byIndex=new Map(),pending=[];
+  for(const [n,ch] of normalizeChapters(chapters).entries()){
+    const item={...ch,number:n+1};
+    const i=(list||[]).findIndex(m=>m&&m.at&&m.at>=ch.at&&(m.role==="user"||m.role==="assistant"));
+    if(i<0)pending.push(item);else{if(!byIndex.has(i))byIndex.set(i,[]);byIndex.get(i).push(item);}
+  }
+  return {byIndex,pending};
+}
+function chapterLabel(ch){return "Chapter "+ch.number+(ch.title?" · "+ch.title:"");}
+function chapterNote(chapters){
+  const list=normalizeChapters(chapters);if(!list.length)return "";
+  const last=list[list.length-1];
+  return "The story is now in Chapter "+list.length+(last.title?": \""+last.title+"\"":"")+". Let the scene reflect this new chapter.";
+}
+/* chapters-core:end */
 /* world-core:start */
 // World info entries written in the app: keywords (comma separated) trigger the text; "always" sends it every reply.
 function parseKeywords(text){return [...new Set(String(text||"").split(/[,\n]/).map(k=>k.trim()).filter(Boolean))].slice(0,30);}
@@ -733,6 +756,7 @@ function longDate(ts){
   return days[d.getDay()]+", "+months[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear();
 }
 function chatToText(title,list,options={}){
+  const placed=placeChapters(options.chapters,list);
   const visible=(list||[]).filter(m=>(m.role==="user"||m.role==="assistant")&&!m.error&&(m.content||m.images?.length));
   const now=options.now||Date.now(),name=String(title||"Chat");
   const out=[name,"Saved "+longDate(now)+" at "+clockTime(now)+" · "+visible.length+" message"+(visible.length===1?"":"s"),"=".repeat(Math.min(48,Math.max(24,name.length)))];
@@ -740,6 +764,7 @@ function chatToText(title,list,options={}){
   let day="";
   for(const m of visible){
     if(m.at){const k=dayKey(m.at);if(k!==day){day=k;out.push("","—— "+longDate(m.at)+" ——");}}
+    for(const ch of placed.byIndex.get((list||[]).indexOf(m))||[])out.push("","═══ "+chapterLabel(ch).toUpperCase()+" ═══");
     const who=m.role==="user"?(options.userName||"You"):(m.characterName||m.agentName||m.workflowRoleName||options.assistantName||"Assistant");
     out.push("",(m.at?"["+clockTime(m.at)+"] ":"")+who+":");
     if(m.content)out.push(String(m.content).replace(/\r\n/g,"\n").trim());
