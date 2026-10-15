@@ -570,6 +570,16 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* swipe-core:start */
+// What a horizontal swipe on a reply does: older/newer version, or a fresh reply past the newest one.
+function swipeAction(message,isLast,dx,dy){
+  if(!message||message.role!=="assistant"||message.streaming||Math.abs(dx)<70||Math.abs(dy)>Math.abs(dx)*0.6)return null;
+  const count=message.versions?.length||1,index=Number.isInteger(message.versionIndex)?message.versionIndex:0;
+  if(dx>0)return index>0?{type:"version",target:index-1}:null;
+  if(index<count-1)return {type:"version",target:index+1};
+  return isLast&&!message.error?{type:"regenerate"}:null;
+}
+/* swipe-core:end */
 /* chapters-core:start */
 // Chapters: named breaks stored as times; each shows before the first message written at or after it.
 function normalizeChapters(raw){

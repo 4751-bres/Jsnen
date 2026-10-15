@@ -594,7 +594,7 @@ function actionButton(name,title,onclick,extraClass){
   b.innerHTML=icon(name);b.title=title;b.setAttribute("aria-label",title);b.onclick=onclick;return b;
 }
 function createChatRow(m){
-    const d=document.createElement("div");
+    const d=document.createElement("div");d._message=m;
     d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
     if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
     const who=whoLabel(m);if(who)d.appendChild(who);
@@ -1574,6 +1574,35 @@ async function exportAgentCard(agent){
   }catch(e){toast("Could not export the card: "+e.message);}
 }
 $("#edExportCard").onclick=()=>{const a=agents.find(x=>x.id===editingId);if(a)exportAgentCard(a);else toast("Save the agent first.");};
+
+/* ---------- Swipe replies (phones): left = next version or a new reply, right = previous version ---------- */
+(()=>{
+  let start=null;
+  const chat=document.getElementById("chat");
+  chat.addEventListener("touchstart",e=>{
+    const row=e.target.closest(".msg.bot");
+    if(!row||e.touches.length!==1||controller||isWorkflow()||e.target.closest("button,a,details,summary,pre,input,textarea")){start=null;return;}
+    start={x:e.touches[0].clientX,y:e.touches[0].clientY,row,decided:false,horizontal:false};
+  },{passive:true});
+  chat.addEventListener("touchmove",e=>{
+    if(!start)return;
+    const dx=e.touches[0].clientX-start.x,dy=e.touches[0].clientY-start.y;
+    if(!start.decided&&(Math.abs(dx)>12||Math.abs(dy)>12)){start.decided=true;start.horizontal=Math.abs(dx)>Math.abs(dy)*1.4;}
+    if(start.horizontal){start.row.style.transform="translateX("+Math.max(-90,Math.min(90,dx*0.6))+"px)";start.row.classList.add("swiping");}
+  },{passive:true});
+  chat.addEventListener("touchend",e=>{
+    if(!start)return;const s=start;start=null;
+    s.row.style.transform="";s.row.classList.remove("swiping");
+    if(!s.horizontal)return;
+    const t=e.changedTouches[0],message=s.row._message,isLast=messages.at(-1)===message;
+    const action=swipeAction(message,isLast,t.clientX-s.x,t.clientY-s.y);
+    if(!action)return;
+    try{navigator.vibrate?.(8);}catch(err){}
+    if(action.type==="version")selectMessageVersion(message,action.target);
+    else regenerateMessage(message);
+  });
+  chat.addEventListener("touchcancel",()=>{if(start){start.row.style.transform="";start.row.classList.remove("swiping");start=null;}});
+})();
 
 /* ---------- Chapters: named breaks in long stories ---------- */
 function chaptersFor(id){try{return normalizeChapters(JSON.parse(localStorage.getItem("ds_chap_"+id)));}catch(e){return [];}}
