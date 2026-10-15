@@ -1817,7 +1817,7 @@ function downloadFile(name,text,type){
 function applyMessageButtons(){
   document.body.classList.toggle("hide-speak",!store.showSpeak);
   document.body.classList.toggle("hide-pin",!store.showPin);
-  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
+  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
 }
 $("#notifyReplies").onchange=async e=>{
   if(!e.target.checked){store.notifyReplies=false;return;}
@@ -1958,6 +1958,73 @@ async function draftMyReply(){
   }catch(error){if(error.name!=="AbortError")toast("Could not draft a reply: "+(error.message||"try again"));}
 }
 $("#draftBtn").onclick=draftMyReply;
+/* ---------- App lock (PIN) ---------- */
+const lockState={failures:0,until:0,entry:"",hiddenAt:0,unlocked:false,setup:null};
+function currentLock(){try{return normalizeLock(JSON.parse(localStorage.getItem("ds_lock")));}catch(e){return null;}}
+async function pinHash(pin,salt){
+  const data=new TextEncoder().encode(salt+":"+pin),digest=await crypto.subtle.digest("SHA-256",data);
+  return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function renderLockDots(){
+  const lock=currentLock(),n=lockState.setup?Math.max(4,lockState.entry.length):lock?.length||4;
+  $("#lockDots").innerHTML=Array.from({length:n},(_,i)=>'<i class="'+(i<lockState.entry.length?"on":"")+'"></i>').join("");
+}
+function showLock(mode){
+  // mode: "unlock" | "new" | "confirm"
+  lockState.entry="";lockState.mode=mode;
+  $("#lockTitle").textContent=mode==="new"?"Choose a PIN (4–8 digits)":mode==="confirm"?"Enter the PIN again":"Enter your PIN";
+  $("#lockMsg").textContent=mode==="new"?"You'll need it to open the app.":"";
+  $("#lockForgot").hidden=mode!=="unlock";$("#lockCancel").hidden=mode==="unlock";$("#lockOk").hidden=mode==="unlock";
+  $("#lockScreen").hidden=false;document.body.classList.add("locked");renderLockDots();
+}
+function hideLock(){$("#lockScreen").hidden=true;document.body.classList.remove("locked");lockState.entry="";lockState.setup=null;}
+async function lockKey(key){
+  const now=Date.now();
+  if(lockState.mode==="unlock"&&now<lockState.until){$("#lockMsg").textContent="Too many tries. Wait "+Math.ceil((lockState.until-now)/1000)+" s.";return;}
+  if(key==="del"){lockState.entry=lockState.entry.slice(0,-1);renderLockDots();return;}
+  if(key==="ok"){await lockSubmit();return;}
+  if(lockState.entry.length>=8)return;
+  lockState.entry+=key;renderLockDots();try{navigator.vibrate?.(5);}catch(e){}
+  const lock=currentLock();
+  if(lockState.mode==="unlock"&&lock&&lockState.entry.length===lock.length)await lockSubmit();
+}
+async function lockSubmit(){
+  const lock=currentLock(),pin=lockState.entry;
+  if(lockState.mode==="unlock"){
+    if(lock&&await pinHash(pin,lock.salt)===lock.hash){lockState.failures=0;lockState.unlocked=true;hideLock();return;}
+    lockState.failures++;lockState.until=Date.now()+lockCooldown(lockState.failures);lockState.entry="";
+    $("#lockMsg").textContent=lockCooldown(lockState.failures)?"Too many tries. Wait "+Math.round(lockCooldown(lockState.failures)/1000)+" s.":"Wrong PIN.";
+    $("#lockDots").classList.remove("shake");void $("#lockDots").offsetWidth;$("#lockDots").classList.add("shake");renderLockDots();return;
+  }
+  if(!validPin(pin)){$("#lockMsg").textContent="Use 4 to 8 digits.";return;}
+  if(lockState.mode==="new"){lockState.setup=pin;showLock("confirm");lockState.setup=pin;return;}
+  if(pin!==lockState.setup){$("#lockMsg").textContent="The PINs don't match. Start again.";lockState.setup=null;setTimeout(()=>showLock("new"),900);return;}
+  const salt=crypto.getRandomValues(new Uint32Array(4)).join("-");
+  try{localStorage.setItem("ds_lock",JSON.stringify({salt,hash:await pinHash(pin,salt),after:Number($("#lockAfter").value)||1,length:pin.length}));}catch(e){toast("Could not save the PIN.");return;}
+  lockState.unlocked=true;hideLock();syncLockSettings();toast("🔒 App lock is on");
+}
+$("#lockPad").addEventListener("click",e=>{const k=e.target.closest("button[data-k]");if(k)lockKey(k.dataset.k);});
+document.addEventListener("keydown",e=>{if($("#lockScreen").hidden)return;if(/^\d$/.test(e.key))lockKey(e.key);else if(e.key==="Backspace")lockKey("del");else if(e.key==="Enter")lockKey("ok");});
+$("#lockCancel").onclick=()=>{hideLock();syncLockSettings();};
+$("#lockForgot").onclick=()=>{
+  if(!confirm("Remove the app lock? For safety this takes 30 seconds; your chats are not touched."))return;
+  let left=30;$("#lockForgot").disabled=true;
+  const t=setInterval(()=>{left--;$("#lockMsg").textContent="Removing the lock in "+left+" s…";
+    if(left<=0){clearInterval(t);localStorage.removeItem("ds_lock");$("#lockForgot").disabled=false;lockState.unlocked=true;hideLock();syncLockSettings();toast("App lock removed");}},1000);
+};
+function syncLockSettings(){const lock=currentLock();$("#lockOn").checked=!!lock;$("#lockAfterRow").hidden=!lock;if(lock)$("#lockAfter").value=String(lock.after);}
+$("#lockOn").onchange=e=>{
+  if(e.target.checked){closeAll();showLock("new");}
+  else{localStorage.removeItem("ds_lock");syncLockSettings();toast("App lock off");}
+};
+$("#lockAfter").onchange=e=>{const lock=currentLock();if(!lock)return;try{localStorage.setItem("ds_lock",JSON.stringify({...lock,after:Number(e.target.value)}));}catch(err){}};
+document.addEventListener("visibilitychange",()=>{
+  const lock=currentLock();if(!lock)return;
+  if(document.hidden){lockState.hiddenAt=Date.now();if(lock.after===0)showLock("unlock");}
+  else if(lockDue(lock,lockState.hiddenAt,Date.now()))showLock("unlock");
+});
+if(currentLock())showLock("unlock");
+
 /* ---------- 💡 Ideas: three suggested replies above the message box ---------- */
 async function suggestIdeas(){
   if(controller||readingImages||isWorkflow())return;
@@ -2087,6 +2154,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
       ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","bondTracked","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
     if(!meta.workflowRoleId&&store.notifyReplies&&globalThis.Notification?.permission==="granted")jobMeta.notify=(bot.characterName||bot.agentName||agent.name||"Your agent")+" replied";
+    if(jobMeta.notify&&currentLock())jobMeta.notifyPrivate=true;
     const res=await fetchWithRetry(()=>backgroundFetch(request.url,{
       method:"POST",
       headers:request.headers,

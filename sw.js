@@ -94,8 +94,8 @@ async function notifyReply(meta, raw) {
   try {
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     if (windows.some(w => w.visibilityState === "visible")) return;
-    await self.registration.showNotification(meta.notify, {
-      body: replyPreview(raw) || "Your reply is ready.", icon: "icon-192.png", badge: "icon-96.png",
+    await self.registration.showNotification(meta.notifyPrivate ? "New reply" : meta.notify, {
+      body: meta.notifyPrivate ? "Open the app to read it." : (replyPreview(raw) || "Your reply is ready."), icon: "icon-192.png", badge: "icon-96.png",
       tag: "reply-" + (meta.convId || "chat"), renotify: true, data: { convId: meta.convId || "" }
     });
   } catch (error) { /* Notifications are optional. */ }

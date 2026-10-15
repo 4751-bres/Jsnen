@@ -458,7 +458,7 @@ function migrateEffortLevels(storage,agentList,workflowList){
 /* backup-core:start */
 const BACKUP_APP="deepseek-agents";
 // The API key stays on the device; everything else under the app prefix is portable.
-const SECRET_KEYS=["ds_key","ds_providers","ds_exa_key"];
+const SECRET_KEYS=["ds_key","ds_providers","ds_exa_key","ds_lock"];
 function isBackupKey(key){return key.startsWith("ds_")&&!SECRET_KEYS.includes(key);}
 function makeBackup(storage,extra){
   const data={};
@@ -573,6 +573,19 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* lock-core:start */
+// App lock: a PIN screen for privacy from people around you (the data itself stays in this browser).
+function validPin(pin){return /^\d{4,8}$/.test(String(pin||""));}
+function normalizeLock(raw){
+  const l=raw&&typeof raw==="object"?raw:null;
+  if(!l||typeof l.hash!=="string"||typeof l.salt!=="string")return null;
+  return {salt:l.salt,hash:l.hash,after:[0,1,5,15,60].includes(Number(l.after))?Number(l.after):1,length:Number(l.length)||4};
+}
+// Lock again when the app comes back after being away for longer than the chosen time.
+function lockDue(lock,hiddenAt,now){return !!lock&&!!hiddenAt&&now-hiddenAt>=lock.after*60000;}
+// After 5 wrong PINs in a row, wait 30 s (doubling after each further miss, up to 5 min).
+function lockCooldown(failures){return failures<5?0:Math.min(300000,30000*2**(failures-5));}
+/* lock-core:end */
 /* ideas-core:start */
 // 💡 Ideas: three different next moves for the user, in their own voice, to tap and edit.
 function ideaInstruction(name,description){

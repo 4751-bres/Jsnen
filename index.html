@@ -46,6 +46,14 @@
     </div>
   </div>
 
+  <div class="lock-screen" id="lockScreen" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
+    <img src="icon-192.png" alt="" width="64" height="64" />
+    <h2 id="lockTitle">Enter your PIN</h2>
+    <div class="lock-dots" id="lockDots" aria-hidden="true"></div>
+    <div class="lock-msg" id="lockMsg" aria-live="polite"></div>
+    <div class="lock-pad" id="lockPad"><button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button><button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button><button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button><button type="button" data-k="del" aria-label="Delete">⌫</button><button type="button" data-k="0">0</button><button type="button" data-k="ok" id="lockOk" aria-label="Done">✓</button></div>
+    <div class="lock-links"><button type="button" class="btn ghost" id="lockForgot">Forgot PIN?</button><button type="button" class="btn ghost" id="lockCancel" hidden>Cancel</button></div>
+  </div>
   <div class="director-bar" id="directorBar" hidden></div>
   <div class="attachments" id="attachments" aria-live="polite"></div>
   <input id="imageFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
@@ -127,6 +135,12 @@
       <div class="hint" style="margin-top:-6px">Turn off to hide these buttons in every chat. Saved memory and voices are kept.</div>
       <label class="toggle-row"><input id="notifyReplies" type="checkbox" /> <span>Notify me when a reply is ready 🔔</span></label>
       <div class="hint" style="margin-top:-6px">When you switch apps or lock the phone while a reply is being written, you get a notification with its first lines. Tap it to come back to that chat.</div>
+      <label class="toggle-row"><input id="lockOn" type="checkbox" /> <span>App lock with a PIN 🔒</span></label>
+      <div id="lockAfterRow" hidden>
+        <label for="lockAfter">Lock again after leaving the app for</label>
+        <select class="field" id="lockAfter"><option value="0">Immediately</option><option value="1">1 minute</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="60">1 hour</option></select>
+      </div>
+      <div class="hint" style="margin-top:-2px">Keeps your chats private from people around you. Notifications then say only "New reply". The PIN is stored as a hash in this browser and is never in backups.</div>
       <label class="toggle-row"><input id="autoSpeak" type="checkbox" /> <span>Read new replies aloud automatically</span></label>
       <div class="hint" style="margin-top:-6px">Hands-free: each new reply in the open chat is read with that character's voice (set in the agent editor), even when the 🔊 buttons are hidden.</div>
 

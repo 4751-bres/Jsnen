@@ -384,6 +384,25 @@ body[data-mood="workflow"] header .title .sub::after{content:""}
 :root[data-theme="light"] .initials{color:var(--ini-l)}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .initials{color:var(--ini-l)}}
 
+/* App lock */
+.lock-screen{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  padding:24px 16px calc(24px + var(--safe-b));background:var(--bg);text-align:center}
+.lock-screen[hidden]{display:none}
+.lock-screen img{border-radius:16px}
+.lock-screen h2{margin:4px 0 0;font-size:19px;font-weight:650}
+.lock-dots{display:flex;gap:14px;min-height:16px}
+.lock-dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--line-strong)}
+.lock-dots i.on{background:var(--accent);border-color:var(--accent)}
+.lock-dots.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.lock-msg{min-height:20px;font-size:14px;color:var(--danger)}
+.lock-pad{display:grid;grid-template-columns:repeat(3,72px);gap:14px;margin-top:6px}
+.lock-pad button{width:72px;height:72px;border-radius:50%;border:1px solid var(--line);background:var(--surface-1);color:var(--text);font:inherit;font-size:26px;font-weight:500;cursor:pointer}
+.lock-pad button:active{background:var(--surface-3)}
+.lock-pad button[hidden]{visibility:hidden;display:block!important}
+.lock-links{display:flex;gap:8px}
+body.locked > :not(.lock-screen):not(script){visibility:hidden}
+
 /* 💡 Ideas */
 .idea-row{display:flex;flex-direction:column;gap:6px;padding:8px max(10px,calc((100% - var(--column)) / 2)) 0;background:var(--bg);position:relative}
 .idea-row[hidden]{display:none}
