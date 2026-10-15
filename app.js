@@ -1613,6 +1613,25 @@ $("#edExportCard").onclick=()=>{const a=agents.find(x=>x.id===editingId);if(a)ex
   chat.addEventListener("touchcancel",()=>{if(start){start.row.style.transform="";start.row.classList.remove("swiping");start=null;}});
 })();
 
+/* ---------- Chat stats ---------- */
+function openStats(){
+  if(isWorkflow()){toast("Stats work in agent and group chats.");return;}
+  const s=chatStats(messages),n=v=>Number(v).toLocaleString();
+  const user=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user.name||"You":"You";
+  const tile=(value,label)=>'<div class="stat"><b>'+value+'</b><small>'+esc(label)+'</small></div>';
+  const speakers=Object.entries(s.speakers).sort((a,b)=>b[1]-a[1]);
+  const top=speakers.length?speakers[0][1]:1;
+  $("#statsBody").innerHTML='<div class="stat-grid">'+
+    tile(n(s.you.messages+s.ai.messages),"messages")+tile(n(s.you.words+s.ai.words),"words")+
+    tile(n(s.days),s.days===1?"day":"days")+tile(n(s.longest),"words in the longest reply")+
+    tile(formatTokens(s.tokensIn),"tokens read by the AI")+tile(formatTokens(s.tokensOut),"tokens written by the AI")+'</div>'+
+    '<div class="stat-split"><div><b>'+esc(user)+'</b><span>'+n(s.you.messages)+' messages · '+n(s.you.words)+' words</span></div><div><b>AI</b><span>'+n(s.ai.messages)+' replies · '+n(s.ai.words)+' words</span></div></div>'+
+    (speakers.length>1?'<label>Who talks most</label>'+speakers.map(([name,count])=>'<div class="stat-bar"><span>'+esc(name)+'</span><i style="--w:'+Math.round(count/top*100)+'%"></i><small>'+count+'</small></div>').join(""):"")+
+    (s.first?'<div class="hint">Started '+esc(longDate(s.first))+', last message '+esc(messageTime(s.last))+'.</div>':"");
+  closeAll();openSheet("#statsSheet");
+}
+$("#statsMenu").onclick=openStats;
+
 /* ---------- Bookmarks: star messages and jump back to them ---------- */
 function toggleBookmark(m){
   if(isWorkflow())return;

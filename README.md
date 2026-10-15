@@ -65,6 +65,7 @@ That's it — it now behaves like a native app with its own icon.
 - **💡 Ideas** — ＋ → Ideas suggests three different next moves in your own voice (one bold, one careful, one playful) above the message box; tap one to put it in the box and edit or send it. One small request.
 - **App lock 🔒** — ⚙️ Settings → *App lock with a PIN*: a 4–8 digit PIN screen when the app opens and when you come back after a chosen time (immediately to 1 hour). Notifications then only say "New reply". Wrong PINs slow down after 5 tries; *Forgot PIN?* removes the lock after a 30-second wait without touching chats. The PIN is stored as a salted hash and never exported.
 - **Bookmarks ★** — tap a message, then ☆ to bookmark it (a small ★ appears in its info line). ⋯ → Bookmarks lists them with who said it, when, and a preview; tap one to jump there.
+- **Chat stats** — ⋯ → Stats: messages and words on each side, days the chat has run, the longest reply, tokens read and written by the AI, and in groups a bar chart of who talks most.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator, and Sexual-health Therapist. The therapist is a fictional adult AI character for sexual-health and relationship conversations, not a licensed clinician. It is also added once for existing users without replacing their agents or chats. Like other agents, it can be edited or deleted. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).

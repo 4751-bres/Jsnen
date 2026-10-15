@@ -573,6 +573,27 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* stats-core:start */
+function wordCount(text){return (String(text||"").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)||[]).length;}
+// Numbers for ⋯ → Stats: who wrote how much, tokens, and how long the chat has been going.
+function chatStats(list){
+  const s={you:{messages:0,words:0},ai:{messages:0,words:0},tokensIn:0,tokensOut:0,longest:0,first:0,last:0,days:0,speakers:{}};
+  const days=new Set();
+  for(const m of list||[]){
+    if(!m||(m.role!=="user"&&m.role!=="assistant")||m.error)continue;
+    const words=wordCount(m.content),side=m.role==="user"?s.you:s.ai;
+    side.messages++;side.words+=words;
+    if(m.role==="assistant"){
+      s.longest=Math.max(s.longest,words);
+      const who=m.characterName||m.agentName;if(who)s.speakers[who]=(s.speakers[who]||0)+1;
+      if(m.usage){s.tokensIn+=m.usage.prompt||0;s.tokensOut+=m.usage.completion||0;}
+    }
+    if(m.at){s.first=s.first?Math.min(s.first,m.at):m.at;s.last=Math.max(s.last,m.at);days.add(dayKey(m.at));}
+  }
+  s.days=days.size;
+  return s;
+}
+/* stats-core:end */
 /* bookmarks-core:start */
 // Bookmarked messages in chat order, with a short preview for the list.
 function bookmarkList(list){
