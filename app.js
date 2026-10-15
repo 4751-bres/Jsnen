@@ -1324,11 +1324,30 @@ $("#composerTools").addEventListener("click",e=>{if(e.target.closest("button"))s
 document.getElementById("input").addEventListener("focus",()=>{setToolsOpen(false);document.body.classList.add("typing");});
 document.getElementById("input").addEventListener("blur",()=>setTimeout(()=>{if(document.activeElement!==document.getElementById("input"))document.body.classList.remove("typing");},150));
 // Keep the whole app above the on-screen keyboard (iOS and browsers without interactive-widget support).
+// Phone profile (Settings → Phone, saved per phone). Only Honor / Other change anything; Automatic and Samsung
+// keep the original behaviour exactly.
+function devicePref(){try{return localStorage.getItem("ds_device")||"auto";}catch(e){return "auto";}}
+function safeDevice(){return devicePref()==="honor"||devicePref()==="other";}
+const SAFE_VIEWPORT="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover";
+const ORIGINAL_VIEWPORT=document.querySelector('meta[name="viewport"]')?.getAttribute("content")||"";
+function applyDeviceProfile(){
+  const safe=safeDevice(),root=document.documentElement,meta=document.querySelector('meta[name="viewport"]');
+  root.classList.toggle("dev-safe",safe);
+  if(meta)meta.setAttribute("content",safe?SAFE_VIEWPORT:ORIGINAL_VIEWPORT);
+  if(safe)root.style.removeProperty("--app-h");else fitToViewport();
+}
 function fitToViewport(){
   const vv=window.visualViewport;if(!vv)return;
+  if(safeDevice())return; // Honor / Other: the browser handles the keyboard on its own
   document.documentElement.style.setProperty("--app-h",Math.round(vv.height)+"px");
   if(window.scrollY)window.scrollTo(0,0);
 }
+applyDeviceProfile();
+$("#deviceSelect").value=devicePref();
+$("#deviceSelect").onchange=e=>{
+  try{localStorage.setItem("ds_device",e.target.value);}catch(err){}
+  applyDeviceProfile();toast("Saved for this phone. Reload the page to apply it fully.");
+};
 if(window.visualViewport){visualViewport.addEventListener("resize",fitToViewport);visualViewport.addEventListener("scroll",fitToViewport);fitToViewport();}
 $("#webBtn").onclick=()=>{store.webOn=!store.webOn;renderWebBtn();toast(store.webOn?"🌐 Web search on — replies will search the web and cite sources":"Web search off");};
 // Folded by default: one small line at the end of the reply; tap it to see the list.
@@ -1955,7 +1974,7 @@ function downloadFile(name,text,type){
 function applyMessageButtons(){
   document.body.classList.toggle("hide-speak",!store.showSpeak);
   document.body.classList.toggle("hide-pin",!store.showPin);
-  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
+  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#deviceSelect").value=devicePref();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
 }
 $("#notifyReplies").onchange=async e=>{
   if(!e.target.checked){store.notifyReplies=false;return;}

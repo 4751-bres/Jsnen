@@ -8,7 +8,7 @@ const root=path.join(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 function source(){
   const page=read('index.html');
-  const css=/<link rel="stylesheet" href="styles\.css" \/>/,js=/<script src="core\.js"><\/script>\r?\n<script src="app\.js"><\/script>/;
+  const css=/<link rel="stylesheet" href="styles\.css(?:\?v=[\w.-]+)?" \/>/,js=/<script src="core\.js(?:\?v=[\w.-]+)?"><\/script>\r?\n<script src="app\.js(?:\?v=[\w.-]+)?"><\/script>/;
   if(!css.test(page)||!js.test(page))throw new Error('index.html no longer links styles.css, core.js, and app.js as expected');
   return page
     .replace(css,()=>'<style>\n'+read('styles.css')+'</style>')

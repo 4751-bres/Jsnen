@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="styles.css?v=20261015d" />
 </head>
 <body>
   <header>
@@ -143,6 +143,15 @@
       <div class="hint" style="margin-top:-2px">Keeps your chats private from people around you. Notifications then say only "New reply". The PIN is stored as a hash in this browser and is never in backups.</div>
       <label class="toggle-row"><input id="autoSpeak" type="checkbox" /> <span>Read new replies aloud automatically</span></label>
       <div class="hint" style="margin-top:-6px">Hands-free: each new reply in the open chat is read with that character's voice (set in the agent editor), even when the 🔊 buttons are hidden.</div>
+
+      <label for="deviceSelect">Phone</label>
+      <select class="field" id="deviceSelect">
+        <option value="auto">Automatic</option>
+        <option value="samsung">Samsung Galaxy S25+</option>
+        <option value="honor">Honor Magic 8 Lite</option>
+        <option value="other">Other phone</option>
+      </select>
+      <div class="hint">Saved on this phone only. Honor Magic 8 Lite (or Other phone) uses a layout made for browsers that jump or cut the screen when the keyboard opens; Automatic and Samsung keep the normal one.</div>
 
       <label for="themeSelect">Theme</label>
       <select class="field" id="themeSelect">
@@ -641,7 +650,7 @@
     </div>
   </section>
 
-<script src="core.js"></script>
-<script src="app.js"></script>
+<script src="core.js?v=20261015d"></script>
+<script src="app.js?v=20261015d"></script>
 </body>
 </html>
