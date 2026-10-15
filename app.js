@@ -1430,6 +1430,56 @@ $("#bgForAll").onclick=()=>{
 };
 $("#bgMenu").onclick=openBgSheet;
 
+/* ---------- Quick model switcher: tap the chat title ---------- */
+let quickAgentId=null;
+function modelSummary(a){
+  const p=providerFor(a);
+  return (a.provider&&p.id?p.name+" · ":"")+(a.model||p.model||store.model)+" · "+(a.think&&a.think!=="off"?"thinking "+a.think:"temp "+a.temp);
+}
+function openQuickModel(){
+  if(isWorkflow()||controller)return;
+  if(isGroup()){
+    const g=curGroup();
+    $("#qmTitle").textContent="Models · "+g.name;$("#qmAgent").hidden=true;$("#qmMembers").hidden=false;$("#qmSave").hidden=true;
+    $("#qmMembers").innerHTML="";
+    for(const a of groupMembers(g)){
+      const row=document.createElement("button");row.type="button";row.className="world-row";
+      row.innerHTML='<span class="av">'+avatarInner(a)+'</span><span class="world-meta"><b>'+esc(memberLabel(g,a))+'</b><small>'+esc(modelSummary(a))+'</small></span>';
+      row.onclick=()=>showQuickAgent(a.id);$("#qmMembers").appendChild(row);
+    }
+  }else showQuickAgent(curAgent().id);
+  closeAll();openSheet("#modelSheet");
+}
+function showQuickAgent(id){
+  const a=agents.find(x=>x.id===id);if(!a)return;quickAgentId=id;
+  $("#qmTitle").textContent=a.name;$("#qmMembers").hidden=true;$("#qmAgent").hidden=false;$("#qmSave").hidden=false;
+  const providers=store.providers;
+  $("#qmProvider").innerHTML='<option value="">'+esc(defaultProvider().name)+' (default)</option>'+providers.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");
+  $("#qmProvider").value=providers.some(p=>p.id===a.provider)?a.provider:"";$("#qmProviderRow").hidden=!providers.length;
+  $("#qmModel").value=a.model||"";$("#qmThink").value=a.think||"off";$("#qmTemp").value=String(a.temp??1);
+  quickProviderPicked();syncQuickTemp();
+}
+function quickProviderPicked(){
+  const id=$("#qmProvider").value,p=providerById(id);fillModelList("qmModelList",id);
+  $("#qmModel").placeholder=p.model?"Provider default ("+p.model+")":id?"Model id":"Settings default ("+store.model+")";
+}
+function syncQuickTemp(){const off=$("#qmThink").value==="off";$("#qmTempRow").hidden=!off;$("#qmTempVal").textContent=Number($("#qmTemp").value).toFixed(1);}
+$("#qmProvider").onchange=()=>{if(providerKind(providerById($("#qmProvider").value).base)!=="deepseek"&&/^deepseek-/.test($("#qmModel").value))$("#qmModel").value="";quickProviderPicked();};
+$("#qmThink").onchange=syncQuickTemp;$("#qmTemp").oninput=syncQuickTemp;
+$("#qmLoad").onclick=async()=>{
+  const id=$("#qmProvider").value,p=providerById(id);
+  try{const ids=await fetchModels(p);fillModelList("qmModelList",id);toast(ids.length+" models loaded. Tap Model to choose.");}
+  catch(e){toast(e instanceof TypeError?"Could not reach "+p.name+".":e.message);}
+};
+$("#qmSave").onclick=()=>{
+  const a=agents.find(x=>x.id===quickAgentId);if(!a)return;
+  a.provider=$("#qmProvider").value||undefined;a.model=$("#qmModel").value.trim();a.think=$("#qmThink").value;a.temp=parseFloat($("#qmTemp").value);
+  try{store.agents=agents;}catch(e){toast("Could not save.");return;}
+  closeAll();refreshHeader();renderAgents();toast(a.name+" · "+modelSummary(a));
+};
+$(".title").addEventListener("click",openQuickModel);
+$(".title").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openQuickModel();}});
+
 /* ---------- World info: keyword-triggered lore for an agent or a group ---------- */
 let worldEditIndex=-1;
 function worldOwner(){return memoryOwner();}

@@ -16,7 +16,7 @@
   <header>
     <button class="icon-btn" id="menuBtn" aria-label="Open chats"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <span class="h-avatar" id="hAvatar" aria-hidden="true">💬</span>
-    <div class="title">
+    <div class="title" role="button" tabindex="0" title="Change model">
       <div class="name" id="hAgent">DeepSeek Agents</div>
       <div class="sub" id="hSub">Open the menu to pick an agent</div>
     </div>
@@ -262,6 +262,31 @@
       <button class="btn" id="bgForAll" type="button" style="width:100%;margin-top:12px">Use this for every chat without its own</button>
       <div class="hint">Photos are resized and kept in this browser with the chat (and in backups). AI replies switch to bubbles over a background so they stay readable.</div>
     </div>
+  </section>
+
+  <!-- Quick model switcher -->
+  <section class="sheet bottom" id="modelSheet">
+    <h3><span class="grow" id="qmTitle">Model</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body">
+      <div id="qmMembers"></div>
+      <div id="qmAgent">
+        <div id="qmProviderRow"><label for="qmProvider">Provider</label><select class="field" id="qmProvider"></select></div>
+        <label for="qmModel">Model</label>
+        <div class="voice-row"><input class="field" id="qmModel" list="qmModelList" autocomplete="off" /><button class="btn" id="qmLoad" type="button">Load models</button></div>
+        <datalist id="qmModelList"></datalist>
+        <label for="qmThink">Thinking</label>
+        <select class="field" id="qmThink">
+          <option value="off">Off — non-thinking, fastest</option>
+          <option value="low">Low effort</option>
+          <option value="high">High effort</option>
+          <option value="max">Max effort — deepest, slowest</option>
+        </select>
+        <div id="qmTempRow"><label for="qmTemp">Temperature <span id="qmTempVal" class="dim-value">1.0</span></label>
+          <input id="qmTemp" class="range" type="range" min="0" max="1.5" step="0.1" value="1" /></div>
+        <div class="hint">Everything else (prompt, memory, voice…) is in the agent editor.</div>
+      </div>
+    </div>
+    <div class="foot"><button class="btn primary" id="qmSave" type="button">Save</button></div>
   </section>
 
   <!-- World info -->

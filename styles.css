@@ -353,6 +353,14 @@ body.has-bg .msg-meta,body.has-bg .day-divider{text-shadow:0 1px 2px var(--bg)}
 .dim-value{float:right;color:var(--text-3);font-weight:500}
 .range{width:100%;accent-color:var(--accent);height:32px}
 
+/* Quick model switcher */
+header .title{cursor:pointer;border-radius:var(--radius-sm)}
+header .title .sub::after{content:" ▾";opacity:.7}
+body[data-mood="workflow"] header .title{cursor:default}
+body[data-mood="workflow"] header .title .sub::after{content:""}
+#qmMembers .av{flex:none;width:32px;height:32px;display:grid;place-items:center;border-radius:50%;background:var(--surface-3);overflow:hidden}
+#qmMembers .av img{width:100%;height:100%;object-fit:cover}
+
 /* World info */
 .world-row{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:8px 12px;margin-bottom:8px;border:1px solid var(--line);border-radius:var(--radius-md);
   background:var(--surface-2);color:var(--text);text-align:left;font:inherit;cursor:pointer}
