@@ -570,6 +570,27 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* icon-core:start */
+// Chats and agents can go without an emoji: an empty icon shows the name's initials, and letters typed as the
+// icon ("NY", "Dr") are shown as a text badge. Colours come from the name, so each one stays recognisable.
+function hasEmoji(text){return /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(String(text||""));}
+function initialsOf(name){
+  const words=String(name||"").trim().split(/\s+/).filter(Boolean);
+  if(!words.length)return "?";
+  const first=w=>Array.from(w.replace(/^[^\p{L}\p{N}]+/u,""))[0]||"";
+  return ((first(words[0])+(words.length>1?first(words[words.length-1]):Array.from(words[0])[1]||"")).toUpperCase()||"?").slice(0,3);
+}
+// "emoji" | "text" (letters typed as the icon) | "initials" (no icon at all)
+function iconKind(item){const e=String(item?.emoji??"").trim();return !e?"initials":hasEmoji(e)?"emoji":"text";}
+/* icon-core:end */
+/* waiting-core:start */
+// What an empty, still-streaming reply says: who is typing, or that the provider is busy (only keep-alives so far).
+function waitingLabel(name,providerName,keepAlives,elapsedMs){
+  const secs=Math.round((elapsedMs||0)/1000);
+  if(keepAlives>0&&secs>=8)return (providerName||"The provider")+" is busy — still waiting · "+secs+"s";
+  return (name||"Your agent")+" is typing…";
+}
+/* waiting-core:end */
 /* swipe-core:start */
 // What a horizontal swipe on a reply does: older/newer version, or a fresh reply past the newest one.
 function swipeAction(message,isLast,dx,dy){
