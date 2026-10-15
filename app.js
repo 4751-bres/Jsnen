@@ -48,6 +48,7 @@ const store = {
   get ctxSummary(){return localStorage.getItem("ds_ctx_summary")==="1"}, set ctxSummary(v){localStorage.setItem("ds_ctx_summary",v?"1":"0")},
   get pins(){try{return JSON.parse(localStorage.getItem("ds_pins"))||[]}catch(e){return []}}, set pins(v){localStorage.setItem("ds_pins",JSON.stringify(v))},
   get personas(){try{const p=JSON.parse(localStorage.getItem("ds_personas"));return Array.isArray(p)?p:[]}catch(e){return []}}, set personas(v){localStorage.setItem("ds_personas",JSON.stringify(v))},
+  get notifyReplies(){return localStorage.getItem("ds_notify")==="1"}, set notifyReplies(v){localStorage.setItem("ds_notify",v?"1":"0")},
   get autoSpeak(){return localStorage.getItem("ds_auto_speak")==="1"}, set autoSpeak(v){localStorage.setItem("ds_auto_speak",v?"1":"0")},
   get showSpeak(){return localStorage.getItem("ds_show_speak")!=="0"}, set showSpeak(v){localStorage.setItem("ds_show_speak",v?"1":"0")},
   get showPin(){return localStorage.getItem("ds_show_pin")!=="0"}, set showPin(v){localStorage.setItem("ds_show_pin",v?"1":"0")},
@@ -1781,8 +1782,16 @@ function downloadFile(name,text,type){
 function applyMessageButtons(){
   document.body.classList.toggle("hide-speak",!store.showSpeak);
   document.body.classList.toggle("hide-pin",!store.showPin);
-  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;$("#showPin").checked=store.showPin;
+  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
 }
+$("#notifyReplies").onchange=async e=>{
+  if(!e.target.checked){store.notifyReplies=false;return;}
+  if(!("Notification" in window)||!navigator.serviceWorker){e.target.checked=false;toast("This browser can't show notifications.");return;}
+  let permission=Notification.permission;
+  if(permission==="default")permission=await Notification.requestPermission();
+  if(permission!=="granted"){e.target.checked=false;store.notifyReplies=false;toast("Notifications are blocked. Allow them in the browser's site settings for this app.");return;}
+  store.notifyReplies=true;toast("🔔 You'll get a notification when a reply finishes in the background");
+};
 $("#autoSpeak").onchange=e=>{try{store.autoSpeak=e.target.checked;}catch(err){}if(!e.target.checked)globalThis.speechSynthesis?.cancel();else toast("New replies will be read aloud");};
 $("#showSpeak").onchange=e=>{try{store.showSpeak=e.target.checked;}catch(err){}applyMessageButtons();if(!e.target.checked)globalThis.speechSynthesis?.cancel();};
 $("#showPin").onchange=e=>{try{store.showPin=e.target.checked;}catch(err){}applyMessageButtons();};
@@ -2012,6 +2021,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
       ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","bondTracked","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
+    if(!meta.workflowRoleId&&store.notifyReplies&&globalThis.Notification?.permission==="granted")jobMeta.notify=(bot.characterName||bot.agentName||agent.name||"Your agent")+" replied";
     const res=await fetchWithRetry(()=>backgroundFetch(request.url,{
       method:"POST",
       headers:request.headers,
@@ -2530,7 +2540,14 @@ store.init().finally(()=>{
   if(!anyProviderReady()){setTimeout(()=>{$("#setBtn").click();},400);}
   else remindBackup();
   recoverBackgroundReplies();
+  // Opened from a reply notification: go to that chat.
+  const fromHash=/^#chat=(.+)$/.exec(location.hash);if(fromHash){openChatById(decodeURIComponent(fromHash[1]));history.replaceState(null,"",location.pathname+location.search);}
 });
+function openChatById(id){
+  if(!id||controller||id===currentId)return;
+  if(agents.some(a=>a.id===id))selectAgent(id);else if(groups.some(g=>g.id===id))selectGroup(id);
+}
+navigator.serviceWorker?.addEventListener("message",e=>{if(e.data?.type==="open-chat")openChatById(e.data.convId);});
 /* ---------- Replies that finished (or are still finishing) while the app was closed ---------- */
 function jobsDb(){
   return new Promise((resolve,reject)=>{

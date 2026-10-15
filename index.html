@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="DS Agents" />
 <link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
@@ -120,6 +123,8 @@
       <label class="toggle-row"><input id="showSpeak" type="checkbox" checked /> <span>Read aloud 🔊</span></label>
       <label class="toggle-row"><input id="showPin" type="checkbox" checked /> <span>Pin to story memory 📌</span></label>
       <div class="hint" style="margin-top:-6px">Turn off to hide these buttons in every chat. Saved memory and voices are kept.</div>
+      <label class="toggle-row"><input id="notifyReplies" type="checkbox" /> <span>Notify me when a reply is ready 🔔</span></label>
+      <div class="hint" style="margin-top:-6px">When you switch apps or lock the phone while a reply is being written, you get a notification with its first lines. Tap it to come back to that chat.</div>
       <label class="toggle-row"><input id="autoSpeak" type="checkbox" /> <span>Read new replies aloud automatically</span></label>
       <div class="hint" style="margin-top:-6px">Hands-free: each new reply in the open chat is read with that character's voice (set in the agent editor), even when the 🔊 buttons are hidden.</div>
 

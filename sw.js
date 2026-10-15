@@ -1,7 +1,7 @@
 // Offline shell for the installed app. Network first, so a new GitHub Pages deploy is picked up on the next
 // online load; the cached copy is used only when the network fails. API calls (other origins) are never cached.
-const CACHE = "ds-agents-shell-v4";
-const SHELL = ["./", "index.html", "styles.css", "core.js", "app.js", "manifest.json"];
+const CACHE = "ds-agents-shell-v5";
+const SHELL = ["./", "index.html", "styles.css", "core.js", "app.js", "manifest.json", "icon-192.png", "icon-96.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -63,6 +63,36 @@ self.addEventListener("message", event => {
   else if (message.type === "forget") event.waitUntil(writeJob(message.id, true));
 });
 
+// The reply text from a saved event stream, without the hidden tags the app strips.
+function replyPreview(raw) {
+  let text = "";
+  for (const line of String(raw).split("\n")) {
+    if (!line.startsWith("data:")) continue;
+    try { text += JSON.parse(line.slice(5)).choices?.[0]?.delta?.content || ""; } catch (e) { /* keep-alive or [DONE] */ }
+  }
+  text = text.replace(/\[\s*(?:mood|thoughts?|inner thoughts?|bond|relationship|affection)\s*:[^\]]*\]/gi, "").replace(/^\s*\[char\]\s*:\s*/i, "").replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim();
+  return text.length > 160 ? text.slice(0, 157) + "…" : text;
+}
+async function notifyReply(meta, raw) {
+  try {
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    if (windows.some(w => w.visibilityState === "visible")) return;
+    await self.registration.showNotification(meta.notify, {
+      body: replyPreview(raw) || "Your reply is ready.", icon: "icon-192.png", badge: "icon-96.png",
+      tag: "reply-" + (meta.convId || "chat"), renotify: true, data: { convId: meta.convId || "" }
+    });
+  } catch (error) { /* Notifications are optional. */ }
+}
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const open = windows.find(w => new URL(w.url).pathname.startsWith(new URL(self.registration.scope).pathname));
+    if (open) { await open.focus(); open.postMessage({ type: "open-chat", convId: event.notification.data?.convId || "" }); }
+    else await self.clients.openWindow(self.registration.scope + (event.notification.data?.convId ? "#chat=" + encodeURIComponent(event.notification.data.convId) : ""));
+  })());
+});
+
 async function runJob(message) {
   const controller = new AbortController();
   activeJobs.set(message.id, controller);
@@ -89,6 +119,7 @@ async function runJob(message) {
     if (tail) { job.raw += tail; post({ type: "chunk", chunk: tail }); }
     job.status = response.ok ? "done" : "error";
     post({ type: "end" });
+    if (response.ok && message.meta?.notify) await notifyReply(message.meta, job.raw);
   } catch (error) {
     job.status = error.name === "AbortError" ? "aborted" : "failed";
     job.error = String(error.message || error);
