@@ -567,6 +567,29 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+
+/* memory-suggest-core:start */
+// Story memory suggestions: the helper model reads the recent story and proposes new lasting facts.
+function memoryExtractMessages(list,existing,userName){
+  const turns=(list||[]).filter(m=>(m.role==="user"||m.role==="assistant")&&!m.error&&m.content).slice(-40)
+    .map(m=>(m.role==="user"?(userName||"User"):(m.characterName||m.agentName||"Character"))+": "+String(m.content).slice(0,1500)).join("\n\n");
+  const known=(existing||[]).length?"Already remembered (do not repeat these):\n"+existing.map(f=>"- "+f).join("\n")+"\n\n":"";
+  return [{role:"system",content:"You keep the story memory for a long-running interactive story. From the conversation, list NEW lasting facts worth remembering: names, relationships and how they changed, promises, secrets revealed, important events, places, possessions, and each character's established traits or preferences. "+
+    "One short fact per line, starting with \"- \", at most 10 lines, each under 25 words, written in third person with names (never \"you\" or \"I\"). Skip small talk and anything temporary. If nothing new is worth remembering, reply with \"- (nothing new)\"."},
+    {role:"user",content:known+"Conversation:\n"+(turns||"(empty)")}];
+}
+function parseFactLines(text,existing){
+  const seen=new Set((existing||[]).map(f=>String(f).trim().toLowerCase()));
+  const out=[];
+  for(const raw of String(text||"").split("\n")){
+    const fact=raw.replace(/^\s*(?:[-*•]|\d+[.)])\s*/,"").replace(/\s+/g," ").trim().slice(0,240);
+    if(!fact||/^\(?nothing new\)?\.?$/i.test(fact)||fact.length<4||/:$/.test(fact))continue;
+    const key=fact.toLowerCase();if(seen.has(key))continue;
+    seen.add(key);out.push(fact);if(out.length>=10)break;
+  }
+  return out;
+}
+/* memory-suggest-core:end */
 /* director-core:start */
 // Scene director: a one-shot direction for the next reply and a standing author's note, both hidden from the story.
 const NOTE_PRESETS=[
@@ -578,6 +601,13 @@ const NOTE_PRESETS=[
   ["Lighter tone","Keep the tone playful and light."],
   ["Present tense","Narrate actions in present tense."],
   ["No speaking for me","Never write {{user}}'s actions, words, or thoughts."]
+];
+const NEXT_PRESETS=[
+  ["⏩ Time skip","Skip ahead to the next meaningful moment, with a short transition."],
+  ["📍 New place","Move the scene to a new location that fits the story."],
+  ["👤 New character","Introduce a new character who complicates things."],
+  ["💬 Confession","Have a character reveal something they have been hiding."],
+  ["🌅 End scene","Bring the current scene to a natural close with a hook for what comes next."]
 ];
 function normalizeDirection(raw){
   const d=raw&&typeof raw==="object"?raw:{};

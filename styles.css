@@ -321,6 +321,11 @@ body[data-mood="fiction"] .msg:not(.show-actions) .reply-meta>.tok:first-child+*
 /* Optional message buttons (Settings → Message buttons) */
 body.hide-speak .act-speak,body.hide-pin .act-pin{display:none!important}
 
+/* Story memory suggestions */
+.mem-suggestions{display:flex;flex-direction:column;margin:6px 0}
+.mem-suggestions .toggle-row.fact{align-items:flex-start;min-height:0;margin:4px 0;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-2);font-weight:450;font-size:14px;line-height:1.4}
+.mem-suggestions .toggle-row.fact input{margin-top:2px}
+
 /* Scene director */
 .director-bar{display:flex;gap:6px;align-items:center;padding:6px max(12px,calc((100% - var(--column)) / 2)) 0;background:var(--bg)}
 .director-bar[hidden]{display:none}

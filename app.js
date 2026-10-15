@@ -2,6 +2,7 @@
 const $ = s => document.querySelector(s);
 // Line icons (24px grid, stroke = currentColor); styled by svg.i in styles.css.
 const ICONS={
+  sparkle:'<path d="M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z"/>',
   clapper:'<path d="M4 11h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 11L3.2 7.6 18.6 3.8l.8 3.4z"/><path d="M8.2 6.6l2.4 3.1M13.2 5.4l2.4 3.1"/>',
   note:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
   dice:'<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="15" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/>',
@@ -1334,6 +1335,40 @@ $("#checkKey").onclick=async()=>{
     out.textContent="✗ "+friendlyApiError(res.status,detail);
   }catch(e){out.textContent="✗ Could not reach "+base+". Check the base URL and your connection.";}
 };
+/* ---------- Story memory sheet: edit facts from the chat, and let the AI suggest new ones ---------- */
+function openMemorySheet(){
+  const owner=memoryOwner();if(!owner){toast("Story memory works in agent and group chats.");return;}
+  $("#memText").value=(owner.memory||[]).join("\n");$("#memSuggestions").innerHTML="";$("#memAddPicked").hidden=true;
+  $("#memTitle").textContent="Story memory · "+(owner.name||"chat");
+  closeAll();openSheet("#memorySheet");
+}
+$("#memSuggest").onclick=async()=>{
+  if(!anyProviderReady()){toast("Add your API key in Settings");return;}
+  if(!messages.some(m=>m.content&&!m.error)){toast("Chat a little first, then ask for suggestions.");return;}
+  const b=$("#memSuggest"),label=b.innerHTML;b.disabled=true;b.innerHTML=icon("sparkle")+"Reading the story…";
+  try{
+    const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
+    const existing=memoryLines($("#memText").value);
+    const facts=parseFactLines(await quickCompletion(memoryExtractMessages(messages,existing,roleplay?.user?.name),undefined,700),existing);
+    $("#memSuggestions").innerHTML=facts.length?facts.map((f,i)=>'<label class="toggle-row fact"><input type="checkbox" checked data-i="'+i+'" /><span>'+esc(f)+'</span></label>').join(""):'<div class="hint">Nothing new worth remembering yet.</div>';
+    $("#memSuggestions")._facts=facts;$("#memAddPicked").hidden=!facts.length;
+  }catch(e){toast("Could not get suggestions: "+e.message);}
+  finally{b.disabled=false;b.innerHTML=label;}
+};
+$("#memAddPicked").onclick=()=>{
+  const facts=$("#memSuggestions")._facts||[],picked=[...$("#memSuggestions").querySelectorAll("input:checked")].map(x=>facts[Number(x.dataset.i)]);
+  const lines=memoryLines($("#memText").value);
+  $("#memText").value=[...lines,...picked.filter(f=>!lines.includes(f))].join("\n");
+  $("#memSuggestions").innerHTML="";$("#memAddPicked").hidden=true;toast(picked.length+" fact"+(picked.length===1?"":"s")+" added · tap Save");
+};
+$("#memSave").onclick=()=>{
+  const owner=memoryOwner();if(!owner)return;
+  owner.memory=memoryLines($("#memText").value);
+  try{if(isGroup())store.groups=groups;else store.agents=agents;}catch(e){toast("Could not save the memory.");return;}
+  closeAll();toast("Story memory saved · "+owner.memory.length+" fact"+(owner.memory.length===1?"":"s"));
+};
+$("#memMenu").onclick=openMemorySheet;
+
 /* ---------- Scene director: next-reply direction and author's note, per chat ---------- */
 function directionFor(id){try{return normalizeDirection(JSON.parse(localStorage.getItem("ds_dir_"+id)));}catch(e){return normalizeDirection(null);}}
 function saveDirection(id,d){
@@ -1351,6 +1386,8 @@ function renderDirectorBar(){
 function openDirector(){
   if(isWorkflow()){toast("The director works in agent and group chats.");return;}
   const d=directionFor(currentId);$("#dirNext").value=d.next;$("#dirNote").value=d.note;
+  $("#dirNextPresets").innerHTML=NEXT_PRESETS.map(([label],i)=>'<button type="button" class="chip-btn all" data-i="'+i+'"><span>'+esc(label)+'</span></button>').join("");
+  $("#dirNextPresets").querySelectorAll("button").forEach(b=>b.onclick=()=>{$("#dirNext").value=NEXT_PRESETS[Number(b.dataset.i)][1];});
   $("#dirPresets").innerHTML=NOTE_PRESETS.map(([label],i)=>'<button type="button" class="chip-btn all" data-i="'+i+'"><span>'+esc(label)+'</span></button>').join("");
   $("#dirPresets").querySelectorAll("button").forEach(b=>b.onclick=()=>{
     const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;

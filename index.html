@@ -235,6 +235,22 @@
     </div>
   </section>
 
+  <!-- Story memory -->
+  <section class="sheet bottom" id="memorySheet">
+    <h3><span class="grow" id="memTitle">Story memory</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body">
+      <div class="hint" style="margin-top:0">Sent with every reply, so characters never forget these, even in very long chats. One fact per line.</div>
+      <textarea class="field" id="memText" rows="7" placeholder="Rin and Nadia met at the bar on a rainy night.&#10;Nadia's brother owes money to the Moretti family."></textarea>
+      <button class="btn" id="memSuggest" type="button" style="margin-top:10px;width:100%"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z"/></svg>Suggest new facts from the chat</button>
+      <div class="hint">Reads the last 40 messages (1 request) and proposes facts that are not remembered yet. Pick the ones to keep.</div>
+      <div id="memSuggestions" class="mem-suggestions"></div>
+      <button class="btn" id="memAddPicked" type="button" style="width:100%" hidden>Add selected facts</button>
+    </div>
+    <div class="foot">
+      <button class="btn primary" id="memSave" type="button">Save memory</button>
+    </div>
+  </section>
+
   <!-- Scene director -->
   <section class="sheet bottom" id="directorSheet">
     <h3><span class="grow">Scene director</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
@@ -242,6 +258,7 @@
       <div class="hint" style="margin-top:0">Steer the story without writing it into the chat. Characters follow these quietly and never see them as your words.</div>
       <label for="dirNext">Next reply only</label>
       <textarea class="field" id="dirNext" rows="3" placeholder="e.g. She finally admits why she came back."></textarea>
+      <div class="dir-presets" id="dirNextPresets"></div>
       <button class="btn" id="dirTwist" type="button" style="margin-top:8px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="15" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/></svg>Surprise me</button>
       <div class="hint">Used once, then cleared. 🎲 Surprise me suggests a twist from the recent story (1 small request).</div>
       <label for="dirNote">Author's note — every reply</label>
@@ -262,6 +279,7 @@
       <button class="menu-item" id="dlTxt" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><b>Download as text</b><small>A .txt file you can open anywhere</small></span></button>
       <button class="menu-item" id="shareTxt" type="button" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4M8.2 13.2l7.6 4"/></svg><span><b>Share as text</b><small>Send the .txt to another app</small></span></button>
       <button class="menu-item" id="dlMd" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg><span><b>Download as Markdown</b><small>Keeps formatting, for notes apps</small></span></button>
+      <button class="menu-item" id="memMenu" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 4.6L19 8.2l-3.8 3.4 1.1 5L12 14.1 7.7 16.6l1.1-5L5 8.2l5.1-.6z"/></svg><span><b>Story memory</b><small>Facts the characters always remember; AI suggestions</small></span></button>
       <button class="menu-item" id="dirMenu" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 11L3.2 7.6 18.6 3.8l.8 3.4z"/><path d="M8.2 6.6l2.4 3.1M13.2 5.4l2.4 3.1"/></svg><span><b>Scene director</b><small>Steer the next reply, set an author's note</small></span></button>
       <button class="menu-item" id="duplicateChatBtn" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span><b>Duplicate chat</b><small>An independent copy with all messages</small></span></button>
       <button class="menu-item danger" id="clearBtn" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M6.5 16.5l8-8a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L13 18H8z"/></svg><span><b>Clear chat</b><small>You can undo for a few seconds</small></span></button>
