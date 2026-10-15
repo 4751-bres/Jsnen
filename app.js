@@ -1343,7 +1343,7 @@ function applyViewportMode(){
   meta.setAttribute("content",viewportFor(devicePref(),plain));
   setTimeout(fitToViewport,50);
 }
-$("#deviceSelect").innerHTML=Object.entries(DEVICE_PROFILES).map(([k,p])=>'<option value="'+k+'">'+esc(p.name)+'</option>').join("");
+$("#deviceSelect").value=devicePref();
 $("#deviceSelect").onchange=e=>{
   try{localStorage.setItem("ds_device",e.target.value);if(e.target.value==="auto")localStorage.removeItem("ds_viewport_plain");}catch(err){}
   applyViewportMode();toast("Saved for this phone: "+DEVICE_PROFILES[e.target.value].name);

@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark only" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="styles.css?v=20261015b" />
 </head>
 <body>
   <header>
@@ -145,7 +145,12 @@
       <div class="hint" style="margin-top:-6px">Hands-free: each new reply in the open chat is read with that character's voice (set in the agent editor), even when the 🔊 buttons are hidden.</div>
 
       <label for="deviceSelect">Phone</label>
-      <select class="field" id="deviceSelect"></select>
+      <select class="field" id="deviceSelect">
+        <option value="auto">Automatic</option>
+        <option value="samsung">Samsung Galaxy S25+</option>
+        <option value="honor">Honor Magic 8 Lite</option>
+        <option value="other">Other phone</option>
+      </select>
       <div class="hint">How the app fits around this phone's keyboard. Automatic works it out by itself; pick your phone if the screen jumps or gets cut when the keyboard opens or closes. Saved on this phone only.</div>
 
       <label for="themeSelect">Theme</label>
@@ -645,7 +650,7 @@
     </div>
   </section>
 
-<script src="core.js"></script>
-<script src="app.js"></script>
+<script src="core.js?v=20261015b"></script>
+<script src="app.js?v=20261015b"></script>
 </body>
 </html>
