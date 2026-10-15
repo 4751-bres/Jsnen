@@ -539,8 +539,8 @@ body.has-bg .chapter-divider{text-shadow:0 1px 3px var(--bg)}
 
 /* Composer */
 .composer{
-  display:flex;gap:8px;align-items:flex-end;flex:none;background:var(--bg);
-  padding:8px max(10px,calc((100% - var(--column)) / 2)) calc(12px + var(--safe-b));
+  display:flex;gap:6px;align-items:flex-end;flex:none;background:var(--bg);
+  padding:8px max(10px,calc((100% - var(--column)) / 2)) calc(12px + var(--safe-b)) max(4px,calc((100% - var(--column)) / 2));
 }
 .composer textarea{
   flex:1;min-width:0;resize:none;min-height:44px;max-height:38vh;padding:10px 16px;outline:none;
@@ -566,7 +566,7 @@ body.has-bg .chapter-divider{text-shadow:0 1px 3px var(--bg)}
 @media (max-height:560px){body.typing #responders,body.typing #directorBar{display:none!important}}
 /* One ＋ button keeps the message box wide; photo, web search and Write my reply live in a small tray above it. */
 #toolsBtn{
-  width:44px;height:44px;flex:0 0 auto;display:grid;place-items:center;padding:0;border:1px solid var(--line);position:relative;
+  width:40px;height:40px;margin-bottom:2px;flex:0 0 auto;display:grid;place-items:center;padding:0;border:1px solid var(--line);position:relative;
   border-radius:var(--radius-pill);background:var(--surface-1);color:var(--text-2);transition:transform var(--dur-fast)
 }
 #toolsBtn[aria-expanded="true"]{transform:rotate(45deg);color:var(--accent)}
