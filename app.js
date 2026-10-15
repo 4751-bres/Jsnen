@@ -471,7 +471,8 @@ function updateChatRow(m,d){
     if(details.open&&text.textContent!==m.reasoning)text.textContent=m.reasoning||"";
   }
   const waiting=m.streaming&&!m.content&&!m.searching&&!m.reasoning;
-  if(d._contentValue!==m.content||d._streaming!==!!m.streaming||d._searching!==!!m.searching||(waiting&&d._waitKey!==m.keepAlives)){
+  const waitKey=waiting?(m.keepAlives||0)+":"+Math.floor((Date.now()-(m.at||Date.now()))/1000):undefined;
+  if(d._contentValue!==m.content||d._streaming!==!!m.streaming||d._searching!==!!m.searching||(waiting&&d._waitKey!==waitKey)){
     let live=m.thoughtsTracked&&m.streaming?stripThoughtsWhileStreaming(m.content):m.content;
     if(m.bondTracked&&m.streaming)live=stripBondWhileStreaming(live);
     const shown=m.role==="assistant"?cleanCharacterReply(m.moodTracked&&m.streaming?stripPartialMoodTag(live):live):m.content||"";
@@ -479,7 +480,7 @@ function updateChatRow(m,d){
     d._text.innerHTML=m.searching?'<span class="searching">'+icon("globe")+'Searching the web…</span>'
       :waiting?'<span class="typing'+(m.keepAlives?" busy":"")+'"><i></i><i></i><i></i><span>'+esc(waitingLabel(who,m.waitingOn,m.keepAlives||0,Date.now()-(m.at||Date.now())))+'</span></span>'
       :linkCitations(md(shown),m.sources)+(m.streaming?'<span class="cursor"></span>':"");
-    d._waitKey=waiting?m.keepAlives:undefined;
+    d._waitKey=waitKey;
     d._contentValue=m.content;d._streaming=!!m.streaming;d._searching=!!m.searching;
     if(!m.streaming)for(const pre of d._text.querySelectorAll("pre")){const b=document.createElement("button");b.type="button";b.className="code-copy";b.innerHTML=icon("copy")+"Copy";b.setAttribute("aria-label","Copy code");pre.prepend(b);}
   }
@@ -2266,6 +2267,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
   const signal=controller.signal;
   setSending(true);renderResponders();renderChat();acquireWakeLock();
   let aborted=false,usedNext=false;
+  const waitTicker=typeof setInterval==="function"?setInterval(()=>{if(bot.streaming&&!bot.content&&!bot.reasoning)scheduleStreamPaint(bot);else clearInterval(waitTicker);},1000):null;
   try{
     if(search){
       try{
@@ -2343,12 +2345,14 @@ async function streamCompletion(agent,apiMessages,meta={}){
     bot.streaming=false;
     if(!bot.content&&!bot.reasoning){bot.content="(empty response)";}
   }catch(err){
+    if(waitTicker)clearInterval(waitTicker);
     bot.streaming=false;bot.searching=false;delete bot.keepAlives;delete bot.waitingOn;
     if(err.name==="AbortError"){aborted=true;bot.content=bot.content||"⏹ stopped.";}
     // A dropped connection keeps everything already written; Continue can finish it.
     else if(bot.content){bot.interrupted=String(err.message||"Connection lost");bot.truncated=true;}
     else{bot.error=true;bot.content="⚠️ "+err.message;}
   }finally{
+    if(waitTicker)clearInterval(waitTicker);
     delete bot.keepAlives;delete bot.waitingOn;
     // A leading "[char]:" speaker label is display noise; keep it out of the saved text, exports and notifications.
     if(!bot.error&&bot.content)bot.content=bot.content.replace(/^(?:\s*\[char\]\s*:\s*)+/i,"");

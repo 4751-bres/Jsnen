@@ -660,7 +660,7 @@ function iconKind(item){const e=String(item?.emoji??"").trim();return !e?"initia
 function waitingLabel(name,providerName,keepAlives,elapsedMs){
   const secs=Math.round((elapsedMs||0)/1000);
   if(keepAlives>0&&secs>=8)return (providerName||"The provider")+" is busy — still waiting · "+secs+"s";
-  return (name||"Your agent")+" is typing…";
+  return (name||"Your agent")+" is typing…"+(secs>=10?" · "+secs+"s":"");
 }
 /* waiting-core:end */
 /* drawer-swipe-core:start */

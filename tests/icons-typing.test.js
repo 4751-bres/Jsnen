@@ -28,4 +28,7 @@ test('an empty streaming reply says who is typing, or that the provider is busy'
   assert.equal(core.waitingLabel('Nadia','DeepSeek',3,4000),'Nadia is typing…');
   assert.equal(core.waitingLabel('Nadia','DeepSeek',5,45200),'DeepSeek is busy — still waiting · 45s');
   assert.equal(core.waitingLabel('',undefined,0,0),'Your agent is typing…');
+  assert.equal(core.waitingLabel('Nadia','DeepSeek',0,12400),'Nadia is typing… · 12s');
+  const {source}=require('./source');
+  assert.match(source(),/setInterval\(\(\)=>\{if\(bot\.streaming&&!bot\.content&&!bot\.reasoning\)scheduleStreamPaint\(bot\)/);
 });
