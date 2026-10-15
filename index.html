@@ -315,6 +315,24 @@
     <div class="foot"><button class="btn primary" id="qmSave" type="button">Save</button></div>
   </section>
 
+  <!-- Message actions (long-press) -->
+  <section class="sheet bottom" id="msgMenu">
+    <h3><span class="grow mm-preview" id="mmPreview"></span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body menu-list">
+      <div class="menu-grid">
+        <button class="menu-item" id="mmCopy" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><span><b>Copy</b></span></button>
+        <button class="menu-item" id="mmEdit" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg><span><b>Edit</b></span></button>
+        <button class="menu-item" id="mmStar" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.9l-5.3 2.7 1-5.8-4.2-4.1 5.9-.9z"/></svg><span><b>Bookmark</b></span></button>
+        <button class="menu-item" id="mmSpeak" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9v6h4l5 4V5L9 9z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg><span><b>Read aloud</b></span></button>
+        <button class="menu-item" id="mmPin" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6M10 4v6l-3 4h10l-3-4V4M12 14v6"/></svg><span><b>To memory</b></span></button>
+        <button class="menu-item" id="mmRegen" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg><span><b>Regenerate</b></span></button>
+        <button class="menu-item" id="mmBranch" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10M18 11c0 4-6 3-12 6"/></svg><span><b>Branch from here</b></span></button>
+        <button class="menu-item danger" id="mmDelete" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg><span><b>Delete</b></span></button>
+      </div>
+      <div class="hint">Branch from here starts a new chat with the story up to this message (with its director notes, chapters and background); the original stays as it is.</div>
+    </div>
+  </section>
+
   <!-- Stats -->
   <section class="sheet bottom" id="statsSheet">
     <h3><span class="grow">Chat stats</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>

@@ -709,6 +709,60 @@ function duplicateCurrentChat(){
 }
 $("#duplicateChatBtn").onclick=duplicateCurrentChat;
 
+/* ---------- Branch from a message: a new chat with the story up to that point ---------- */
+function branchFromMessage(m){
+  if(controller||readingImages||isWorkflow()){toast("Wait for the current reply to finish.");return;}
+  const index=messages.indexOf(m);if(index<0)return;
+  const kind=currentKind,list=kind==="group"?groups:agents,original=list.find(item=>item.id===currentId);if(!original)return;
+  let id;do{id=uid();}while(agents.some(a=>a.id===id)||groups.some(g=>g.id===id)||workflows.some(w=>w.id===id)||store.raw("ds_conv_"+id)!==null);
+  const copy=JSON.parse(JSON.stringify({...original,id,name:branchName(original.name,list.map(x=>x.name))}));
+  const history=branchMessages(messages,index),cutoff=m.at||Date.now(),key="ds_conv_"+id,next=[...list,copy];
+  try{
+    store.setRaw(key,JSON.stringify(history));
+    if(kind==="group")store.groups=next;else store.agents=next;
+  }catch(error){store.removeRaw(key);toast("Not enough browser storage for a branch.");return;}
+  // The scene travels with it: director notes, chapters so far, background.
+  try{
+    const dir=localStorage.getItem("ds_dir_"+currentId);if(dir)localStorage.setItem("ds_dir_"+id,dir);
+    const ch=branchChapters(chaptersFor(currentId),cutoff);if(ch.length)localStorage.setItem("ds_chap_"+id,JSON.stringify(ch));
+    const bg=store.raw("ds_bg_"+currentId);if(bg)store.setRaw("ds_bg_"+id,bg);
+  }catch(e){/* The branch itself is saved. */}
+  if(kind==="group")groups=next;else agents=next;
+  currentId=id;try{store.cur=id;store.kind=kind;}catch(e){}
+  loadConv();renderAgents();closeAll();toast("🌿 Branched: “"+copy.name+"”. The original chat is unchanged.");
+}
+
+/* ---------- Long-press a message (right-click on desktop): quick actions ---------- */
+let menuMessage=null;
+function openMessageMenu(m){
+  if(isWorkflow()||!m||m.streaming)return;
+  menuMessage=m;
+  const isBot=m.role==="assistant",busy=!!controller;
+  $("#mmPreview").textContent=String(m.content||(m.images?.length?"[image]":"")).replace(/\s+/g," ").trim().slice(0,120);
+  $("#mmStar").querySelector("b").textContent=m.starred?"Unbookmark":"Bookmark";
+  $("#mmSpeak").hidden=!isBot||!globalThis.speechSynthesis;
+  $("#mmRegen").hidden=!isBot;
+  for(const id of ["#mmEdit","#mmRegen","#mmBranch","#mmDelete"])$(id).disabled=busy;
+  closeAll();openSheet("#msgMenu");
+}
+const messageActions={
+  mmCopy:async m=>toast(await copyMessageText(m.role==="assistant"?cleanCharacterReply(m.content):m.content||"")?"Copied":"Could not copy"),mmEdit:m=>openMessageEditor(m),mmStar:m=>toggleBookmark(m),mmSpeak:m=>speakMessage(m),
+  mmPin:m=>pinToMemory(m),mmRegen:m=>regenerateMessage(m),mmBranch:m=>branchFromMessage(m),mmDelete:m=>deleteMessage(m)
+};
+$("#msgMenu").addEventListener("click",e=>{
+  const b=e.target.closest(".menu-item");if(!b||b.disabled||!menuMessage)return;
+  const m=menuMessage,act=messageActions[b.id];menuMessage=null;closeAll();
+  if(act&&messages.includes(m))setTimeout(()=>act(m),60);
+});
+document.getElementById("chat").addEventListener("contextmenu",e=>{
+  const row=e.target.closest(".msg");if(!row||!row._message||e.target.closest("a,input,textarea"))return;
+  e.preventDefault();try{getSelection()?.removeAllRanges();}catch(err){}
+  try{navigator.vibrate?.(12);}catch(err){}
+  openMessageMenu(row._message);
+});
+
+
+
 /* ---------- Agents & groups drawer ---------- */
 function selectAgent(id){if(controller){toast("Stop the response before switching");return;}currentKind="agent";currentId=id;store.kind="agent";store.cur=id;loadConv();renderAgents();closeAll();}
 function selectGroup(id){if(controller){toast("Stop the response before switching");return;}currentKind="group";currentId=id;store.kind="group";store.cur=id;loadConv();renderAgents();closeAll();}

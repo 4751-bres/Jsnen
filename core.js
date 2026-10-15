@@ -573,6 +573,20 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* branch-core:start */
+// A branch keeps the story up to (and including) one message; versions after it are dropped with the rest.
+function branchMessages(list,index){
+  if(!Array.isArray(list)||index<0||index>=list.length)return [];
+  return JSON.parse(JSON.stringify(list.slice(0,index+1))).map(m=>{delete m.streaming;return m;});
+}
+// Chapters that start at or before the branch point carry over.
+function branchChapters(chapters,cutoffAt){return (chapters||[]).filter(c=>Number(c.at)<=cutoffAt);}
+function branchName(name,taken){
+  const base=String(name||"Chat")+" (branch)";let out=base,n=2;
+  while((taken||[]).includes(out))out=base.replace(/\)$/," "+n+++")");
+  return out;
+}
+/* branch-core:end */
 /* stats-core:start */
 function wordCount(text){return (String(text||"").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)||[]).length;}
 // Numbers for ⋯ → Stats: who wrote how much, tokens, and how long the chat has been going.

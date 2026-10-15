@@ -392,6 +392,11 @@ body[data-mood="workflow"] header .title .sub::after{content:""}
 :root[data-theme="light"] .initials{color:var(--ini-l)}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .initials{color:var(--ini-l)}}
 
+/* Message actions */
+.mm-preview{font-size:14px!important;font-weight:500;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic}
+.menu-grid .menu-item[hidden]{display:none}
+#chat .msg{-webkit-touch-callout:none}
+
 /* Stats */
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .stat{display:flex;flex-direction:column;gap:2px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-2)}
