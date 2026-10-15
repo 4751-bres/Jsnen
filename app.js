@@ -479,7 +479,7 @@ function updateChatRow(m,d){
   }
   if(m.thoughts&&!m.streaming){
     if(!d._thoughts){d._thoughts=document.createElement("details");d._thoughts.className="thoughts";d._text.after(d._thoughts);}
-    if(d._thoughtsValue!==m.thoughts){d._thoughts.innerHTML='<summary>💭 <span>'+esc((m.characterName||m.agentName||"Their")+(m.characterName||m.agentName?"'s":"")+" thoughts")+'</span></summary><p>'+esc(m.thoughts)+'</p>';d._thoughtsValue=m.thoughts;}
+    if(d._thoughtsValue!==m.thoughts){d._thoughts.innerHTML='<summary>💭 <span>'+esc(((m.characterName||m.agentName||(!isGroup()&&curAgent()?.name)||"")+"'s thoughts").replace(/^'s thoughts$/,"Thoughts"))+'</span></summary><p>'+esc(m.thoughts)+'</p>';d._thoughtsValue=m.thoughts;}
   }else if(d._thoughts){d._thoughts.remove();d._thoughts=null;d._thoughtsValue=null;}
   if(m.sources&&!m.searching){
     if(!d._sources){d._sources=document.createElement("details");d._sources.className="sources";d._text.after(d._sources);}
@@ -2077,6 +2077,8 @@ async function streamCompletion(agent,apiMessages,meta={}){
     else if(bot.content){bot.interrupted=String(err.message||"Connection lost");bot.truncated=true;}
     else{bot.error=true;bot.content="⚠️ "+err.message;}
   }finally{
+    // A leading "[char]:" speaker label is display noise; keep it out of the saved text, exports and notifications.
+    if(!bot.error&&bot.content)bot.content=bot.content.replace(/^(?:\s*\[char\]\s*:\s*)+/i,"");
     if(bot.thoughtsTracked&&!bot.error)applyThoughtsTag(bot);
     if(bot.bondTracked&&!bot.error)applyBondTag(bot,bondBefore);
     if(bot.moodTracked&&!bot.error)applyMoodTag(bot);

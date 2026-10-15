@@ -24,3 +24,10 @@ test('thoughts appear in the text export',()=>{
   assert.match(t,/Nadia:\nHi\n\(thoughts: He is cute\.\)/);
   assert.match(vm.runInContext('THOUGHTS_INSTRUCTION',core),/\[thoughts: …\]/);
 });
+test('a leading [char]: label is removed from the saved reply',()=>{
+  const {source}=require('./source');
+  const line=source().split(/\r?\n/).find(l=>l.includes('bot.content=bot.content.replace(/^(?:'));
+  assert.ok(line,'strip line present');
+  const re=new RegExp(line.match(/replace\(\/(.+)\/i,""\)/)[1],'i');
+  assert.equal('[char]: Hello [1]'.replace(re,''),'Hello [1]');assert.equal('Plain'.replace(re,''),'Plain');
+});
