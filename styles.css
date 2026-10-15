@@ -321,6 +321,17 @@ body[data-mood="fiction"] .msg:not(.show-actions) .reply-meta>.tok:first-child+*
 /* Optional message buttons (Settings → Message buttons) */
 body.hide-speak .act-speak,body.hide-pin .act-pin{display:none!important}
 
+/* Character colours */
+.msg.tinted{--char:var(--char-d)}
+:root[data-theme="light"] .msg.tinted{--char:var(--char-l)}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .msg.tinted{--char:var(--char-l)}}
+.msg.tinted .who-name{color:var(--char)}
+.msg.tinted .who .av{border-color:color-mix(in srgb,var(--char) 55%,transparent)}
+body.bubbles .msg.bot.tinted .msg-body,body.has-bg .msg.bot.tinted .msg-body{border-left:3px solid var(--char)}
+#edColorRow{gap:6px}
+#edColorRow .swatch{width:30px;height:30px}
+.swatch.auto{background:conic-gradient(#f2b880,#8fa8ff,#f48fb1,#5eead4,#c4b0ff,#fcd34d,#86efac,#fca5a5,#f2b880)}
+
 /* Inner thoughts */
 .thoughts{margin-top:8px;border-left:3px solid var(--accent-soft);padding:2px 0 2px 10px}
 .thoughts summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;min-height:32px;font-size:13px;color:var(--text-3);font-weight:550}

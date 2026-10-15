@@ -484,6 +484,7 @@ function updateChatRow(m,d){
     if(d._sourcesKey!==key){d._sources.innerHTML=sourcesHtml(m);d._sourcesKey=key;}
   }else if(d._sources){d._sources.remove();d._sources=null;d._sourcesKey=null;}
   d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
+  if(d._tinted)d.classList.add("tinted");
   if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
   if(d._showActions)d.classList.add("show-actions");
   const note=m.interrupted?"⚠ connection lost — reply incomplete":m.finish?"⚠ "+(FINISH_NOTES[m.finish]||m.finish):m.truncated?"⚠ "+FINISH_NOTES.length:"";
@@ -591,6 +592,8 @@ function createChatRow(m){
     d.className="msg "+(m.role==="user"?"user":m.error?"err":"bot");
     if(m.workflowStage==="synthesis"&&!m.streaming&&!m.error)d.classList.add("final");
     const who=whoLabel(m);if(who)d.appendChild(who);
+    const tint=m.role==="assistant"&&!m.workflowRoleName&&(m.agentId||!isGroup())?characterColor(m.agentId?agentById(m.agentId):curAgent(),isGroup()):null;
+    if(tint){d.style.setProperty("--char-d",tint[0]);d.style.setProperty("--char-l",tint[1]);d._tinted=true;}
     d._body=document.createElement("div");d._body.className="msg-body";
     d._text=document.createElement("div");d._text.className="message-text";d._body.appendChild(d._text);
     for(const image of m.images||[]){
@@ -777,14 +780,19 @@ function openEditor(id){
   const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
   $("#edTitle").textContent=id?"Edit agent":"New agent";
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;$("#edThoughts").checked=!!a.thoughts;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;editingColor=a.color||"";renderColorRow();$("#edThoughts").checked=!!a.thoughts;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);syncTempState();
   $("#delAgent").hidden=!(id&&agents.length>1);
   $("#dupAgent").hidden=!id;
   closeAll();openSheet("#editor");
 }
-let editingAvatar=null;
+let editingAvatar=null,editingColor="";
+function renderColorRow(){
+  $("#edColorRow").innerHTML='<button type="button" class="swatch auto'+(editingColor?"":" on")+'" data-color="" aria-label="Automatic" title="Automatic"></button>'+
+    Object.entries(CHARACTER_COLORS).map(([k,c])=>'<button type="button" class="swatch'+(editingColor===k?" on":"")+'" data-color="'+k+'" style="--sw:'+c[0]+'" aria-label="'+k+'"></button>').join("");
+  $("#edColorRow").querySelectorAll(".swatch").forEach(b=>b.onclick=()=>{editingColor=b.dataset.color;renderColorRow();});
+}
 function renderEditorAvatar(){
   $("#edAvatarPreview").innerHTML=avatarInner({avatar:editingAvatar,emoji:$("#edEmoji").value.trim()||"🤖"});
   $("#edAvatarRemove").hidden=!editingAvatar;$("#edAvatarPickLabel").textContent=editingAvatar?"Change photo":"Add photo";
@@ -808,7 +816,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,memory:memoryLines($("#edMemory").value)};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -817,7 +825,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim()||"🤖",name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,memory:memoryLines($("#edMemory").value)};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");

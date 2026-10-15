@@ -649,6 +649,15 @@ function backgroundImage(bg){
   if(!bg||bg.kind==="none")return "";
   return bg.kind==="preset"?BG_PRESETS[bg.value].css:'url("'+bg.value+'")';
 }
+// Character name colours: [dark theme, light theme]. Group members without a choice get one from their id.
+const CHARACTER_COLORS={amber:["#f2b880","#a5520c"],blue:["#8fa8ff","#3653d4"],rose:["#f48fb1","#c2185b"],teal:["#5eead4","#0e7469"],
+  violet:["#c4b0ff","#6a48d6"],gold:["#fcd34d","#8a6100"],green:["#86efac","#137a3b"],coral:["#fca5a5","#b42318"]};
+function characterColor(agent,auto){
+  if(agent?.color&&CHARACTER_COLORS[agent.color])return CHARACTER_COLORS[agent.color];
+  if(!auto||!agent?.id)return null;
+  const keys=Object.keys(CHARACTER_COLORS);let h=0;for(const c of String(agent.id))h=(h*31+c.charCodeAt(0))>>>0;
+  return CHARACTER_COLORS[keys[h%keys.length]];
+}
 /* appearance-core:end */
 /* memory-suggest-core:start */
 // Story memory suggestions: the helper model reads the recent story and proposes new lasting facts.

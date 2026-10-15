@@ -29,3 +29,10 @@ test('chat backgrounds are stored with conversations so backups carry them',()=>
   const page=source();
   assert.match(page,/isBigKey\(k\)\{return \/\^ds_\(conv\|run\|sum\|bg\)_\//);
 });
+test('character colours: chosen colour wins, groups get a stable automatic one',()=>{
+  assert.deepEqual([...core.characterColor({id:'a',color:'rose'},false)],['#f48fb1','#c2185b']);
+  assert.equal(core.characterColor({id:'a'},false),null);
+  const one=core.characterColor({id:'nadia-1'},true),again=core.characterColor({id:'nadia-1'},true);
+  assert.deepEqual([...one],[...again]);assert.equal(one.length,2);
+  assert.equal(core.characterColor({id:'a',color:'nope'},false),null);
+});
