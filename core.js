@@ -573,6 +573,26 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* char-label-migration:start */
+// Older replies were saved with a leading "[char]:" speaker label; remove it from replies and their versions.
+const CHAR_LABEL=/^(?:\s*\[char\]\s*:\s*)+/i;
+function stripCharLabels(list){
+  let changed=false;
+  const clean=m=>{
+    if(!m||m.role!=="assistant"||typeof m.content!=="string"||!CHAR_LABEL.test(m.content))return m;
+    changed=true;return {...m,content:m.content.replace(CHAR_LABEL,"")};
+  };
+  const out=(Array.isArray(list)?list:[]).map(m=>{
+    let next=clean(m);
+    if(next&&Array.isArray(next.versions)){
+      const versions=next.versions.map(v=>v&&typeof v.content==="string"&&CHAR_LABEL.test(v.content)?(changed=true,{...v,content:v.content.replace(CHAR_LABEL,"")}):v);
+      if(versions.some((v,i)=>v!==next.versions[i]))next={...next,versions};
+    }
+    return next;
+  });
+  return {list:out,changed};
+}
+/* char-label-migration:end */
 /* branch-core:start */
 // A branch keeps the story up to (and including) one message; versions after it are dropped with the rest.
 function branchMessages(list,index){

@@ -2873,11 +2873,25 @@ function handleArrival(){
 
 /* ---------- Boot ---------- */
 store.onWriteError=()=>toast("Browser storage refused the last save. Free space or export a backup.");
+// One-time cleanup of old "[char]:" labels in saved replies (kept on screen hidden, but they leaked into exports).
+function cleanCharLabelsOnce(){
+  try{if(localStorage.getItem("ds_mig_charlabel")==="1")return;}catch(e){return;}
+  let fixed=0;
+  for(const key of store.bigKeys()){
+    if(!key.startsWith("ds_conv_"))continue;
+    let list;try{list=JSON.parse(store.raw(key));}catch(e){continue;}
+    const result=stripCharLabels(list);
+    if(result.changed){try{store.setRaw(key,JSON.stringify(result.list));fixed++;}catch(e){return;}}
+  }
+  try{localStorage.setItem("ds_mig_charlabel","1");}catch(e){}
+  if(fixed&&currentId){messages=store.conv(currentId);renderChat();}
+}
 store.init().finally(()=>{
   renderAgents();loadConv();refreshConnPill();
   if(!anyProviderReady()){setTimeout(()=>{$("#setBtn").click();},400);}
   else remindBackup();
   recoverBackgroundReplies();
+  cleanCharLabelsOnce();
   handleArrival();
   // Opened from a reply notification: go to that chat.
   const fromHash=/^#chat=(.+)$/.exec(location.hash);if(fromHash){openChatById(decodeURIComponent(fromHash[1]));history.replaceState(null,"",location.pathname+location.search);}
