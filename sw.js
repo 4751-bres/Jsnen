@@ -1,6 +1,6 @@
 // Offline shell for the installed app. Network first, so a new GitHub Pages deploy is picked up on the next
 // online load; the cached copy is used only when the network fails. API calls (other origins) are never cached.
-const CACHE = "ds-agents-shell-v5";
+const CACHE = "ds-agents-shell-v6";
 const SHELL = ["./", "index.html", "styles.css", "core.js", "app.js", "manifest.json", "icon-192.png", "icon-96.png"];
 
 self.addEventListener("install", event => {
@@ -10,13 +10,30 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => key !== CACHE && key !== SHARE_CACHE).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
 
+// Android share sheet → this app (installed PWA): keep the shared text and images for the page, then open it.
+const SHARE_CACHE = "ds-share";
+async function receiveShare(request) {
+  try {
+    const form = await request.formData(), cache = await caches.open(SHARE_CACHE);
+    await Promise.all((await cache.keys()).map(key => cache.delete(key)));
+    const images = form.getAll("images").filter(file => file && typeof file === "object" && file.size);
+    const text = [form.get("title"), form.get("text"), form.get("url")].map(v => String(v || "").trim()).filter(Boolean)
+      .filter((v, i, all) => all.indexOf(v) === i).join("\n");
+    await cache.put("share.json", new Response(JSON.stringify({ text, count: images.length, at: Date.now() }), { headers: { "Content-Type": "application/json" } }));
+    for (const [i, file] of images.slice(0, 4).entries())
+      await cache.put("image-" + i, new Response(file, { headers: { "Content-Type": file.type || "image/png", "X-Name": encodeURIComponent(file.name || "shared-" + i) } }));
+  } catch (error) { /* Open the app anyway. */ }
+  return Response.redirect("./?shared=1", 303);
+}
+
 self.addEventListener("fetch", event => {
   const request = event.request;
+  if (request.method === "POST" && new URL(request.url).searchParams.has("share-target")) { event.respondWith(receiveShare(request)); return; }
   if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
   event.respondWith(
     fetch(request.url, { cache: "no-cache", credentials: "same-origin" })

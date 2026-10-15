@@ -2535,6 +2535,32 @@ async function autoRespond(){
   const agent=agents.find(a=>a.id===id);if(agent)await runSequence([agent]);
 }
 
+/* ---------- Arrivals from Android: the share sheet and home-screen shortcuts ---------- */
+async function takeSharedContent(){
+  let cache;try{cache=await caches.open("ds-share");}catch(e){return;}
+  const meta=await cache.match("share.json");if(!meta)return;
+  let info={};try{info=await meta.json();}catch(e){}
+  const files=[];
+  for(let i=0;i<Math.min(4,info.count||0);i++){
+    const r=await cache.match("image-"+i);if(!r)continue;
+    const blob=await r.blob();files.push(new File([blob],decodeURIComponent(r.headers.get("X-Name")||"shared.png"),{type:blob.type||"image/png"}));
+  }
+  await Promise.all((await cache.keys()).map(k=>cache.delete(k)));
+  if(isWorkflow()&&files.length){toast("Open an agent or group chat to use shared images.");}
+  if(info.text){input.value=(input.value.trim()?input.value.trim()+"\n\n":"")+info.text;autoGrow();try{localStorage.setItem(draftKey(),input.value);}catch(e){}}
+  if(files.length&&!isWorkflow())await addImages(files);
+  toast("📥 Shared "+(files.length?files.length+" image"+(files.length===1?"":"s"):"")+(files.length&&info.text?" and ":"")+(info.text?"text":"")+" added. Pick a chat with ☰ if needed, then send.");
+}
+function handleArrival(){
+  const params=new URLSearchParams(location.search);
+  if(!params.has("shared")&&!params.has("open"))return;
+  const open=params.get("open");
+  history.replaceState(null,"",location.pathname+location.hash);
+  if(params.has("shared"))takeSharedContent().catch(()=>toast("Could not read what was shared."));
+  else if(open==="library")setTimeout(()=>$("#openLibrary").click(),300);
+  else if(open==="import")setTimeout(()=>$("#importCard").click(),300);
+}
+
 /* ---------- Boot ---------- */
 store.onWriteError=()=>toast("Browser storage refused the last save. Free space or export a backup.");
 store.init().finally(()=>{
@@ -2542,6 +2568,7 @@ store.init().finally(()=>{
   if(!anyProviderReady()){setTimeout(()=>{$("#setBtn").click();},400);}
   else remindBackup();
   recoverBackgroundReplies();
+  handleArrival();
   // Opened from a reply notification: go to that chat.
   const fromHash=/^#chat=(.+)$/.exec(location.hash);if(fromHash){openChatById(decodeURIComponent(fromHash[1]));history.replaceState(null,"",location.pathname+location.search);}
 });
