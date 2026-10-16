@@ -1140,12 +1140,13 @@ function exaResults(json){
   }));
 }
 // The text the helper model turns into a search query.
-function searchQueryMessages(apiMessages){
+function searchQueryMessages(apiMessages,now){
   const turns=(apiMessages||[]).filter(m=>m.role!=="system").slice(-6).map(m=>{
     const text=typeof m.content==="string"?m.content:(m.content||[]).filter(p=>p.type==="text").map(p=>p.text).join(" ");
     return (m.role==="user"?"User: ":"Assistant: ")+text.slice(0,1200);
   }).join("\n\n");
-  return [{role:"system",content:"You write one web search query that would find current information needed to answer the user's latest message. Reply with only the query (under 15 words, no quotes). If no web search is useful, reply with the user's latest message shortened to a query anyway."},
+  const today=new Date(now||Date.now()).toISOString().slice(0,10);
+  return [{role:"system",content:"You write one web search query that would find current information needed to answer the user's latest message. Today is "+today+": for anything recent, use this year (or no year at all), never an older one. Reply with only the query (under 15 words, no quotes). If no web search is useful, reply with the user's latest message shortened to a query anyway."},
     {role:"user",content:turns||"(empty)"}];
 }
 function lastUserText(apiMessages){

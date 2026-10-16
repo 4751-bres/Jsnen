@@ -381,6 +381,7 @@ async function regenerateMessage(message){
   const previous=messages,branch=prepareRegeneration(messages,index);
   const meta={versions:branch.versions,versionIndex:branch.versionIndex};
   for(const key of ["agentId","agentName","agentEmoji","characterName"])if(message[key])meta[key]=message[key];
+  if(message.sources)meta.forceSearch=true; // a reply that used the web keeps using it when regenerated
   messages=branch.prefix;
   const mood=moodOptions(agent);Object.assign(meta,moodMeta(mood));
   try{
@@ -1273,7 +1274,7 @@ $("#delWorkflow").onclick=()=>{
 
 /* ---------- Web search (Exa) ---------- */
 function webSearchWanted(agent,meta){
-  return !!store.exaKey&&!meta.workflowRoleId&&!meta.noSearch&&(store.webOn||!!agent?.webSearch);
+  return !!store.exaKey&&!meta.workflowRoleId&&!meta.noSearch&&(store.webOn||!!agent?.webSearch||!!meta.forceSearch);
 }
 let lastWebSearch=null; // reused when several group members answer the same message
 async function runWebSearch(apiMessages,signal){
@@ -1281,7 +1282,7 @@ async function runWebSearch(apiMessages,signal){
   const key=currentId+"\n"+fallback;
   if(lastWebSearch?.key===key&&Date.now()-lastWebSearch.at<10*60*1000)return lastWebSearch.found;
   let query=fallback;
-  try{query=cleanSearchQuery(await quickCompletion(searchQueryMessages(apiMessages),signal,60),fallback);}
+  try{query=cleanSearchQuery(await quickCompletion(searchQueryMessages(apiMessages,Date.now()),signal,60),fallback);}
   catch(e){if(signal?.aborted)throw e;}
   const found={query,results:await exaSearch(query,signal)};
   lastWebSearch={key,at:Date.now(),found};
@@ -2317,7 +2318,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
   const convId=currentId,conversationMessages=messages;
   const search=webSearchWanted(agent,meta);
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,at:Date.now(),...meta};
-  delete bot.noSearch;if(search)bot.searching=true;if(meta.proactive)bot.proactive=true;
+  delete bot.noSearch;delete bot.forceSearch;if(search)bot.searching=true;if(meta.proactive)bot.proactive=true;
   if(typeof thoughtsWanted==="function"&&thoughtsWanted(agent,meta))bot.thoughtsTracked=true;
   let bondBefore;
   if(typeof clockWanted==="function"&&clockWanted(meta))bot.sceneTracked=true;
