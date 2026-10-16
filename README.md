@@ -75,6 +75,7 @@ That's it — it now behaves like a native app with its own icon.
 - **"Previously…" recap** — open a chat with 8+ messages after 6+ hours away and a short catch-up card appears above the message box: where things stand, how the characters feel, open threads. One small request, cached per chat; ✕ hides it; ⚙️ Settings can turn it off.
 - **Find in chat** — ⋯ → Find (or Ctrl+F on a computer): search the whole chat, including older messages not loaded on screen, ignoring case and accents; ↑ ↓ (or Enter / Shift+Enter) jump between matches, which are highlighted.
 - **Type while it replies** — while a reply is streaming, type your next message: the send button turns into ⏳ and queues it, and it sends by itself as soon as the reply finishes (a strip shows what is queued; ✕ cancels and puts the text back). With an empty box the button is still Stop.
+- **Story clock 🌙** — in a roleplay group's editor, *Story clock*: characters keep track of the day, time and weather (shown in the chat header, e.g. "🌙 Day 1 · 1:40 a.m. · storm") and keep them consistent, moving time on only when the story does.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator, and Sexual-health Therapist. The therapist is a fictional adult AI character for sexual-health and relationship conversations, not a licensed clinician. It is also added once for existing users without replacing their agents or chats. Like other agents, it can be edited or deleted. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).

@@ -575,6 +575,35 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* clock-core:start */
+// Story clock: a hidden [scene: Day N, time of day, weather] line keeps in-story time and weather consistent.
+function clockInstruction(current){
+  return "STORY CLOCK: After your reply (before any [mood] line), add one line in exactly this form: [scene: Day N, time of day, weather], "+
+    "for example [scene: Day 2, late evening, light rain]. "+(current?"It is currently "+current+". Move time forward only as the story moves on (a scene change, a night's sleep, a time skip) and keep the weather consistent unless it changes in the story. ":"Start from what the story suggests. ")+
+    "Let the time and weather show in your descriptions. The app reads and hides this line; never mention it in the story.";
+}
+const SCENE_TAG=/\[\s*scene\s*:\s*([^\]]{3,80})\]/gi;
+function applySceneTag(bot){
+  let scene=null;
+  const cleaned=String(bot.content||"").replace(new RegExp("\n?[ \t]*"+SCENE_TAG.source,"gi"),(all,inner)=>{scene=inner.trim();return "";});
+  if(!scene)return bot;
+  bot.content=cleaned.replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim()||bot.content;
+  bot.scene=scene.replace(/\s*,\s*/g," · ").slice(0,60);
+  return bot;
+}
+function stripSceneWhileStreaming(text){
+  return String(text||"").replace(SCENE_TAG,"").replace(/\s*\[\s*(?:s(?:c(?:e(?:n(?:e)?)?)?)?)?\s*(?::[^\]]*)?$/i,"");
+}
+function latestScene(list){for(let i=(list||[]).length-1;i>=0;i--)if(list[i]?.scene)return list[i].scene;return "";}
+function sceneEmoji(scene){
+  const s=String(scene||"").toLowerCase();
+  const clock=/\b(\d{1,2})(?::\d\d)?\s*([ap])\.?\s*m\b/.exec(s);
+  if(clock){const h=Number(clock[1])%12+(clock[2]==="p"?12:0);if(h>=21||h<5)return "🌙";if(h<7)return "🌅";if(h>=18)return "🌆";}
+  if(/night|midnight|late evening/.test(s))return "🌙";if(/dawn|sunrise|early morning/.test(s))return "🌅";
+  if(/evening|dusk|sunset/.test(s))return "🌆";if(/rain|storm|drizzle|shower/.test(s))return "🌧";if(/snow/.test(s))return "❄";
+  return "☀";
+}
+/* clock-core:end */
 /* find-core:start */
 // Find in this chat: indexes of messages containing the text (case- and accent-insensitive).
 function foldText(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();}
@@ -1156,7 +1185,7 @@ function exaMcpResults(raw){
   if(json.error)throw new Error("Exa: "+(json.error.message||"search failed"));
   const text=(json.result?.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("\n");
   const results=parseExaMcpText(text);
-  if(!results.length&&/rate limit|api key|unauthori|invalid/i.test(text))throw new Error(/rate limit/i.test(text)?"Exa did not accept the key (free rate limit reached). Check the key in Settings.":/invalid api key|401/i.test(text)?"Exa rejected the key. Check it in Settings.":"Exa: "+text.slice(0,160));
+  if(!results.length&&/rate limit|api key|unauthori|invalid/i.test(text))throw new Error(/rate limit/i.test(text)?"Exa did not accept the key (free rate limit reached). Check the key in Settings.":/invalid api key|\b401\b/i.test(text)?"Exa rejected the key. Check it in Settings.":"Exa: "+text.slice(0,160));
   return results;
 }
 // Adds the results to the system prompt (or as a new first system message).

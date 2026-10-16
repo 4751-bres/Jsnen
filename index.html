@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css?v=20261016e" />
+<link rel="stylesheet" href="styles.css?v=20261016g" />
 </head>
 <body>
   <header>
@@ -651,6 +651,8 @@
         <label for="grInitiative">Characters message you first 💌</label>
         <select class="field" id="grInitiative"><option value="off">Off</option><option value="rarely">Rarely — after 12 h away, once a day</option><option value="sometimes">Sometimes — after 4 h away, up to 3 a day</option><option value="often">Often — after 1 h away, up to 6 a day</option></select>
         <div class="hint" style="margin-top:4px">When you come back after being away, the character who spoke last may have written to you first.</div>
+        <label class="toggle-row"><input id="grClock" type="checkbox" /> <span>Story clock — keep in-story time &amp; weather 🌙</span></label>
+        <div class="hint" style="margin-top:-6px">Characters track the day, time and weather (shown in the chat's header, e.g. "🌙 Day 3 · night · rain") and keep them consistent.</div>
         <label class="toggle-row"><input id="grRpBond" type="checkbox" /> <span>Track relationships ❤</span></label>
         <div class="hint" style="margin-top:-6px">Each character keeps a 0–100 closeness to your character that grows or drops with the story, shown as ❤ under their replies.</div>
         <div class="hint" style="margin-top:-6px">Each reply carries the character's private thoughts, shown folded under the message. Other characters never hear them.</div>
@@ -707,7 +709,7 @@
     </div>
   </section>
 
-<script src="core.js?v=20261016e"></script>
-<script src="app.js?v=20261016e"></script>
+<script src="core.js?v=20261016g"></script>
+<script src="app.js?v=20261016g"></script>
 </body>
 </html>

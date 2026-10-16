@@ -243,7 +243,8 @@ function refreshHeader(){
   }else if(isGroup()){
     const g=curGroup(),n=groupMembers(g).length,roleplay=isRoleplayGroup(g);
     $("#hAgent").textContent=g.name;
-    $("#hSub").textContent=roleplay?"Roleplay · "+(g.roleplay.user.name||"you"):n+" agent"+(n===1?"":"s")+usedText;
+    const scene=roleplay&&g.clock?latestScene(messages):"";
+    $("#hSub").textContent=roleplay?(scene?sceneEmoji(scene)+" "+scene:"Roleplay · "+(g.roleplay.user.name||"you")):n+" agent"+(n===1?"":"s")+usedText;
     $("#input").placeholder=roleplay?"Continue the scene, or @name…":"Message the group, or @name…";
   }else{
     const a=curAgent();
@@ -476,6 +477,7 @@ function updateChatRow(m,d){
   if(d._contentValue!==m.content||d._streaming!==!!m.streaming||d._searching!==!!m.searching||(waiting&&d._waitKey!==waitKey)){
     let live=m.thoughtsTracked&&m.streaming?stripThoughtsWhileStreaming(m.content):m.content;
     if(m.bondTracked&&m.streaming)live=stripBondWhileStreaming(live);
+    if(m.sceneTracked&&m.streaming)live=stripSceneWhileStreaming(live);
     const shown=m.role==="assistant"?cleanCharacterReply(m.moodTracked&&m.streaming?stripPartialMoodTag(live):live):m.content||"";
     const who=m.characterName||m.agentName||(!isGroup()&&!isWorkflow()?curAgent()?.name:"")||"";
     d._text.innerHTML=m.searching?'<span class="searching">'+icon("globe")+'Searching the web…</span>'
@@ -1013,7 +1015,7 @@ function openGroupEditor(id){
   $("#grRoleplay").checked=groupRoleplayDraft.enabled;$("#grRpSetting").value=groupRoleplayDraft.setting;
   $("#grRpOpening").value=groupRoleplayDraft.opening;$("#grRpUserName").value=groupRoleplayDraft.user.name;
   $("#grRpUserDescription").value=groupRoleplayDraft.user.description;renderPersonaChoices();$("#grRpMature").checked=groupRoleplayDraft.mature;
-  $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;$("#grRpThoughts").checked=!!g.thoughts;$("#grInitiative").value=g.initiative||"off";$("#grRpBond").checked=!!g.bond;
+  $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;$("#grRpThoughts").checked=!!g.thoughts;$("#grClock").checked=!!g.clock;$("#grInitiative").value=g.initiative||"off";$("#grRpBond").checked=!!g.bond;
   $("#grRoleplay").onchange=renderRoleplayEditor;
   $("#grRpMature").onchange=()=>{$("#grRpAdultRow").style.display=$("#grRpMature").checked?"flex":"none";if(!$("#grRpMature").checked)$("#grRpAdult").checked=false;};
   renderRoleplayEditor();$("#delGroup").style.display=id?"":"none";
@@ -1148,7 +1150,7 @@ $("#saveGroup").onclick=()=>{
   const roleplay=collectRoleplayEditor(members),errors=validateRoleplay(roleplay,members,$("#grRpAdult").checked);
   if(errors.includes("adult-confirmation")){toast("Confirm that you are an adult");return;}
   if(errors.length){toast("Complete the roleplay character details");return;}
-  const data={emoji:$("#grEmoji").value.trim(),name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),memory:memoryLines($("#grMemory").value),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked,thoughts:$("#grRpThoughts").checked||undefined,initiative:$("#grInitiative").value==="off"?undefined:$("#grInitiative").value,bond:$("#grRpBond").checked||undefined};
+  const data={emoji:$("#grEmoji").value.trim(),name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),memory:memoryLines($("#grMemory").value),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked,thoughts:$("#grRpThoughts").checked||undefined,clock:$("#grClock").checked||undefined,initiative:$("#grInitiative").value==="off"?undefined:$("#grInitiative").value,bond:$("#grRpBond").checked||undefined};
   if(editingGroupId){Object.assign(groups.find(g=>g.id===editingGroupId),data);}
   else{const g={id:uid(),...data};groups.push(g);currentKind="group";currentId=g.id;store.kind="group";store.cur=g.id;}
   store.groups=groups;renderAgents();loadConv();closeAll();toast("Group saved");
@@ -1490,6 +1492,9 @@ $("#checkKey").onclick=async()=>{
     out.textContent="✗ "+friendlyApiError(res.status,detail);
   }catch(e){out.textContent="✗ Could not reach "+base+". Check the base URL and your connection.";}
 };
+/* ---------- Story clock (roleplay groups that opt in) ---------- */
+function clockWanted(meta){return !meta.workflowRoleId&&!meta.noSearch&&isGroup()&&isRoleplayGroup(curGroup())&&!!curGroup().clock;}
+
 /* ---------- Relationship meter ---------- */
 function bondWanted(agent,meta){
   if(meta.workflowRoleId||meta.noSearch||isWorkflow())return false;
@@ -2315,6 +2320,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
   delete bot.noSearch;if(search)bot.searching=true;if(meta.proactive)bot.proactive=true;
   if(typeof thoughtsWanted==="function"&&thoughtsWanted(agent,meta))bot.thoughtsTracked=true;
   let bondBefore;
+  if(typeof clockWanted==="function"&&clockWanted(meta))bot.sceneTracked=true;
   if(typeof bondWanted==="function"&&bondWanted(agent,meta)){bot.bondTracked=true;bondBefore=lastBond(conversationMessages,isGroup()?agent.id:null);}
   messages.push(bot);
   renderChat();
@@ -2341,6 +2347,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     if(bot.thoughtsTracked)payload.messages=[...payload.messages,{role:"system",content:THOUGHTS_INSTRUCTION}];
     if(meta.proactive){const rp=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;payload.messages=[...payload.messages,{role:"system",content:proactiveInstruction(meta.proactive.hours,rp?.user?.name)}];}
     if(meta.whisperTo)payload.messages=[...payload.messages,{role:"system",content:"PRIVATE: the user just whispered to you alone; the others did not hear it. Answer quietly, just to them."}];
+    if(bot.sceneTracked)payload.messages=[...payload.messages,{role:"system",content:clockInstruction(latestScene(conversationMessages.slice(0,-1)))}];
     if(bot.bondTracked){const rp=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;payload.messages=[...payload.messages,{role:"system",content:bondInstruction(bondBefore,rp?.user?.name)}];}
     const chapterLine=!meta.workflowRoleId&&typeof chaptersFor==="function"?chapterNote(chaptersFor(convId)):"";
     if(chapterLine)payload.messages=[...payload.messages,{role:"system",content:chapterLine}];
@@ -2352,7 +2359,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     }
     // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
-      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","bondTracked","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
+      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","bondTracked","sceneTracked","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
     if(!meta.workflowRoleId&&store.notifyReplies&&globalThis.Notification?.permission==="granted")jobMeta.notify=(bot.characterName||bot.agentName||agent.name||"Your agent")+" replied";
     if(jobMeta.notify&&currentLock())jobMeta.notifyPrivate=true;
     const res=await fetchWithRetry(()=>backgroundFetch(request.url,{
@@ -2419,6 +2426,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     if(!bot.error&&bot.content)bot.content=bot.content.replace(/^(?:\s*\[char\]\s*:\s*)+/i,"");
     if(bot.thoughtsTracked&&!bot.error)applyThoughtsTag(bot);
     if(bot.bondTracked&&!bot.error)applyBondTag(bot,bondBefore);
+    if(bot.sceneTracked&&!bot.error)applySceneTag(bot);
     if(bot.moodTracked&&!bot.error)applyMoodTag(bot);
     cancelStreamPaint();releaseWakeLock();
     controller=null;setSending(false);
@@ -3214,6 +3222,7 @@ function adoptJob(job,interrupted){
   if(interrupted||job.status!=="done"){bot.interrupted="The app was closed before this reply finished";bot.truncated=true;}
   if(bot.thoughtsTracked)applyThoughtsTag(bot);
   if(bot.bondTracked)applyBondTag(bot,lastBond(list,bot.agentId));
+  if(bot.sceneTracked)applySceneTag(bot);
   if(bot.moodTracked)applyMoodTag(bot);
   try{store.saveConv(meta.convId,[...list,bot]);}catch(e){return false;}
   return meta.convId;
