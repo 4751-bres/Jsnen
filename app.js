@@ -1289,7 +1289,7 @@ async function runWebSearch(apiMessages,signal){
   return found;
 }
 // Direct API first; when the browser blocks it (Exa's CORS allow-list), use Exa's MCP endpoint and remember that.
-let exaViaMcp=false;try{exaViaMcp=sessionStorage.getItem("ds_exa_mcp")==="1";}catch(e){}
+let exaViaMcp=false;try{exaViaMcp=localStorage.getItem("ds_exa_mcp")==="1";}catch(e){} // remembered per device
 async function exaSearch(query,signal){
   if(!exaViaMcp){
     try{
@@ -1301,7 +1301,7 @@ async function exaSearch(query,signal){
       return exaResults(await res.json());
     }catch(e){
       if(!(e instanceof TypeError)||signal?.aborted)throw e;
-      exaViaMcp=true;try{sessionStorage.setItem("ds_exa_mcp","1");}catch(err){}
+      exaViaMcp=true;try{localStorage.setItem("ds_exa_mcp","1");}catch(err){}
     }
   }
   const call=async url=>{
