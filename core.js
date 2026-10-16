@@ -589,7 +589,7 @@ function recapDue(list,now,cached){
 function recapMessages(list,userName,assistantName){
   const turns=(list||[]).filter(m=>m&&(m.role==="user"||m.role==="assistant")&&!m.error&&m.content).slice(-30)
     .map(m=>(m.role==="user"?(userName||"User"):(m.characterName||m.agentName||assistantName||"Character"))+": "+String(m.content).slice(0,900)).join("\n\n");
-  return [{role:"system",content:"Write a 'Previously on…' recap for someone returning to this story: 2–4 short sentences, present tense, addressing "+(userName||"the user")+" as you. Say where things stand right now, how the characters feel, and any open thread or promise. No title, no bullet points, no spoilers beyond the text."},
+  return [{role:"system",content:"Write a 'Previously on…' recap for someone returning to this story: 2–4 short sentences, present tense, addressing "+(userName||"the user")+" as you. Say where things stand right now, how the characters feel, and any open thread or promise. Write as a neutral narrator, never in a character's voice (no \"I\"), and name the characters. No title, no bullet points, nothing that did not happen."},
     {role:"user",content:turns||"(empty)"}];
 }
 /* recap-core:end */
