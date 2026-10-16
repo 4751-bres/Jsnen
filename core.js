@@ -575,6 +575,24 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* recap-core:start */
+// "Previously on…": a short catch-up when you return to a long chat after hours away.
+const RECAP_AWAY_HOURS=6,RECAP_MIN_MESSAGES=8;
+function recapDue(list,now,cached){
+  const usable=(list||[]).filter(m=>m&&(m.role==="user"||m.role==="assistant")&&!m.error&&!m.streaming&&m.content);
+  if(usable.length<RECAP_MIN_MESSAGES)return null;
+  const lastAt=usable[usable.length-1].at;if(!lastAt)return null;
+  if(cached&&cached.at===lastAt)return {lastAt,cached:true};
+  if(now-lastAt<RECAP_AWAY_HOURS*3600000)return null;
+  return {lastAt,cached:false};
+}
+function recapMessages(list,userName,assistantName){
+  const turns=(list||[]).filter(m=>m&&(m.role==="user"||m.role==="assistant")&&!m.error&&m.content).slice(-30)
+    .map(m=>(m.role==="user"?(userName||"User"):(m.characterName||m.agentName||assistantName||"Character"))+": "+String(m.content).slice(0,900)).join("\n\n");
+  return [{role:"system",content:"Write a 'Previously on…' recap for someone returning to this story: 2–4 short sentences, present tense, addressing "+(userName||"the user")+" as you. Say where things stand right now, how the characters feel, and any open thread or promise. No title, no bullet points, no spoilers beyond the text."},
+    {role:"user",content:turns||"(empty)"}];
+}
+/* recap-core:end */
 /* initiative-core:start */
 // Characters who message first: how long the user must have been away and how many times a day, per level.
 const INITIATIVE={off:null,rarely:{awayHours:12,perDay:1},sometimes:{awayHours:4,perDay:3},often:{awayHours:1,perDay:6}};

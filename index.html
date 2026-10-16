@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css?v=20261015i" />
+<link rel="stylesheet" href="styles.css?v=20261016a" />
 </head>
 <body>
   <header>
@@ -54,6 +54,7 @@
     <div class="lock-pad" id="lockPad"><button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button><button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button><button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button><button type="button" data-k="del" aria-label="Delete">⌫</button><button type="button" data-k="0">0</button><button type="button" data-k="ok" id="lockOk" aria-label="Done">✓</button></div>
     <div class="lock-links"><button type="button" class="btn ghost" id="lockForgot">Forgot PIN?</button><button type="button" class="btn ghost" id="lockCancel" hidden>Cancel</button></div>
   </div>
+  <div class="recap-card" id="recapCard" hidden aria-live="polite"></div>
   <div class="director-bar" id="directorBar" hidden></div>
   <div class="attachments" id="attachments" aria-live="polite"></div>
   <input id="imageFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
@@ -143,6 +144,8 @@
         <select class="field" id="lockAfter"><option value="0">Immediately</option><option value="1">1 minute</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="60">1 hour</option></select>
       </div>
       <div class="hint" style="margin-top:-2px">Keeps your chats private from people around you. Notifications then say only "New reply". The PIN is stored as a hash in this browser and is never in backups.</div>
+      <label class="toggle-row"><input id="recapOn" type="checkbox" checked /> <span>"Previously…" recap when I come back</span></label>
+      <div class="hint" style="margin-top:-6px">After 6 hours away from a chat with 8+ messages, a short catch-up appears above the message box (1 small request, cached).</div>
       <label class="toggle-row"><input id="autoSpeak" type="checkbox" /> <span>Read new replies aloud automatically</span></label>
       <div class="hint" style="margin-top:-6px">Hands-free: each new reply in the open chat is read with that character's voice (set in the agent editor), even when the 🔊 buttons are hidden.</div>
 
@@ -695,7 +698,7 @@
     </div>
   </section>
 
-<script src="core.js?v=20261015i"></script>
-<script src="app.js?v=20261015i"></script>
+<script src="core.js?v=20261016a"></script>
+<script src="app.js?v=20261016a"></script>
 </body>
 </html>

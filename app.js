@@ -679,7 +679,7 @@ function loadConv(){
   try{input.value=localStorage.getItem(draftKey())||"";}catch(e){input.value="";}autoGrow();
   if(currentRun)store.saveRun(currentId,currentRun);
   renderChat();refreshHeader();renderResponders();renderWorkflowUi();
-  if(typeof renderWhisper==="function"){whisperTarget=null;renderWhisper();setTimeout(maybeReachOut,900);}
+  if(typeof renderWhisper==="function"){whisperTarget=null;renderWhisper();showRecap("");setTimeout(async()=>{await maybeRecap();maybeReachOut();},900);}
 }
 
 /* ---------- Duplicate a conversation ---------- */
@@ -1977,7 +1977,7 @@ function downloadFile(name,text,type){
 function applyMessageButtons(){
   document.body.classList.toggle("hide-speak",!store.showSpeak);
   document.body.classList.toggle("hide-pin",!store.showPin);
-  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#deviceSelect").value=devicePref();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
+  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#recapOn").checked=recapOn();$("#deviceSelect").value=devicePref();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
 }
 $("#notifyReplies").onchange=async e=>{
   if(!e.target.checked){store.notifyReplies=false;return;}
@@ -2227,7 +2227,9 @@ function commitComposer(extra={}){
   const message={role:"user",content:text,at:Date.now(),...(pendingImages.length?{images:pendingImages.slice()}:{}),...extra};
   try{store.saveConv(currentId,[...messages,message]);}
   catch(error){toast("Browser storage is full. Remove an attachment or clear an old chat first.");return false;}
-  messages.push(message);pendingImages=[];input.value="";clearDraft();autoGrow();renderAttachments();renderChat();return true;
+  messages.push(message);pendingImages=[];input.value="";clearDraft();autoGrow();renderAttachments();renderChat();
+  if(typeof showRecap==="function")showRecap("");
+  return true;
 }
 // Unsent text is kept per chat, so switching chats never carries a draft into the wrong conversation.
 function draftKey(){return "ds_draft_"+currentKind+":"+currentId;}
@@ -2822,6 +2824,37 @@ function send(){
   runAgent(curAgent());
 }
 
+/* ---------- "Previously on…" recap when you come back to a long chat ---------- */
+function recapOn(){try{return localStorage.getItem("ds_recap")!=="0";}catch(e){return true;}}
+function cachedRecap(id){try{return JSON.parse(localStorage.getItem("ds_recap_"+id));}catch(e){return null;}}
+function showRecap(text,loading){
+  const card=$("#recapCard");
+  if(!text&&!loading){card.hidden=true;card.innerHTML="";return;}
+  card.hidden=false;
+  card.innerHTML='<div class="recap-head">'+icon("book")+'<b>Previously…</b><button type="button" class="dir-x" aria-label="Hide recap">'+icon("x")+'</button></div>'+
+    (loading?'<span class="typing-dots"><i></i><i></i><i></i><span>Catching you up…</span></span>':'<p>'+esc(text)+'</p>');
+  card.querySelector("button").onclick=()=>{card.hidden=true;try{const c=cachedRecap(currentId);if(c)localStorage.setItem("ds_recap_"+currentId,JSON.stringify({...c,dismissed:true}));}catch(e){}};
+}
+let recapping=false;
+async function maybeRecap(){
+  if(recapping||isWorkflow()||!recapOn()||!currentId){showRecap("");return;}
+  const id=currentId,cached=cachedRecap(id),due=recapDue(messages,Date.now(),cached);
+  if(!due){showRecap("");return;}
+  if(due.cached){if(cached.dismissed)showRecap("");else showRecap(cached.text);return;}
+  if(!anyProviderReady()){showRecap("");return;}
+  recapping=true;showRecap("",true);
+  try{
+    const rp=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
+    const text=(await quickCompletion(recapMessages(messages,rp?.user?.name,isGroup()?"":curAgent()?.name),undefined,260)).trim();
+    if(id!==currentId)return;
+    if(!text){showRecap("");return;}
+    try{localStorage.setItem("ds_recap_"+id,JSON.stringify({at:due.lastAt,text}));}catch(e){}
+    showRecap(text);
+  }catch(e){if(id===currentId)showRecap("");}
+  finally{recapping=false;}
+}
+$("#recapOn").onchange=e=>{try{localStorage.setItem("ds_recap",e.target.checked?"1":"0");}catch(err){}if(!e.target.checked)showRecap("");};
+
 /* ---------- Characters who message first (when you come back after a while) ---------- */
 let reachingOut=false;
 async function maybeReachOut(){
@@ -2835,7 +2868,7 @@ async function maybeReachOut(){
   catch(e){/* Try again next time. */}
   finally{reachingOut=false;}
 }
-document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(maybeReachOut,900);});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(async()=>{await maybeRecap();maybeReachOut();},900);});
 
 /* ---------- Whisper (groups): a private line to one character ---------- */
 let whisperTarget=null;

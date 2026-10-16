@@ -422,6 +422,15 @@ body[data-mood="workflow"] header .title .sub::after{content:""}
 :root.dev-safe .director-bar,:root.dev-safe .attachments,:root.dev-safe main{width:100%;max-width:none;align-self:stretch;margin-left:0;margin-right:0}
 :root.dev-safe body,:root.dev-safe input,:root.dev-safe textarea,:root.dev-safe select,:root.dev-safe button{font-style:normal;font-synthesis:none}
 
+/* "Previously…" recap */
+.recap-card{margin:8px max(10px,calc((100% - var(--column)) / 2)) 0;padding:10px 12px;border-radius:var(--radius-md);border:1px solid var(--line);
+  background:var(--surface-1);max-height:30vh;overflow-y:auto;flex:none}
+.recap-card[hidden]{display:none}
+.recap-head{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:12.5px;letter-spacing:.06em;text-transform:uppercase}
+.recap-head b{flex:1}.recap-head svg{width:16px;height:16px}
+.recap-card p{margin:6px 0 2px;font-size:14.5px;line-height:1.5;color:var(--text-2);font-family:var(--msg-font,inherit)}
+@media (max-height:560px){body.typing #recapCard{display:none!important}}
+
 /* Whisper and first messages */
 .msg.whispered .msg-body{border:1px dashed var(--line-strong);border-radius:16px;padding:8px 12px;opacity:.92}
 .msg.user.whispered .msg-body{background:color-mix(in srgb,var(--bubble-user) 60%,transparent)}
