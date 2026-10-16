@@ -679,6 +679,7 @@ function loadConv(){
   try{input.value=localStorage.getItem(draftKey())||"";}catch(e){input.value="";}autoGrow();
   if(currentRun)store.saveRun(currentId,currentRun);
   renderChat();refreshHeader();renderResponders();renderWorkflowUi();
+  if(typeof closeFind==="function")closeFind();
   if(typeof renderWhisper==="function"){whisperTarget=null;renderWhisper();showRecap("");setTimeout(async()=>{await maybeRecap();maybeReachOut();},900);}
 }
 
@@ -2823,6 +2824,56 @@ function send(){
   }
   runAgent(curAgent());
 }
+
+/* ---------- Find in this chat ---------- */
+const findState={hits:[],pos:-1,timer:null};
+function clearFindMarks(){document.querySelectorAll("#chat mark.find-hit").forEach(m=>{const t=document.createTextNode(m.textContent);m.replaceWith(t);t.parentNode?.normalize();});}
+function markInRow(row,query){
+  const box=row?.querySelector(".message-text");if(!box)return;
+  const q=foldText(query).trim();if(!q)return;
+  const walker=document.createTreeWalker(box,NodeFilter.SHOW_TEXT),nodes=[];
+  while(walker.nextNode())nodes.push(walker.currentNode);
+  for(const node of nodes){
+    if(node.parentElement.closest("pre,code,mark"))continue;
+    const text=node.nodeValue,folded=foldText(text);let at=folded.indexOf(q);if(at<0)continue;
+    const frag=document.createDocumentFragment();let last=0;
+    while(at>=0){
+      frag.append(text.slice(last,at));
+      const mk=document.createElement("mark");mk.className="find-hit";mk.textContent=text.slice(at,at+q.length);frag.append(mk);
+      last=at+q.length;at=folded.indexOf(q,last);
+    }
+    frag.append(text.slice(last));node.replaceWith(frag);
+  }
+}
+function showFindHit(){
+  const n=findState.hits.length;
+  $("#findCount").textContent=n?(findState.pos+1)+" of "+n:($("#findInput").value.trim().length>1?"No matches":"");
+  $("#findPrev").disabled=$("#findNext").disabled=n<2;
+  clearFindMarks();if(!n)return;
+  const index=findState.hits[findState.pos];focusMessage(index);
+  markInRow(chatRows.get(messages[index]),$("#findInput").value);
+}
+function runFind(){
+  findState.hits=findMatches(messages,$("#findInput").value);
+  findState.pos=findState.hits.length-1;  // start from the most recent match
+  showFindHit();
+}
+function openFind(){
+  if(isWorkflow()&&!messages.length)return;
+  closeAll();$("#findBar").hidden=false;$("#findInput").value="";$("#findCount").textContent="";
+  setTimeout(()=>$("#findInput").focus(),60);
+}
+function closeFind(){$("#findBar").hidden=true;clearFindMarks();findState.hits=[];findState.pos=-1;}
+$("#findInput").addEventListener("input",()=>{clearTimeout(findState.timer);findState.timer=setTimeout(runFind,180);});
+$("#findInput").addEventListener("keydown",e=>{
+  if(e.key==="Enter"){e.preventDefault();if(!findState.hits.length)return;findState.pos=(findState.pos+(e.shiftKey?1:-1)+findState.hits.length)%findState.hits.length;showFindHit();}
+  else if(e.key==="Escape")closeFind();
+});
+$("#findPrev").onclick=()=>{if(!findState.hits.length)return;findState.pos=(findState.pos-1+findState.hits.length)%findState.hits.length;showFindHit();};
+$("#findNext").onclick=()=>{if(!findState.hits.length)return;findState.pos=(findState.pos+1)%findState.hits.length;showFindHit();};
+$("#findClose").onclick=closeFind;
+$("#findMenu").onclick=openFind;
+document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="f"&&!document.querySelector(".sheet.on")&&$("#lockScreen").hidden){e.preventDefault();openFind();}});
 
 /* ---------- "Previously on…" recap when you come back to a long chat ---------- */
 function recapOn(){try{return localStorage.getItem("ds_recap")!=="0";}catch(e){return true;}}

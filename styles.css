@@ -422,6 +422,14 @@ body[data-mood="workflow"] header .title .sub::after{content:""}
 :root.dev-safe .director-bar,:root.dev-safe .attachments,:root.dev-safe main{width:100%;max-width:none;align-self:stretch;margin-left:0;margin-right:0}
 :root.dev-safe body,:root.dev-safe input,:root.dev-safe textarea,:root.dev-safe select,:root.dev-safe button{font-style:normal;font-synthesis:none}
 
+/* Find in chat */
+.find-bar{display:flex;align-items:center;gap:4px;padding:6px max(8px,calc((100% - var(--column)) / 2));background:var(--bg);border-bottom:1px solid var(--line);flex:none}
+.find-bar[hidden]{display:none}
+.find-bar input{flex:1;min-width:0;height:40px;padding:0 12px}
+.find-bar #findCount{flex:none;min-width:58px;text-align:center;font-size:12.5px;color:var(--text-3)}
+.find-bar .icon-btn{width:38px;height:38px}
+mark.find-hit{background:#fbbf24;color:#111;border-radius:3px;padding:0 1px}
+
 /* "Previously…" recap */
 .recap-card{margin:8px max(10px,calc((100% - var(--column)) / 2)) 0;padding:10px 12px;border-radius:var(--radius-md);border:1px solid var(--line);
   background:var(--surface-1);max-height:30vh;overflow-y:auto;flex:none}

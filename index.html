@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css?v=20261016b" />
+<link rel="stylesheet" href="styles.css?v=20261016d" />
 </head>
 <body>
   <header>
@@ -27,12 +27,20 @@
     <button class="icon-btn" id="chatMenuBtn" type="button" aria-label="Chat options" title="Chat options: download, duplicate, clear"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/></svg></button>
     <button class="icon-btn" id="setBtn" aria-label="Settings" title="Settings"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
   </header>
+  <div class="find-bar" id="findBar" hidden>
+    <input class="field" id="findInput" type="search" placeholder="Find in this chat" autocomplete="off" enterkeyhint="search" aria-label="Find in this chat" />
+    <span id="findCount" aria-live="polite"></span>
+    <button class="icon-btn" id="findPrev" type="button" aria-label="Older match"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+    <button class="icon-btn" id="findNext" type="button" aria-label="Newer match"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+    <button class="icon-btn" id="findClose" type="button" aria-label="Close find"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
 
   <div id="chatBg" aria-hidden="true"></div>
   <main id="chat"></main>
   <button id="jumpToLatest" type="button" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>Latest</button>
 
   <div class="workflow-progress" id="workflowProgress"></div>
+  <div class="recap-card" id="recapCard" hidden aria-live="polite"></div>
   <div class="responders" id="responders"></div>
 
   <div class="workflow-actions" id="workflowActions">
@@ -54,7 +62,6 @@
     <div class="lock-pad" id="lockPad"><button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button><button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button><button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button><button type="button" data-k="del" aria-label="Delete">⌫</button><button type="button" data-k="0">0</button><button type="button" data-k="ok" id="lockOk" aria-label="Done">✓</button></div>
     <div class="lock-links"><button type="button" class="btn ghost" id="lockForgot">Forgot PIN?</button><button type="button" class="btn ghost" id="lockCancel" hidden>Cancel</button></div>
   </div>
-  <div class="recap-card" id="recapCard" hidden aria-live="polite"></div>
   <div class="director-bar" id="directorBar" hidden></div>
   <div class="attachments" id="attachments" aria-live="polite"></div>
   <input id="imageFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
@@ -488,6 +495,7 @@
       <div class="menu-sect">This chat</div>
       <div class="menu-grid">
       <button class="menu-item" id="bgMenu" type="button" title="A photo or ambience behind this chat"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/></svg><span><b>Background</b></span></button>
+      <button class="menu-item" id="findMenu" type="button" title="Search this chat's messages"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><span><b>Find</b></span></button>
       <button class="menu-item" id="statsMenu" type="button" title="Messages, words, tokens and who talks most"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span><b>Stats</b></span></button>
       <button class="menu-item" id="duplicateChatBtn" type="button" title="An independent copy with all messages"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span><b>Duplicate</b></span></button>
       <button class="menu-item danger" id="clearBtn" type="button" title="You can undo for a few seconds"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M6.5 16.5l8-8a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L13 18H8z"/></svg><span><b>Clear chat</b></span></button>
@@ -698,7 +706,7 @@
     </div>
   </section>
 
-<script src="core.js?v=20261016b"></script>
-<script src="app.js?v=20261016b"></script>
+<script src="core.js?v=20261016d"></script>
+<script src="app.js?v=20261016d"></script>
 </body>
 </html>

@@ -575,6 +575,16 @@ function buildScenario(preset,userName,idFactory){
 
 
 
+/* find-core:start */
+// Find in this chat: indexes of messages containing the text (case- and accent-insensitive).
+function foldText(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();}
+function findMatches(list,query){
+  const q=foldText(query).trim();if(q.length<2)return [];
+  const out=[];
+  (list||[]).forEach((m,i)=>{if(m&&(m.role==="user"||m.role==="assistant")&&foldText(m.content).includes(q))out.push(i);});
+  return out;
+}
+/* find-core:end */
 /* recap-core:start */
 // "Previously on…": a short catch-up when you return to a long chat after hours away.
 const RECAP_AWAY_HOURS=6,RECAP_MIN_MESSAGES=8;
