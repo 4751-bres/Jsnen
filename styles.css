@@ -572,6 +572,7 @@ body.has-bg .chapter-divider{text-shadow:0 1px 3px var(--bg)}
 .send svg{stroke-width:2.2}
 .send.stop{background:var(--danger-fill)}
 .send.stop svg{fill:currentColor;stroke:none}
+.send.queue{background:var(--warn);color:#1b1300}
 .send:disabled{opacity:.4}
 #draftBtn{
   width:44px;height:44px;flex:0 0 auto;display:grid;place-items:center;padding:0;border:1px solid var(--line);

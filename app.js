@@ -2,6 +2,7 @@
 const $ = s => document.querySelector(s);
 // Line icons (24px grid, stroke = currentColor); styled by svg.i in styles.css.
 const ICONS={
+  clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   star:'<path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.9l-5.3 2.7 1-5.8-4.2-4.1 5.9-.9z"/>',
   sparkle:'<path d="M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z"/>',
   clapper:'<path d="M4 11h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 11L3.2 7.6 18.6 3.8l.8 3.4z"/><path d="M8.2 6.6l2.4 3.1M13.2 5.4l2.4 3.1"/>',
@@ -680,6 +681,7 @@ function loadConv(){
   if(currentRun)store.saveRun(currentId,currentRun);
   renderChat();refreshHeader();renderResponders();renderWorkflowUi();
   if(typeof closeFind==="function")closeFind();
+  if(typeof renderQueue==="function")renderQueue();
   if(typeof renderWhisper==="function"){whisperTarget=null;renderWhisper();showRecap("");setTimeout(async()=>{await maybeRecap();maybeReachOut();},900);}
 }
 
@@ -2247,14 +2249,45 @@ input.addEventListener("keydown",e=>{
     e.preventDefault();send();
   }
 });
-$("#sendBtn").onclick=()=>{ if(controller){controller.abort();} else {send();} };
+$("#sendBtn").onclick=()=>{ if(controller){if(!(input.value.trim()&&!isWorkflow()&&queueMessage()))controller.abort();} else {send();} };
+input.addEventListener("input",()=>{if(controller)updateSendButton();});
 
 function setSending(on){
-  const b=$("#sendBtn");
-  if(on){b.classList.add("stop");b.innerHTML=icon("stop");b.setAttribute("aria-label","Stop generating");}
-  else{b.classList.remove("stop");b.innerHTML=icon("send");b.setAttribute("aria-label","Send message");refreshHeader();}
+  updateSendButton();
+  if(!on)refreshHeader();
   renderWorkflowUi();
   renderAttachments();
+  if(!on)setTimeout(flushQueuedMessage,250);
+}
+// While a reply streams: Stop with an empty box, or ⏳ to queue what you typed for right after it.
+function updateSendButton(){
+  const b=$("#sendBtn"),busy=!!controller,queue=busy&&!!input.value.trim()&&!isWorkflow();
+  b.classList.toggle("stop",busy&&!queue);b.classList.toggle("queue",queue);
+  b.innerHTML=icon(queue?"clock":busy?"stop":"send");
+  b.setAttribute("aria-label",queue?"Send after this reply":busy?"Stop generating":"Send message");
+}
+/* ---------- Type while it's replying: one queued message, sent when the reply finishes ---------- */
+let queuedMessage=null;
+function renderQueue(){
+  const bar=$("#queueBar");
+  if(!queuedMessage||queuedMessage.conv!==currentId){bar.hidden=true;bar.innerHTML="";return;}
+  bar.hidden=false;
+  bar.innerHTML='<span class="whisper-pill">⏳ Sends after this reply: '+esc(queuedMessage.text.slice(0,60))+(queuedMessage.text.length>60?"…":"")+'</span><button type="button" class="dir-x" aria-label="Cancel queued message">'+icon("x")+'</button>';
+  bar.querySelector("button").onclick=()=>{const q=queuedMessage;queuedMessage=null;renderQueue();if(q&&!input.value.trim()){input.value=q.text;autoGrow();}};
+}
+function queueMessage(){
+  const text=input.value.trim();if(!text)return false;
+  if(queuedMessage&&queuedMessage.conv===currentId)queuedMessage.text+="\n\n"+text;
+  else queuedMessage={text,conv:currentId};
+  input.value="";clearDraft();autoGrow();updateSendButton();renderQueue();
+  return true;
+}
+function flushQueuedMessage(){
+  if(!queuedMessage||controller||sequence||readingImages)return;
+  if(queuedMessage.conv!==currentId){return;}
+  const q=queuedMessage;queuedMessage=null;renderQueue();
+  const draft=input.value;input.value=q.text;send();
+  if(input.value===q.text)input.value=draft; // not sent (e.g. no key): put things back
 }
 
 /* ---------- Build OpenAI-compatible message list for a given responder ---------- */
@@ -2803,6 +2836,7 @@ $("#cancelWorkflow").onclick=cancelWorkflow;
 
 /* ---------- Composer send ---------- */
 function send(){
+  if(controller&&!isWorkflow()&&input.value.trim()){queueMessage();return;}
   if(controller||readingImages)return;
   const text=input.value.trim();
   if(!text&&!pendingImages.length)return;
