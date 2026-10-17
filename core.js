@@ -507,7 +507,7 @@ function previewOf(list){
   for(let i=(list||[]).length-1;i>=0;i--){
     const m=list[i];
     if(!m||(m.role!=="user"&&m.role!=="assistant")||m.error||m.streaming)continue;
-    const text=String(m.content||"").replace(/\*/g,"").replace(/\s+/g," ").trim();
+    const text=String(m.content||"").replace(/^(?:\s*\[char\]\s*:\s*)+/i,"").replace(/\*/g,"").replace(/\s+/g," ").trim();
     if(!text&&!m.images?.length)continue;
     return {who:m.role==="user"?"You":(m.characterName||m.agentName||""),text:text?text.slice(0,90):"Photo",at:m.at||0};
   }

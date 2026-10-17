@@ -144,6 +144,7 @@ if(!localStorage.getItem("ds_therapist_v1")){
   if(!agents.some(a=>a.id===THERAPIST_AGENT.id)){agents=[...agents,{...THERAPIST_AGENT}];store.agents=agents;}
   localStorage.setItem("ds_therapist_v1","1");
 }
+if(!localStorage.getItem("ds_previews_v2")){try{localStorage.removeItem("ds_previews");localStorage.setItem("ds_previews_v2","1");}catch(e){}}
 if(!localStorage.getItem("ds_friend_v1")){
   if(!agents.some(a=>a.id===FRIEND_AGENT.id)){agents=[...agents,{...FRIEND_AGENT}];store.agents=agents;}
   localStorage.setItem("ds_friend_v1","1");
@@ -1742,7 +1743,8 @@ $("#edExportCard").onclick=()=>{const a=agents.find(x=>x.id===editingId);if(a)ex
   },{passive:true});
   chat.addEventListener("touchend",e=>{
     if(!start)return;const s=start;start=null;
-    s.row.style.transform="";s.row.classList.remove("swiping");
+    s.row.classList.remove("swiping");s.row.classList.add("snapping");s.row.style.transform="";
+    setTimeout(()=>s.row.classList.remove("snapping"),220);
     if(!s.horizontal)return;
     const t=e.changedTouches[0],message=s.row._message,isLast=messages.at(-1)===message;
     const action=swipeAction(message,isLast,t.clientX-s.x,t.clientY-s.y);

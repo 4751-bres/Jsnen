@@ -363,11 +363,11 @@ body.bubbles .msg.bot.tinted .msg-body,body.has-bg .msg.bot.tinted .msg-body{bor
 :root[data-density="compact"] .msg-body{gap:6px}
 body.bubbles .msg.bot .msg-body,body.has-bg .msg.bot .msg-body{
   max-width:94%;align-self:flex-start;padding:10px 14px;border-radius:20px 20px 20px 6px;background:var(--surface-1);border:1px solid var(--line)}
-#chatBg{position:fixed;inset:0;z-index:-1;pointer-events:none;background-size:cover;background-position:center}
+#chatBg{position:fixed;inset:0;z-index:-1;pointer-events:none;background-size:cover;background-position:center;transform:translateZ(0);contain:strict}
 #chatBg::after{content:"";position:absolute;inset:0;background:var(--bg);opacity:var(--bg-dim,.45)}
 body.has-bg{background:transparent}
 html:has(body.has-bg){background:var(--bg)}
-body.has-bg .msg.bot .msg-body{background:color-mix(in srgb,var(--surface-1) 84%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+body.has-bg .msg.bot .msg-body{background:color-mix(in srgb,var(--surface-1) 93%,transparent)}
 body.has-bg .msg-meta,body.has-bg .day-divider{text-shadow:0 1px 2px var(--bg)}
 .bg-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .bg-tile{display:flex;flex-direction:column;align-items:center;gap:4px;padding:0;border:0;background:none;color:var(--text-2);font:inherit;font-size:12px;cursor:pointer}
@@ -490,8 +490,7 @@ body.ideas-open #jumpToLatest{display:none!important}
 @keyframes typing{0%,60%,100%{opacity:.35;transform:none}30%{opacity:1;transform:translateY(-3px)}}
 
 /* Swipe replies */
-.msg.bot{transition:transform .18s var(--ease-out)}
-.msg.bot.swiping{transition:none}
+.msg.bot.snapping{transition:transform .18s var(--ease-out)}
 
 /* Chapters */
 .chapter-divider{display:flex;flex-direction:column;align-items:center;gap:2px;margin:30px 0 24px;text-align:center}
