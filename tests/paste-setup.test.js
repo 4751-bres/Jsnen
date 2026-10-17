@@ -72,3 +72,13 @@ test('copy damage from phones is repaired; a cut-off block says so',()=>{
   assert.throws(()=>core.parseSetup('{"agents":[{"name":"A" "description":"b"}]}'),/typo near/);
   assert.equal(core.buildSetup(core.parseSetup(nbsp),()=>'q').agents[1].emoji,'👩‍💼');
 });
+
+test('dialogue quotes that lost their backslashes in the copy still load',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const text=JSON.stringify({...setup,agents:[{...setup.agents[0],description:'Ioana, 27.\n\nHow she talks:\n"Good morning… sorry."\n"I need this job, okay?"\n"You always did look at me like that."'},setup.agents[1]]},null,2);
+  const stripped=text.replace(/\\"/g,'"');
+  assert.notEqual(stripped,text);
+  const parsed=core.parseSetup(stripped);
+  assert.equal(parsed.agents[0].description,'Ioana, 27.\n\nHow she talks:\n"Good morning… sorry."\n"I need this job, okay?"\n"You always did look at me like that."');
+  assert.equal(parsed.group.name,'Arcadia Soft');
+});

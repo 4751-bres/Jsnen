@@ -1411,15 +1411,18 @@ function setupText(v,max){return String(v??"").trim().slice(0,max||4000);}
 function setupKey(a){return setupText(a?.key||a?.name,80).toLowerCase();}
 function setupGroups(data){return Array.isArray(data.groups)?data.groups:data.group?[data.group]:[];}
 // Phones and chat apps damage copied text: non-breaking spaces, curly quotes, real line breaks inside text,
-// zero-width marks. Repair them outside the text values so JSON.parse accepts it; depth>0 means it was cut off.
+// zero-width marks, and backslashes dropped from quotes inside text (\"Hi\" arrives as "Hi").
+// A quote only ends a text value when JSON structure follows it; any other quote is part of the text.
+const SETUP_QUOTE_END=/^\s*(?:[}\]:]|,\s*(?:["{[\]}\-\d]|true\b|false\b|null\b)|$)/;
 function looseSetupJson(raw){
-  let out="",inStr=false,esc=false,depth=0;
-  for(const ch of String(raw).replace(/[\u201c\u201d\u201e\u201f\u2033]/g,'"')){
+  const s=String(raw).replace(/[\u201c\u201d\u201e\u201f\u2033]/g,'"');
+  let out="",inStr=false,depth=0;
+  for(let i=0;i<s.length;i++){
+    const ch=s[i];
     if(inStr){
-      if(esc){out+=ch;esc=false;}
-      else if(ch==="\\"){out+=ch;esc=true;}
-      else if(ch==='"'){out+=ch;inStr=false;}
-      else if(ch==="\n")out+="\\n";
+      if(ch==="\\"&&i+1<s.length){out+=ch+s[++i];continue;}
+      if(ch==='"'){if(SETUP_QUOTE_END.test(s.slice(i+1,i+40))){out+=ch;inStr=false;}else out+='\\"';continue;}
+      if(ch==="\n")out+="\\n";
       else if(ch==="\t")out+="\\t";
       else if(ch>=" ")out+=ch;
       continue;
