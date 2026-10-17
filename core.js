@@ -1481,11 +1481,13 @@ function setupMemory(list){return (Array.isArray(list)?list:[]).map(s=>setupText
 function buildSetup(data,idFactory,userName){
   const mature=data.mature!==false,user=data.persona||data.user||{},name=setupText(userName,80)||setupText(user.name,80);
   const persona=name?{name,description:setupText(user.description,4000),save:user.save!==false}:null;
-  const byKey={};
+  const byKey={},grouped=new Set(setupGroups(data).flatMap(g=>Array.isArray(g.members)&&g.members.length?g.members.map(k=>String(k).trim().toLowerCase()):data.agents.map(setupKey)));
   const agents=data.agents.map(a=>{
     const description=setupText(a.description||a.prompt,20000),temp=a.temp===""||a.temp==null?NaN:+a.temp;
+    const solo=!grouped.has(setupKey(a)),setting=setupText(a.setting||a.scene,8000);
+    const parts=[description,solo&&setting&&"Setting: "+setting,solo&&persona&&"The user plays "+persona.name+(persona.description?" — "+persona.description.replace(/[.!?\s]+$/,""):"")+". Never speak or act for them.",mature&&MATURE_CHARACTER_RULES];
     const agent={id:idFactory(),emoji:setupText(a.emoji,16)||"🙂",name:setupText(a.name,80),
-      prompt:mature?description+"\n\n"+MATURE_CHARACTER_RULES:description,
+      prompt:parts.filter(Boolean).join("\n\n"),
       model:setupText(a.model,120)||"deepseek-flash",temp:Number.isFinite(temp)?Math.min(2,Math.max(0,temp)):1.3,
       think:THINK_LEVELS.includes(a.think)?a.think:"off",moods:a.moods!==false,matureMoods:mature};
     if(a.thoughts)agent.thoughts=true;
@@ -1497,6 +1499,7 @@ function buildSetup(data,idFactory,userName){
     const memory=setupMemory(a.memory);if(memory.length)agent.memory=memory;
     const book=setupWorld(a.world,agent.name);if(book)agent.lorebook=book;
     byKey[setupKey(a)]={agent,description};
+    if(solo)agent.solo=true;
     return agent;
   });
   const groups=setupGroups(data).map(g=>{
@@ -1515,11 +1518,12 @@ function buildSetup(data,idFactory,userName){
     if(SETUP_INITIATIVE.includes(g.initiative)&&g.initiative!=="off")group.initiative=g.initiative;
     return group;
   });
-  return {agents,groups,persona};
+  const solo=agents.filter(a=>a.solo);solo.forEach(a=>delete a.solo);
+  return {agents,groups,persona,solo:solo.map(a=>a.id)};
 }
 // One line per thing the setup creates, for the confirm step.
 function setupSummary(built){
-  const lines=built.agents.map(a=>"Character: "+a.emoji+" "+a.name);
+  const lines=built.agents.map(a=>(built.solo?.includes(a.id)?"Own chat: ":"Character: ")+a.emoji+" "+a.name+(built.solo?.includes(a.id)&&built.persona?" · you play "+built.persona.name:""));
   for(const g of built.groups){
     const extras=[g.memory&&g.memory.length+(g.memory.length===1?" memory line":" memory lines"),g.lorebook&&g.lorebook.entries.length+(g.lorebook.entries.length===1?" world entry":" world entries"),
       g.thoughts&&"thoughts",g.bond&&"relationships",g.clock&&"story clock",g.initiative&&"messages first ("+g.initiative+")"].filter(Boolean);

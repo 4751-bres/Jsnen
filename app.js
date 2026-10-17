@@ -1182,6 +1182,7 @@ $("#setupClip").onclick=async()=>{
   catch(e){toast("The browser blocked clipboard access. Long-press the box and paste instead.");}
 };
 $("#setupText").addEventListener("input",checkSetup);$("#setupName").addEventListener("input",checkSetup);
+$("#pasteAgent").onclick=()=>{if(controller){toast("Stop the response first");return;}$("#openSetup").click();};
 $("#openSetup").onclick=()=>{closeAll();openSheet("#setupSheet");$("#setupAdult").checked=false;checkSetup();setTimeout(()=>$("#setupText").focus(),250);};
 $("#setupCreate").onclick=()=>{
   if(!pastedSetup){checkSetup();return;}
@@ -1199,6 +1200,7 @@ $("#setupCreate").onclick=()=>{
   }
   $("#setupText").value="";$("#setupName").value="";pastedSetup=null;
   if(built.groups.length)selectGroup(built.groups[0].id);else selectAgent(built.agents[0].id);
+  if(built.groups.length&&built.solo.length)toast("Setup created · own chats are under Single agents");else
   toast("Setup created");
 };
 $("#addGroup").onclick=()=>{

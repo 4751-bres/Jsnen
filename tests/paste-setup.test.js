@@ -82,3 +82,16 @@ test('dialogue quotes that lost their backslashes in the copy still load',()=>{
   assert.equal(parsed.agents[0].description,'Ioana, 27.\n\nHow she talks:\n"Good morning… sorry."\n"I need this job, okay?"\n"You always did look at me like that."');
   assert.equal(parsed.group.name,'Arcadia Soft');
 });
+
+test('characters outside any group get their own chat with the setting and your persona',()=>{
+  const data={persona:{description:'30, a detective.'},agents:[{name:'Elena',description:'Elena, 28, a singer.',setting:'A jazz club in 1950s Rome.',greeting:'You came back.'}]};
+  const built=core.buildSetup(core.parseSetup(JSON.stringify(data)),()=>'e1','Marco');
+  const p=built.agents[0].prompt;
+  assert.match(p,/^Elena, 28, a singer\.\n\nSetting: A jazz club in 1950s Rome\.\n\nThe user plays Marco — 30, a detective\. Never speak or act for them\./);
+  assert.match(p,/no content limits from this app/);
+  assert.deepEqual([...built.solo],['e1']);assert.equal(built.agents[0].solo,undefined);assert.equal(built.agents[0].opener,'text');
+  assert.equal(core.setupSummary(built)[0],'Own chat: 🙂 Elena · you play Marco');
+  let n=0;const mixed=core.buildSetup(core.parseSetup(JSON.stringify({...setup,agents:[...setup.agents,{key:'max',name:'Max',description:'Max, 30.'}]})),()=>'m'+(++n));
+  assert.deepEqual([...mixed.solo],[mixed.agents[2].id]);assert.doesNotMatch(mixed.agents[0].prompt,/The user plays/);
+  assert.match(require('./source').source(),/id="pasteAgent"/);
+});
