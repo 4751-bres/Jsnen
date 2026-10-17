@@ -71,7 +71,7 @@ function buildGroupApiMessages(group,agent,messages,options={}){
   const cast=(group.members||[]).filter(id=>id!==agent.id).map(id=>rp.characters[id]).filter(Boolean).map(c=>c.name+": "+c.description).join("\n");
   const system=[agent.prompt,"Within this scene, you are "+character.name+" ([char]). Speak as I from your own perspective, with your established personality and knowledge.","Character: "+character.description,
     "User character: "+rp.user.name+" — "+rp.user.description,"Setting: "+rp.setting,
-    cast&&"Other characters:\n"+cast,rp.opening&&"Opening scene (already shown to the user before the conversation began):\n"+rp.opening,rp.mature&&"Mature-mode preference: enabled.",
+    cast&&"Other characters:\n"+cast,rp.opening&&"Opening scene (already shown to the user before the conversation began):\n"+rp.opening,rp.mature&&"Mature mode: on. All characters are adults (18+); this app sets no content limits. Follow the user's lead on how explicit or intense the story becomes.",
     "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE,options.memory,
     options.mood?.track&&moodInstruction(options.mood.current,options.mood.mature)
   ].filter(Boolean).join("\n\n");
@@ -524,7 +524,7 @@ function shortWhen(at,now){
 /* drawer-core:end */
 /* scenario-library:start */
 // Ready-made mature roleplay scenarios. Every character is an adult woman; consent is part of each character's rules.
-const MATURE_CHARACTER_RULES="Everyone in this story is an adult. This is a mature romance roleplay: let flirtation, attraction and intimacy build naturally and at the user's pace, matching how far they take the scene. Respect consent within the story: read the user's cues, and slow down or change course if they hesitate. Stay fully in character.";
+const MATURE_CHARACTER_RULES="Everyone in this story is an adult (18+). This is a mature roleplay with no content limits from this app: follow the user's lead on how romantic, explicit or intense the story becomes, and match how far they take it. Stay fully in character.";
 const SCENARIO_LIBRARY=[
   {id:"last-call",emoji:"🍸",title:"Last Call",tagline:"A hotel rooftop bar after midnight, and a bartender who notices everything.",
     setting:"The Aurelia Hotel's rooftop bar, 1:40 a.m., the city skyline glittering below. The bar closes at two; soft jazz, empty tables, one bartender left. Slow-burn flirtation between adults that goes as far as the guest wants.",

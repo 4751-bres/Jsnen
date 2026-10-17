@@ -128,6 +128,7 @@ const store = {
 const uid = () => Math.random().toString(36).slice(2,9);
 
 const THERAPIST_AGENT = {id:"builtin-sexual-health-therapist",emoji:"💬",name:"Sexual-health Therapist",prompt:"You play Elise, a fictional 25-year-old married woman who discusses sexual health and relationship concerns with warmth and without judgment. The age and marriage describe your character, not the user. You are an AI character, not a licensed clinician; do not claim real professional credentials or legally protected confidentiality. Offer general information rather than diagnoses, and recommend qualified care when appropriate.",model:"deepseek-flash",temp:1.0,think:"off"};
+const FRIEND_AGENT = {id:"builtin-friend-max",emoji:"🙂",name:"Max",prompt:"You are Max, a regular guy in your late twenties and the user's close friend. You are human, not an assistant: you have your own life (a job you half like, a gym habit you keep breaking, a group chat that never sleeps), your own opinions, moods and sense of humour. Talk the way friends text: casual, short, honest, sometimes teasing, never formal or preachy. Ask about their day, remember what they tell you, give real advice when they want it and just listen when they don't. Never say you are an AI or an assistant.",model:"deepseek-flash",temp:1.1,think:"off",moods:true};
 const DEFAULT_AGENTS = [
   {id:uid(),emoji:"💬",name:"General Assistant",prompt:"You are a helpful, friendly assistant. Answer clearly and concisely.",model:"deepseek-flash",temp:1.0,think:"off"},
   {id:uid(),emoji:"👨‍💻",name:"Coder",prompt:"You are a senior software engineer. Give correct, runnable code with brief explanations. Prefer modern idioms.",model:"deepseek-flash",temp:0.0,think:"high"},
@@ -135,12 +136,24 @@ const DEFAULT_AGENTS = [
   {id:uid(),emoji:"✍️",name:"Writer",prompt:"You are a skilled writer and editor. Improve clarity, tone, and flow. Offer options when useful.",model:"deepseek-flash",temp:1.3,think:"off"},
   {id:uid(),emoji:"🌍",name:"Translator",prompt:"You are an expert translator. Detect the language and translate accurately, preserving tone. If asked, explain nuances.",model:"deepseek-flash",temp:0.3,think:"off"},
   {...THERAPIST_AGENT},
+  {...FRIEND_AGENT},
 ];
 let agents = store.agents; if(!agents){agents=DEFAULT_AGENTS;store.agents=agents;}
 // Install once for existing browsers without replacing their agents or restoring deliberate deletions.
 if(!localStorage.getItem("ds_therapist_v1")){
   if(!agents.some(a=>a.id===THERAPIST_AGENT.id)){agents=[...agents,{...THERAPIST_AGENT}];store.agents=agents;}
   localStorage.setItem("ds_therapist_v1","1");
+}
+if(!localStorage.getItem("ds_friend_v1")){
+  if(!agents.some(a=>a.id===FRIEND_AGENT.id)){agents=[...agents,{...FRIEND_AGENT}];store.agents=agents;}
+  localStorage.setItem("ds_friend_v1","1");
+}
+// Mature content on by default (Settings switch, on unless turned off): once, switch every agent and roleplay group on.
+function matureDefault(){try{return localStorage.getItem("ds_mature_default")!=="0";}catch(e){return true;}}
+if(matureDefault()&&!localStorage.getItem("ds_mature_all_v1")){
+  agents=agents.map(a=>({...a,matureMoods:true}));store.agents=agents;
+  try{const gs=store.groups;if(Array.isArray(gs))store.groups=gs.map(g=>g.roleplay?{...g,roleplay:{...g.roleplay,mature:true}}:g);}catch(e){}
+  localStorage.setItem("ds_mature_all_v1","1");
 }
 // Remove the stray shorthand line from the built-in therapist prompt, only if the user never edited it.
 if(!localStorage.getItem("ds_therapist_prompt_v2")){
@@ -855,7 +868,7 @@ const NEW_AGENT_MIN_THINK="low";
 function newAgentThink(value){return !value||value==="off"?NEW_AGENT_MIN_THINK:value;}
 function openEditor(id){
   editingId=id;
-  const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK};
+  const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK,matureMoods:matureDefault()};
   $("#edTitle").textContent=id?"Edit agent":"New agent";$("#edExportCard").hidden=!id;
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
   $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;editingColor=a.color||"";renderColorRow();$("#edThoughts").checked=!!a.thoughts;$("#edInitiative").value=a.initiative||"off";$("#edBond").checked=!!a.bond;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
@@ -959,7 +972,7 @@ function renderRoleplayCharacters(){
 function renderRoleplayEditor(){
   const enabled=$("#grRoleplay").checked;
   groupRoleplayDraft.enabled=enabled;$("#grRpFields").style.display=enabled?"block":"none";
-  $("#grRpAdultRow").style.display=$("#grRpMature").checked?"flex":"none";
+  $("#grRpAdultRow").style.display=$("#grRpMature").checked&&!matureDefault()?"flex":"none";
   if(enabled)renderRoleplayCharacters();
 }
 function collectRoleplayEditor(members){
@@ -998,6 +1011,7 @@ function openGroupEditor(id){
   editingGroupId=id;
   const g=id?groups.find(x=>x.id===id):{emoji:"👥",name:"",members:agents.slice(0,Math.min(3,agents.length)).map(a=>a.id)};
   groupRoleplayDraft=normalizeRoleplay(g.roleplay,g.members||[],agents);
+  if(!id&&matureDefault())groupRoleplayDraft={...groupRoleplayDraft,mature:true};
   $("#grTitle").textContent=id?"Edit group":"New group";
   $("#grMemory").value=(g.memory||[]).join("\n");
   $("#grEmoji").value=g.emoji;$("#grName").value=g.name;$("#grRounds").value=groupRounds(g);$("#grHistory").value=g.historyLimit??"";
@@ -1018,7 +1032,7 @@ function openGroupEditor(id){
   $("#grRpUserDescription").value=groupRoleplayDraft.user.description;renderPersonaChoices();$("#grRpMature").checked=groupRoleplayDraft.mature;
   $("#grRpAdult").checked=groupRoleplayDraft.mature;$("#grRpMoods").checked=g.moods!==false;$("#grRpThoughts").checked=!!g.thoughts;$("#grClock").checked=!!g.clock;$("#grInitiative").value=g.initiative||"off";$("#grRpBond").checked=!!g.bond;
   $("#grRoleplay").onchange=renderRoleplayEditor;
-  $("#grRpMature").onchange=()=>{$("#grRpAdultRow").style.display=$("#grRpMature").checked?"flex":"none";if(!$("#grRpMature").checked)$("#grRpAdult").checked=false;};
+  $("#grRpMature").onchange=()=>{$("#grRpAdultRow").style.display=$("#grRpMature").checked&&!matureDefault()?"flex":"none";if(!$("#grRpMature").checked)$("#grRpAdult").checked=false;};
   renderRoleplayEditor();$("#delGroup").style.display=id?"":"none";
   closeAll();openSheet("#groupEditor");
 }
@@ -1041,10 +1055,10 @@ function renderCardSheet(){
   const sel=$("#cardGreeting");sel.innerHTML="";
   if(!card.greetings.length)sel.innerHTML='<option value="0">No greeting (start empty)</option>';
   card.greetings.forEach((g,i)=>{const o=document.createElement("option");o.value=i;o.textContent=(i?"Alternate "+i+": ":"Default: ")+g.replace(/\s+/g," ").slice(0,70)+(g.length>70?"…":"");sel.appendChild(o);});
-  const mature=/nsfw|mature|18\+|adult|explicit/i.test(card.tags.join(" "));
-  $("#cardMature").checked=mature;$("#cardAdultRow").hidden=!mature;$("#cardAdult").checked=false;
+  const mature=matureDefault()||/nsfw|mature|18\+|adult|explicit/i.test(card.tags.join(" "));
+  $("#cardMature").checked=mature;$("#cardAdultRow").hidden=!mature||matureDefault();$("#cardAdult").checked=matureDefault();
 }
-$("#cardMature").onchange=()=>{$("#cardAdultRow").hidden=!$("#cardMature").checked;if(!$("#cardMature").checked)$("#cardAdult").checked=false;};
+$("#cardMature").onchange=()=>{$("#cardAdultRow").hidden=!$("#cardMature").checked||matureDefault();if(!$("#cardMature").checked)$("#cardAdult").checked=false;else if(matureDefault())$("#cardAdult").checked=true;};
 $("#importCard").onclick=()=>{if(controller){toast("Stop the response first");return;}$("#cardFile").click();};
 $("#cardFile").onchange=async e=>{
   const file=e.target.files[0];e.target.value="";if(!file)return;
@@ -1055,7 +1069,7 @@ $("#cardImportBtn").onclick=()=>{
   if(!pendingCard)return;
   const mode=$("#cardMode").value,userName=$("#cardUserName").value.trim(),mature=$("#cardMature").checked;
   if(mode==="scene"&&!userName){toast("Enter your name for the roleplay scene");$("#cardUserName").focus();return;}
-  if(mature&&!$("#cardAdult").checked){toast("Confirm that you are an adult");return;}
+  if(mature&&!matureDefault()&&!$("#cardAdult").checked){toast("Confirm that you are an adult");return;}
   const built=cardToChat(pendingCard.card,{userName,mature,mode,greetingIndex:Number($("#cardGreeting").value)||0,avatar:pendingCard.avatar},uid,Date.now());
   if(built.group)applyPersona(built.group);
   const nextAgents=[...agents,built.agent],nextGroups=built.group?[...groups,built.group]:groups;
@@ -1121,6 +1135,7 @@ renderPersonaChoices();
 /* ---------- Scenario library ---------- */
 function renderLibrary(){
   const list=$("#libraryList");list.innerHTML="";
+  $("#libAdult").closest("label").hidden=matureDefault();
   for(const preset of SCENARIO_LIBRARY){
     const card=document.createElement("div");card.className="lib-card";
     card.innerHTML='<div class="lib-head"><span class="av">'+esc(preset.emoji)+'</span><div class="lib-title"><b>'+esc(preset.title)+'</b><small>'+preset.characters.map(c=>esc(c.emoji+" "+c.name)).join(" · ")+'</small></div></div>'+
@@ -1132,7 +1147,7 @@ function renderLibrary(){
 function addScenario(preset){
   const userName=$("#libUserName").value.trim();
   if(!userName){toast("Enter your character name first");$("#libUserName").focus();return;}
-  if(!$("#libAdult").checked){toast("Confirm that you are an adult");return;}
+  if(!matureDefault()&&!$("#libAdult").checked){toast("Confirm that you are an adult");return;}
   const {agents:newAgents,group}=buildScenario(preset,userName,uid);applyPersona(group);
   const nextAgents=[...agents,...newAgents],nextGroups=[...groups,group];
   try{store.agents=nextAgents;store.groups=nextGroups;}
@@ -1148,7 +1163,7 @@ $("#addGroup").onclick=()=>{
 $("#saveGroup").onclick=()=>{
   const members=selectedGroupMemberIds();
   if(members.length<1){toast("Pick at least one agent");return;}
-  const roleplay=collectRoleplayEditor(members),errors=validateRoleplay(roleplay,members,$("#grRpAdult").checked);
+  const roleplay=collectRoleplayEditor(members),errors=validateRoleplay(roleplay,members,matureDefault()||$("#grRpAdult").checked);
   if(errors.includes("adult-confirmation")){toast("Confirm that you are an adult");return;}
   if(errors.length){toast("Complete the roleplay character details");return;}
   const data={emoji:$("#grEmoji").value.trim(),name:$("#grName").value.trim()||"Group",members,roleplay,discussRounds:groupRounds({discussRounds:$("#grRounds").value}),memory:memoryLines($("#grMemory").value),historyLimit:$("#grHistory").value,moods:$("#grRpMoods").checked,thoughts:$("#grRpThoughts").checked||undefined,clock:$("#grClock").checked||undefined,initiative:$("#grInitiative").value==="off"?undefined:$("#grInitiative").value,bond:$("#grRpBond").checked||undefined};
@@ -1986,7 +2001,7 @@ function downloadFile(name,text,type){
 function applyMessageButtons(){
   document.body.classList.toggle("hide-speak",!store.showSpeak);
   document.body.classList.toggle("hide-pin",!store.showPin);
-  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#recapOn").checked=recapOn();$("#deviceSelect").value=devicePref();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
+  $("#showSpeak").checked=store.showSpeak;$("#autoSpeak").checked=store.autoSpeak;syncLockSettings();$("#matureDefault").checked=matureDefault();$("#recapOn").checked=recapOn();$("#deviceSelect").value=devicePref();$("#notifyReplies").checked=store.notifyReplies&&globalThis.Notification?.permission==="granted";$("#showPin").checked=store.showPin;
 }
 $("#notifyReplies").onchange=async e=>{
   if(!e.target.checked){store.notifyReplies=false;return;}
@@ -2947,6 +2962,11 @@ async function maybeRecap(){
   }catch(e){if(id===currentId)showRecap("");}
   finally{recapping=false;}
 }
+$("#matureDefault").onchange=e=>{
+  try{localStorage.setItem("ds_mature_default",e.target.checked?"1":"0");}catch(err){}
+  if(e.target.checked){agents=agents.map(a=>({...a,matureMoods:true}));store.agents=agents;groups=groups.map(g=>g.roleplay?{...g,roleplay:{...g.roleplay,mature:true}}:g);store.groups=groups;toast("Mature content on for every agent and roleplay group");}
+  else toast("New agents and groups start without mature mode; existing ones keep their setting");
+};
 $("#recapOn").onchange=e=>{try{localStorage.setItem("ds_recap",e.target.checked?"1":"0");}catch(err){}if(!e.target.checked)showRecap("");};
 
 /* ---------- Characters who message first (when you come back after a while) ---------- */

@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css?v=20261016i" />
+<link rel="stylesheet" href="styles.css?v=20261017a" />
 </head>
 <body>
   <header>
@@ -152,6 +152,8 @@
         <select class="field" id="lockAfter"><option value="0">Immediately</option><option value="1">1 minute</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="60">1 hour</option></select>
       </div>
       <div class="hint" style="margin-top:-2px">Keeps your chats private from people around you. Notifications then say only "New reply". The PIN is stored as a hash in this browser and is never in backups.</div>
+      <label class="toggle-row"><input id="matureDefault" type="checkbox" checked /> <span>Mature content on by default (I'm an adult) 🔞</span></label>
+      <div class="hint" style="margin-top:-6px">Every agent, roleplay group and imported card gets mature mode and mature moods, with no extra confirmations. The app adds no content limits; all characters are adults. DeepSeek's own service rules still apply on its side.</div>
       <label class="toggle-row"><input id="recapOn" type="checkbox" checked /> <span>"Previously…" recap when I come back</span></label>
       <div class="hint" style="margin-top:-6px">After 6 hours away from a chat with 8+ messages, a short catch-up appears above the message box (1 small request, cached).</div>
       <label class="toggle-row"><input id="autoSpeak" type="checkbox" /> <span>Read new replies aloud automatically</span></label>
@@ -709,7 +711,7 @@
     </div>
   </section>
 
-<script src="core.js?v=20261016i"></script>
-<script src="app.js?v=20261016i"></script>
+<script src="core.js?v=20261017a"></script>
+<script src="app.js?v=20261017a"></script>
 </body>
 </html>

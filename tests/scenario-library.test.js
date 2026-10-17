@@ -23,7 +23,7 @@ test('buildScenario creates mood-tracking mature agents and a valid mature rolep
   let n=0;const preset=library.find(p=>p.characters.length===2);
   const {agents,group}=core.buildScenario(preset,'  Rin  ',()=>'id'+(++n));
   assert.equal(agents.length,2);
-  for(const a of agents){assert.equal(a.moods,true);assert.equal(a.matureMoods,true);assert.match(a.prompt,/Everyone in this story is an adult/);assert.match(a.prompt,/consent/);}
+  for(const a of agents){assert.equal(a.moods,true);assert.equal(a.matureMoods,true);assert.match(a.prompt,/Everyone in this story is an adult \(18\+\)/);assert.match(a.prompt,/no content limits from this app/);assert.doesNotMatch(a.prompt,/slow down/);}
   assert.deepEqual([...group.members],[...agents.map(a=>a.id)]);
   assert.equal(group.moods,true);assert.equal(group.roleplay.enabled,true);assert.equal(group.roleplay.mature,true);
   assert.equal(group.roleplay.user.name,'Rin');assert.equal(group.roleplay.opening,preset.opening);
