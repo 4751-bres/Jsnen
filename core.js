@@ -1402,3 +1402,100 @@ function agentToCard(agent,greeting){
     ...(entries.length?{character_book:{name:agent.lorebook?.name||agent.name||"",entries,extensions:{}}}:{})}};
 }
 /* card-export:end */
+/* setup-core:start */
+// Paste setup: one JSON block (usually sent in a chat) that creates characters, a roleplay group, a persona,
+// story memory and world info in one go. Parsed locally; no API call.
+const SETUP_APP="deepseek-agents-setup";
+const SETUP_INITIATIVE=["off","rarely","sometimes","often"];
+function setupText(v,max){return String(v??"").trim().slice(0,max||4000);}
+function setupKey(a){return setupText(a?.key||a?.name,80).toLowerCase();}
+function setupGroups(data){return Array.isArray(data.groups)?data.groups:data.group?[data.group]:[];}
+function parseSetup(text){
+  let raw=String(text||"").trim();
+  const fence=raw.match(/```(?:json)?\s*([\s\S]*?)```/i);if(fence)raw=fence[1].trim();
+  const start=raw.indexOf("{"),end=raw.lastIndexOf("}");
+  if(start<0||end<=start)throw new Error("Paste the whole setup block, from the first { to the last }.");
+  let data;
+  try{data=JSON.parse(raw.slice(start,end+1).replace(/[“”]/g,'"'));}
+  catch(e){throw new Error("The setup is not complete. Copy it again with the copy button.");}
+  if(!data||typeof data!=="object"||Array.isArray(data))throw new Error("That is not a setup block.");
+  if(data.app&&data.app!==SETUP_APP)throw new Error("That block is for a different app.");
+  if(Number(data.version)>1)throw new Error("This setup needs a newer version of the app. Reload and try again.");
+  const agents=Array.isArray(data.agents)?data.agents:[];
+  if(!agents.length)throw new Error("The setup has no characters.");
+  if(agents.length>12)throw new Error("A setup can create at most 12 characters.");
+  const keys=new Set();
+  agents.forEach((a,i)=>{
+    if(!setupText(a?.name,80))throw new Error("Character "+(i+1)+" has no name.");
+    if(!setupText(a.description||a.prompt,20000))throw new Error(setupText(a.name,80)+" has no description.");
+    if(keys.has(setupKey(a)))throw new Error("Two characters share the key "+setupKey(a)+".");
+    keys.add(setupKey(a));
+  });
+  const persona=data.persona||data.user;
+  for(const g of setupGroups(data)){
+    if(!g||typeof g!=="object")throw new Error("A group in the setup is empty.");
+    for(const m of Array.isArray(g.members)?g.members:[])if(!keys.has(String(m).trim().toLowerCase()))throw new Error((setupText(g.name,80)||"The group")+" lists "+m+", who is not in the setup.");
+    if(!setupText((g.user||g.persona||persona)?.name,80))throw new Error("Add a persona with your character's name.");
+  }
+  return data;
+}
+function setupWorld(list,name){
+  const entries=[];
+  for(const e of Array.isArray(list)?list:[]){
+    try{entries.push(makeWorldEntry({name:e?.name,keys:Array.isArray(e?.keys)?e.keys.join(","):e?.keys,content:e?.content,always:!!e?.always}));}
+    catch(err){throw new Error("World info "+(setupText(e?.name,80)||"entry")+": "+err.message);}
+  }
+  return entries.length?{name:setupText(name,80),entries}:undefined;
+}
+function setupMemory(list){return (Array.isArray(list)?list:[]).map(s=>setupText(s,600)).filter(Boolean).slice(0,40);}
+function buildSetup(data,idFactory){
+  const mature=data.mature!==false,user=data.persona||data.user||{};
+  const persona=setupText(user.name,80)?{name:setupText(user.name,80),description:setupText(user.description,4000),save:user.save!==false}:null;
+  const byKey={};
+  const agents=data.agents.map(a=>{
+    const description=setupText(a.description||a.prompt,20000),temp=a.temp===""||a.temp==null?NaN:+a.temp;
+    const agent={id:idFactory(),emoji:setupText(a.emoji,16)||"🙂",name:setupText(a.name,80),
+      prompt:mature?description+"\n\n"+MATURE_CHARACTER_RULES:description,
+      model:setupText(a.model,120)||"deepseek-flash",temp:Number.isFinite(temp)?Math.min(2,Math.max(0,temp)):1.3,
+      think:THINK_LEVELS.includes(a.think)?a.think:"off",moods:a.moods!==false,matureMoods:mature};
+    if(a.thoughts)agent.thoughts=true;
+    if(a.bond)agent.bond=true;
+    if(SETUP_INITIATIVE.includes(a.initiative)&&a.initiative!=="off")agent.initiative=a.initiative;
+    if(CHARACTER_COLORS[a.color])agent.color=a.color;
+    const greeting=setupText(a.greeting,4000);
+    if(greeting){agent.opener="text";agent.greeting=greeting;}else if(a.opener==="ai"||a.opener===true)agent.opener="ai";
+    const memory=setupMemory(a.memory);if(memory.length)agent.memory=memory;
+    const book=setupWorld(a.world,agent.name);if(book)agent.lorebook=book;
+    byKey[setupKey(a)]={agent,description};
+    return agent;
+  });
+  const groups=setupGroups(data).map(g=>{
+    const keys=[...new Set((Array.isArray(g.members)&&g.members.length?g.members:Object.keys(byKey)).map(k=>String(k).trim().toLowerCase()))];
+    const characters={};
+    for(const k of keys)characters[byKey[k].agent.id]={name:byKey[k].agent.name,description:byKey[k].description};
+    const own=setupText((g.user||g.persona)?.name,80)?(g.user||g.persona):persona;
+    const group={id:idFactory(),emoji:setupText(g.emoji,16)||"🎭",name:setupText(g.name,80)||"Story",members:keys.map(k=>byKey[k].agent.id),moods:g.moods!==false,discussRounds:2,
+      roleplay:{enabled:true,mature,setting:setupText(g.setting,8000),opening:setupText(g.opening,8000),
+        user:{name:setupText(own?.name,80),description:setupText(own?.description,4000)},characters}};
+    const memory=setupMemory(g.memory);if(memory.length)group.memory=memory;
+    const book=setupWorld(g.world,group.name);if(book)group.lorebook=book;
+    if(g.thoughts)group.thoughts=true;
+    if(g.bond)group.bond=true;
+    if(g.clock)group.clock=true;
+    if(SETUP_INITIATIVE.includes(g.initiative)&&g.initiative!=="off")group.initiative=g.initiative;
+    return group;
+  });
+  return {agents,groups,persona};
+}
+// One line per thing the setup creates, for the confirm step.
+function setupSummary(built){
+  const lines=built.agents.map(a=>"Character: "+a.emoji+" "+a.name);
+  for(const g of built.groups){
+    const extras=[g.memory&&g.memory.length+(g.memory.length===1?" memory line":" memory lines"),g.lorebook&&g.lorebook.entries.length+(g.lorebook.entries.length===1?" world entry":" world entries"),
+      g.thoughts&&"thoughts",g.bond&&"relationships",g.clock&&"story clock",g.initiative&&"messages first ("+g.initiative+")"].filter(Boolean);
+    lines.push("Group: "+g.emoji+" "+g.name+" · you play "+g.roleplay.user.name+(extras.length?" · "+extras.join(", "):""));
+  }
+  if(built.persona?.save)lines.push("Saved persona: "+built.persona.name);
+  return lines;
+}
+/* setup-core:end */

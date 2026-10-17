@@ -1158,6 +1158,40 @@ function addScenario(preset){
   selectGroup(group.id);toast(preset.title+" added");
 }
 $("#openLibrary").onclick=()=>{if(controller){toast("Stop the response first");return;}renderLibrary();closeAll();openSheet("#librarySheet");};
+/* ---------- Paste setup: build a whole story from one pasted block ---------- */
+let pastedSetup=null;
+function checkSetup(){
+  const text=$("#setupText").value.trim();pastedSetup=null;
+  $("#setupPreview").innerHTML="";$("#setupCreate").disabled=true;
+  if(!text){$("#setupStatus").textContent="";return;}
+  try{
+    const data=parseSetup(text),built=buildSetup(data,()=>"preview");
+    pastedSetup=data;
+    $("#setupStatus").textContent="This will create:";
+    $("#setupPreview").innerHTML=setupSummary(built).map(line=>"<li>"+esc(line)+"</li>").join("");
+    $("#setupAdultRow").hidden=matureDefault()||data.mature===false;
+    $("#setupCreate").disabled=false;
+  }catch(e){$("#setupStatus").textContent=e.message;}
+}
+$("#setupText").addEventListener("input",checkSetup);
+$("#openSetup").onclick=()=>{closeAll();openSheet("#setupSheet");$("#setupAdult").checked=false;checkSetup();setTimeout(()=>$("#setupText").focus(),250);};
+$("#setupCreate").onclick=()=>{
+  if(!pastedSetup){checkSetup();return;}
+  if(controller){toast("Stop the response first");return;}
+  if(!$("#setupAdultRow").hidden&&!$("#setupAdult").checked){toast("Confirm that you are an adult");return;}
+  let built;try{built=buildSetup(pastedSetup,uid);}catch(e){toast(e.message);return;}
+  const nextAgents=[...agents,...built.agents],nextGroups=[...groups,...built.groups];
+  try{store.agents=nextAgents;store.groups=nextGroups;}
+  catch(e){store.agents=agents;store.groups=groups;toast("Not enough browser storage for this setup.");return;}
+  agents=nextAgents;groups=normalizeStoredGroups(nextGroups,agents);
+  if(built.persona?.save){
+    const others=store.personas.filter(p=>p.name.toLowerCase()!==built.persona.name.toLowerCase());
+    try{store.personas=[...others,{name:built.persona.name,description:built.persona.description}].sort((a,b)=>a.name.localeCompare(b.name));renderPersonaChoices();}catch(e){}
+  }
+  $("#setupText").value="";pastedSetup=null;
+  if(built.groups.length)selectGroup(built.groups[0].id);else selectAgent(built.agents[0].id);
+  toast("Setup created");
+};
 $("#addGroup").onclick=()=>{
   if(!agents.length){toast("Create an agent first");return;}
   openGroupEditor(null);

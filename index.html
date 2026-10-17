@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css?v=20261017d" />
+<link rel="stylesheet" href="styles.css?v=20261017e" />
 </head>
 <body>
   <header>
@@ -268,11 +268,25 @@
   <section class="sheet bottom" id="librarySheet">
     <h3><span class="grow">Scenario library</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
     <div class="body">
+      <button class="btn" id="openSetup" type="button" style="width:100%;margin-top:12px">📋 Paste a setup</button>
       <div class="hint" style="margin-top:12px">Ready-made mature roleplay scenes. Adding one creates its characters as agents and a roleplay group with mature mode and mood tracking on. All characters are adult women. Everything stays editable.</div>
       <label for="libUserName">Your character name</label>
       <input class="field" id="libUserName" placeholder="Who you play" autocomplete="off" list="personaNames" />
       <label class="toggle-row"><input id="libAdult" type="checkbox" /> <span>I confirm I am an adult</span></label>
       <div id="libraryList"></div>
+    </div>
+  </section>
+
+  <!-- Paste setup: one block creates characters, a group, persona, memory and world info -->
+  <section class="sheet bottom" id="setupSheet">
+    <h3><span class="grow">Paste a setup</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body">
+      <div class="hint" style="margin-top:12px">Paste a setup block you were sent. It creates the characters, the group chat, your persona, story memory and world info at once. Nothing is sent anywhere.</div>
+      <textarea class="field" id="setupText" rows="7" placeholder="Paste the setup block here" autocomplete="off" spellcheck="false"></textarea>
+      <div class="hint" id="setupStatus" aria-live="polite"></div>
+      <ul class="setup-list" id="setupPreview"></ul>
+      <label class="toggle-row" id="setupAdultRow"><input id="setupAdult" type="checkbox" /> <span>I confirm I am an adult</span></label>
+      <button class="btn primary" id="setupCreate" type="button" style="width:100%" disabled>Create</button>
     </div>
   </section>
 
@@ -721,7 +735,7 @@
     </div>
   </section>
 
-<script src="core.js?v=20261017d"></script>
-<script src="app.js?v=20261017d"></script>
+<script src="core.js?v=20261017e"></script>
+<script src="app.js?v=20261017e"></script>
 </body>
 </html>

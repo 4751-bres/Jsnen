@@ -822,3 +822,5 @@ input[type=range]{accent-color:var(--accent-fill)}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
+.setup-list{margin:4px 0 10px;padding-left:20px;font-size:14px;line-height:1.5;color:var(--text)}
+.setup-list:empty{display:none}
