@@ -78,6 +78,7 @@ That's it — it now behaves like a native app with its own icon.
 - **Story clock 🌙** — in a roleplay group's editor, *Story clock*: characters keep track of the day, time and weather (shown in the chat header, e.g. "🌙 Day 1 · 1:40 a.m. · storm") and keep them consistent, moving time on only when the story does.
 - **Max** — a built-in plain human male friend: casual, funny, honest, with his own life; talks like a friend texting, never like an assistant.
 - **Mature content on by default** — ⚙️ Settings → *Mature content on by default (I'm an adult)* (on): every agent, roleplay group and imported card gets mature mode and mature moods with no extra confirmations, and the app adds no content limits to the prompts. All characters are adults. DeepSeek's own service rules still apply on its side.
+- **First message** — in the agent editor: *You start*, *The agent starts* (written fresh by the AI each time; the default for new agents) or *The agent starts with a fixed greeting* (instant, no request). Used whenever a chat with that agent is new or cleared.
 - **Multiple agents** — ships with General Assistant, Coder, Deep Reasoner, Writer,
   Translator, and Sexual-health Therapist. The therapist is a fictional adult AI character for sexual-health and relationship conversations, not a licensed clinician. It is also added once for existing users without replacing their agents or chats. Like other agents, it can be edited or deleted. Add/edit/delete your own (icon, name, system prompt, model, thinking,
   temperature).

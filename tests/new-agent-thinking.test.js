@@ -11,7 +11,7 @@ test('new agents reason at least at Low while keeping higher choices',()=>{
   assert.equal(c.newAgentThink('high'),'high');
 });
 test('the new-agent form defaults to Low and hides Off only when creating',()=>{
-  assert.match(source,/think:NEW_AGENT_MIN_THINK,matureMoods:matureDefault\(\)\}/);
+  assert.match(source,/think:NEW_AGENT_MIN_THINK,matureMoods:matureDefault\(\),opener:"ai"\}/);
   assert.match(source,/offOption\.disabled=offOption\.hidden=!id/);
 });
 

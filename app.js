@@ -699,7 +699,7 @@ function loadConv(){
   renderChat();refreshHeader();renderResponders();renderWorkflowUi();
   if(typeof closeFind==="function")closeFind();
   if(typeof renderQueue==="function")renderQueue();
-  if(typeof renderWhisper==="function"){whisperTarget=null;renderWhisper();showRecap("");setTimeout(async()=>{await maybeRecap();maybeReachOut();},900);}
+  if(typeof renderWhisper==="function"){whisperTarget=null;renderWhisper();showRecap("");setTimeout(async()=>{if(await maybeOpen())return;await maybeRecap();maybeReachOut();},700);}
 }
 
 /* ---------- Duplicate a conversation ---------- */
@@ -869,10 +869,10 @@ const NEW_AGENT_MIN_THINK="low";
 function newAgentThink(value){return !value||value==="off"?NEW_AGENT_MIN_THINK:value;}
 function openEditor(id){
   editingId=id;
-  const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK,matureMoods:matureDefault()};
+  const a=id?agents.find(x=>x.id===id):{emoji:"🤖",name:"",prompt:"",model:"",temp:1.0,think:NEW_AGENT_MIN_THINK,matureMoods:matureDefault(),opener:"ai"};
   $("#edTitle").textContent=id?"Edit agent":"New agent";$("#edExportCard").hidden=!id;
   $("#edEmoji").value=a.emoji;$("#edName").value=a.name;$("#edPrompt").value=a.prompt;
-  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;editingColor=a.color||"";renderColorRow();$("#edThoughts").checked=!!a.thoughts;$("#edInitiative").value=a.initiative||"off";$("#edBond").checked=!!a.bond;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
+  $("#edModel").value=a.model;$("#edThink").value=a.think||"off";$("#edHistory").value=a.historyLimit??"";editingAvatar=a.avatar||null;renderEditorAvatar();$("#edMoods").checked=!!a.moods;$("#edWebSearch").checked=!!a.webSearch;editingColor=a.color||"";renderColorRow();$("#edThoughts").checked=!!a.thoughts;$("#edOpener").value=openerMode(a);$("#edGreeting").value=a.greeting||"";$("#edGreetingRow").hidden=openerMode(a)!=="text";$("#edInitiative").value=a.initiative||"off";$("#edBond").checked=!!a.bond;fillProviderSelect(a.provider||"");$("#edMemory").value=(a.memory||[]).join("\n");fillVoiceSelect(a.voice||"");$("#edMatureMoods").checked=!!a.matureMoods;$("#edMaxTokens").value=a.maxTokens??"";
   const offOption=$("#edThink").querySelector('option[value="off"]');offOption.disabled=offOption.hidden=!id;
   $("#edTemp").value=a.temp;$("#tempVal").textContent=Number(a.temp).toFixed(1);syncTempState();
   $("#delAgent").hidden=!(id&&agents.length>1);
@@ -880,6 +880,7 @@ function openEditor(id){
   closeAll();openSheet("#editor");
 }
 let editingAvatar=null,editingColor="";
+$("#edOpener").onchange=()=>{$("#edGreetingRow").hidden=$("#edOpener").value!=="text";};
 $("#edEmoji").addEventListener("input",()=>renderEditorAvatar());$("#edName").addEventListener("input",()=>{if(!$("#edEmoji").value.trim())renderEditorAvatar();});
 function renderColorRow(){
   $("#edColorRow").innerHTML='<button type="button" class="swatch auto'+(editingColor?"":" on")+'" data-color="" aria-label="Automatic" title="Automatic"></button>'+
@@ -909,7 +910,7 @@ $("#addAgent").onclick=()=>openEditor(null);
 $("#saveAgent").onclick=()=>{
   const name=$("#edName").value.trim()||"Agent";
   const data={emoji:$("#edEmoji").value.trim(),name,prompt:$("#edPrompt").value.trim(),
-    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,initiative:$("#edInitiative").value==="off"?undefined:$("#edInitiative").value,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
+    model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,opener:$("#edOpener").value==="off"?undefined:$("#edOpener").value,greeting:$("#edGreeting").value.trim()||undefined,initiative:$("#edInitiative").value==="off"?undefined:$("#edInitiative").value,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
   else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
@@ -918,7 +919,7 @@ $("#dupAgent").onclick=()=>{
   // duplicate using the current form values, so any edits carry into the copy
   const data={emoji:$("#edEmoji").value.trim(),name:($("#edName").value.trim()||"Agent")+" copy",
     prompt:$("#edPrompt").value.trim(),model:$("#edModel").value.trim(),
-    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,initiative:$("#edInitiative").value==="off"?undefined:$("#edInitiative").value,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
+    temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,opener:$("#edOpener").value==="off"?undefined:$("#edOpener").value,greeting:$("#edGreeting").value.trim()||undefined,initiative:$("#edInitiative").value==="off"?undefined:$("#edInitiative").value,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
   const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);store.agents=agents;
   currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;
   renderAgents();loadConv();openEditor(a.id);toast("Agent duplicated");
@@ -2335,7 +2336,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
   const convId=currentId,conversationMessages=messages;
   const search=webSearchWanted(agent,meta);
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,at:Date.now(),...meta};
-  delete bot.noSearch;delete bot.forceSearch;if(search)bot.searching=true;if(meta.proactive)bot.proactive=true;
+  delete bot.noSearch;delete bot.forceSearch;delete bot.opener;if(search)bot.searching=true;if(meta.proactive)bot.proactive=true;
   if(typeof thoughtsWanted==="function"&&thoughtsWanted(agent,meta))bot.thoughtsTracked=true;
   let bondBefore;
   if(typeof clockWanted==="function"&&clockWanted(meta))bot.sceneTracked=true;
@@ -2363,6 +2364,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
       bot.searching=false;scheduleStreamPaint(bot);
     }
     if(bot.thoughtsTracked)payload.messages=[...payload.messages,{role:"system",content:THOUGHTS_INSTRUCTION}];
+    if(meta.opener)payload.messages=[...payload.messages,{role:"user",content:OPENER_NUDGE}];
     if(meta.proactive){const rp=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;payload.messages=[...payload.messages,{role:"system",content:proactiveInstruction(meta.proactive.hours,rp?.user?.name)}];}
     if(meta.whisperTo)payload.messages=[...payload.messages,{role:"system",content:"PRIVATE: the user just whispered to you alone; the others did not hear it. Answer quietly, just to them."}];
     if(bot.sceneTracked)payload.messages=[...payload.messages,{role:"system",content:clockInstruction(latestScene(conversationMessages.slice(0,-1)))}];
@@ -2934,6 +2936,24 @@ $("#findNext").onclick=()=>{if(!findState.hits.length)return;findState.pos=(find
 $("#findClose").onclick=closeFind;
 $("#findMenu").onclick=openFind;
 document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="f"&&!document.querySelector(".sheet.on")&&$("#lockScreen").hidden){e.preventDefault();openFind();}});
+
+/* ---------- First message from the agent (single-agent chats) ---------- */
+let opening=false;
+async function maybeOpen(){
+  if(opening||controller||isGroup()||isWorkflow()||!currentId)return false;
+  const agent=curAgent(),mode=shouldOpen(agent,messages);if(!mode)return false;
+  if(mode==="text"){
+    const m={role:"assistant",content:String(agent.greeting).trim(),at:Date.now()};
+    try{store.saveConv(currentId,[...messages,m]);}catch(e){return false;}
+    messages.push(m);renderChat();return true;
+  }
+  if(!anyProviderReady())return false;
+  opening=true;
+  try{await runAgentResult(agent,{extraMeta:{opener:true}});refreshHeader();}
+  catch(e){/* Try again next time the chat opens. */}
+  finally{opening=false;}
+  return true;
+}
 
 /* ---------- "Previously on…" recap when you come back to a long chat ---------- */
 function recapOn(){try{return localStorage.getItem("ds_recap")!=="0";}catch(e){return true;}}

@@ -614,6 +614,17 @@ function findMatches(list,query){
   return out;
 }
 /* find-core:end */
+/* opener-core:start */
+// Who speaks first in a new single-agent chat: "off" (you), "ai" (written fresh each time) or "text" (a fixed greeting).
+function openerMode(agent){const m=agent?.opener;return m==="ai"||m==="text"?m:"off";}
+function shouldOpen(agent,list){
+  const mode=openerMode(agent);if(mode==="off")return null;
+  if((list||[]).some(m=>m&&(m.role==="user"||m.role==="assistant")))return null;
+  if(mode==="text")return String(agent.greeting||"").trim()?"text":null;
+  return "ai";
+}
+const OPENER_NUDGE="(Start the conversation now: send your first message, fully in character, as if you are the one reaching out or the scene is just beginning. Do not mention this note.)";
+/* opener-core:end */
 /* recap-core:start */
 // "Previously on…": a short catch-up when you return to a long chat after hours away.
 const RECAP_AWAY_HOURS=6,RECAP_MIN_MESSAGES=8;
