@@ -1410,14 +1410,42 @@ const SETUP_INITIATIVE=["off","rarely","sometimes","often"];
 function setupText(v,max){return String(v??"").trim().slice(0,max||4000);}
 function setupKey(a){return setupText(a?.key||a?.name,80).toLowerCase();}
 function setupGroups(data){return Array.isArray(data.groups)?data.groups:data.group?[data.group]:[];}
+// Phones and chat apps damage copied text: non-breaking spaces, curly quotes, real line breaks inside text,
+// zero-width marks. Repair them outside the text values so JSON.parse accepts it; depth>0 means it was cut off.
+function looseSetupJson(raw){
+  let out="",inStr=false,esc=false,depth=0;
+  for(const ch of String(raw).replace(/[\u201c\u201d\u201e\u201f\u2033]/g,'"')){
+    if(inStr){
+      if(esc){out+=ch;esc=false;}
+      else if(ch==="\\"){out+=ch;esc=true;}
+      else if(ch==='"'){out+=ch;inStr=false;}
+      else if(ch==="\n")out+="\\n";
+      else if(ch==="\t")out+="\\t";
+      else if(ch>=" ")out+=ch;
+      continue;
+    }
+    if(ch==='"'){out+=ch;inStr=true;continue;}
+    if(/[\u200b\u200c\u200d\u2060\ufeff]/.test(ch))continue;
+    if(/\s/.test(ch)){out+=/[ \t\r\n]/.test(ch)?ch:" ";continue;}
+    if(ch==="{"||ch==="[")depth++;
+    if(ch==="}"||ch==="]"){depth--;out=out.replace(/,\s*$/,"");}
+    out+=ch;
+  }
+  return {json:out,cut:inStr||depth>0};
+}
 function parseSetup(text){
   let raw=String(text||"").trim();
   const fence=raw.match(/```(?:json)?\s*([\s\S]*?)```/i);if(fence)raw=fence[1].trim();
   const start=raw.indexOf("{"),end=raw.lastIndexOf("}");
-  if(start<0||end<=start)throw new Error("Paste the whole setup block, from the first { to the last }.");
+  if(start<0)throw new Error("Paste the whole setup block, from the first { to the last }.");
+  const fixed=looseSetupJson(raw.slice(start,end>start?end+1:undefined));
+  if(fixed.cut)throw new Error("The block is cut off (it ends with “"+raw.trim().slice(-30)+"”). Copy the whole block again; the Paste from clipboard button avoids keyboard clipboard limits.");
   let data;
-  try{data=JSON.parse(raw.slice(start,end+1).replace(/[“”]/g,'"'));}
-  catch(e){throw new Error("The setup is not complete. Copy it again with the copy button.");}
+  try{data=JSON.parse(fixed.json);}
+  catch(e){
+    const at=+(String(e.message).match(/position (\d+)/)||[])[1];
+    throw new Error("The setup has a typo"+(Number.isFinite(at)?" near “"+fixed.json.slice(Math.max(0,at-25),at+15).replace(/\s+/g," ")+"”":"")+". Copy it again with the copy button.");
+  }
   if(!data||typeof data!=="object"||Array.isArray(data))throw new Error("That is not a setup block.");
   if(data.app&&data.app!==SETUP_APP)throw new Error("That block is for a different app.");
   if(Number(data.version)>1)throw new Error("This setup needs a newer version of the app. Reload and try again.");

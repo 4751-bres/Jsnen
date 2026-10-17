@@ -1175,6 +1175,11 @@ function checkSetup(){
     $("#setupCreate").disabled=false;
   }catch(e){$("#setupStatus").textContent=e.message;}
 }
+$("#setupClip").hidden=!navigator.clipboard?.readText;
+$("#setupClip").onclick=async()=>{
+  try{const text=await navigator.clipboard.readText();if(!text.trim()){toast("The clipboard is empty");return;}$("#setupText").value=text;checkSetup();}
+  catch(e){toast("The browser blocked clipboard access. Long-press the box and paste instead.");}
+};
 $("#setupText").addEventListener("input",checkSetup);$("#setupName").addEventListener("input",checkSetup);
 $("#openSetup").onclick=()=>{closeAll();openSheet("#setupSheet");$("#setupAdult").checked=false;checkSetup();setTimeout(()=>$("#setupText").focus(),250);};
 $("#setupCreate").onclick=()=>{

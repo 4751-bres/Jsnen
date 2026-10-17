@@ -18,7 +18,7 @@ test('a pasted block in a code fence (with chat text around it) parses',()=>{
 });
 test('bad setups explain what is wrong',()=>{
   assert.throws(()=>core.parseSetup('hello'),/whole setup block/);
-  assert.throws(()=>core.parseSetup('{"agents":['),/whole setup block|not complete/);
+  assert.throws(()=>core.parseSetup('{"agents":['),/whole setup block|cut off/);
   assert.throws(()=>core.parseSetup('{"agents":[]}'),/no characters/);
   assert.throws(()=>core.parseSetup(JSON.stringify({...setup,app:'other'})),/different app/);
   assert.throws(()=>core.parseSetup(JSON.stringify({...setup,group:{...setup.group,members:['ioana','mihai']}})),/mihai/);
@@ -58,4 +58,17 @@ test('the library opens a Paste setup sheet that saves everything and opens the 
   assert.match(page,/id="openSetup"/);assert.match(page,/id="setupSheet"/);assert.match(page,/id="setupText"/);
   assert.match(page,/buildSetup\(pastedSetup,uid,\$\("#setupName"\)\.value\)/);
   assert.match(page,/selectGroup\(built\.groups\[0\]\.id\)/);
+});
+
+test('copy damage from phones is repaired; a cut-off block says so',()=>{
+  const json=JSON.stringify(setup,null,2);
+  const nbsp=json.replace(/^( +)/gm,m=>'\u00a0'.repeat(m.length)).replace('"app"','\u200b"app"');
+  assert.equal(core.parseSetup(nbsp).agents.length,2);
+  assert.equal(core.parseSetup(json.replace(/"/g,(m,i)=>i%2?'\u201c':'\u201d')).agents.length,2);
+  const rawBreak=json.replace('junior support specialist.','junior support\nspecialist.');
+  assert.match(core.parseSetup(rawBreak).agents[0].description,/support\nspecialist/);
+  assert.equal(core.parseSetup(json.replace(/\n\s*\]/,',\n]')).agents.length,2);
+  assert.throws(()=>core.parseSetup(json.slice(0,300)),/cut off/);
+  assert.throws(()=>core.parseSetup('{"agents":[{"name":"A" "description":"b"}]}'),/typo near/);
+  assert.equal(core.buildSetup(core.parseSetup(nbsp),()=>'q').agents[1].emoji,'👩‍💼');
 });
