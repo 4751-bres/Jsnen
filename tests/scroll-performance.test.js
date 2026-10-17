@@ -13,3 +13,11 @@ test('no per-message blur or always-on row animations',()=>{
 test('chat previews drop an old [char]: label',()=>{
   assert.equal(core.previewOf([{role:'assistant',content:'[char]: I stop mid-step.'}]).text,'I stop mid-step.');
 });
+test('closed panels and an unused background layer are not drawn',()=>{
+  const css=read('styles.css');
+  assert.match(css,/transform:translateY\(105%\);[^}]*visibility:hidden/);
+  assert.match(css,/\.bottom\.on\{[^}]*visibility:visible/);
+  assert.match(css,/transform:translateX\(-105%\);[^}]*visibility:hidden/);
+  assert.match(css,/\.scrim\{[^}]*visibility:hidden/);
+  assert.match(css,/#chatBg\{[^}]*display:none\}/);assert.match(css,/body\.has-bg #chatBg\{display:block\}/);
+});

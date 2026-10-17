@@ -363,7 +363,8 @@ body.bubbles .msg.bot.tinted .msg-body,body.has-bg .msg.bot.tinted .msg-body{bor
 :root[data-density="compact"] .msg-body{gap:6px}
 body.bubbles .msg.bot .msg-body,body.has-bg .msg.bot .msg-body{
   max-width:94%;align-self:flex-start;padding:10px 14px;border-radius:20px 20px 20px 6px;background:var(--surface-1);border:1px solid var(--line)}
-#chatBg{position:fixed;inset:0;z-index:-1;pointer-events:none;background-size:cover;background-position:center;transform:translateZ(0);contain:strict}
+#chatBg{position:fixed;inset:0;z-index:-1;pointer-events:none;background-size:cover;background-position:center;contain:strict;display:none}
+body.has-bg #chatBg{display:block}
 #chatBg::after{content:"";position:absolute;inset:0;background:var(--bg);opacity:var(--bg-dim,.45)}
 body.has-bg{background:transparent}
 html:has(body.has-bg){background:var(--bg)}
@@ -666,23 +667,26 @@ a.cite{display:inline-grid;place-items:center;min-width:18px;height:18px;padding
 .workflow-action-row .btn{min-width:120px}
 
 /* Sheets and drawer */
-.scrim{position:fixed;inset:0;background:var(--scrim);opacity:0;pointer-events:none;transition:opacity var(--dur-base);z-index:20}
-.scrim.on{opacity:1;pointer-events:auto}
+.scrim{position:fixed;inset:0;background:var(--scrim);opacity:0;pointer-events:none;z-index:20;
+  visibility:hidden;transition:opacity var(--dur-base),visibility 0s linear var(--dur-base)}
+.scrim.on{opacity:1;pointer-events:auto;visibility:visible;transition:opacity var(--dur-base),visibility 0s}
 .sheet{
   position:fixed;z-index:30;display:flex;flex-direction:column;background:var(--surface-1);
   border:1px solid var(--line-strong);box-shadow:var(--shadow-raised)
 }
 .drawer{
   top:0;bottom:0;left:0;width:min(88vw,var(--sidebar));border-radius:0 var(--radius-xl) var(--radius-xl) 0;border-left:0;
-  transform:translateX(-105%);transition:transform var(--dur-drawer) var(--ease-out);padding-top:var(--safe-t)
+  transform:translateX(-105%);transition:transform var(--dur-drawer) var(--ease-out),visibility 0s linear var(--dur-drawer);padding-top:var(--safe-t);
+  visibility:hidden
 }
-.drawer.on{transform:translateX(0)}
+.drawer.on,.drawer.dragging{transform:translateX(0);visibility:visible;transition:transform var(--dur-drawer) var(--ease-out),visibility 0s}
 .bottom{
   left:0;right:0;bottom:0;max-height:94dvh;border-radius:var(--radius-xl) var(--radius-xl) 0 0;border-bottom:0;
-  transform:translateY(105%);transition:transform var(--dur-sheet) var(--ease-out);padding-bottom:var(--safe-b)
+  transform:translateY(105%);transition:transform var(--dur-sheet) var(--ease-out),visibility 0s linear var(--dur-sheet);padding-bottom:var(--safe-b);
+  visibility:hidden
 }
 .bottom::before{content:"";width:40px;height:5px;border-radius:var(--radius-pill);background:var(--line-strong);margin:8px auto 0;flex:none}
-.bottom.on{transform:translateY(0)}
+.bottom.on{transform:translateY(0);visibility:visible;transition:transform var(--dur-sheet) var(--ease-out),visibility 0s}
 .sheet h3{
   margin:0;display:flex;align-items:center;gap:10px;padding:10px 12px 12px 20px;border-bottom:1px solid var(--line);
   font-size:19px;font-weight:700
@@ -806,7 +810,7 @@ input[type=range]{accent-color:var(--accent-fill)}
 /* Desktop: the drawer becomes a persistent sidebar and sheets become centred panels. */
 @media (min-width:900px){
   body{padding-left:var(--sidebar)}
-  .drawer{width:var(--sidebar);transform:none;border-radius:0;border-top:0;border-bottom:0;box-shadow:none;z-index:10;transition:none}
+  .drawer{width:var(--sidebar);transform:none;border-radius:0;border-top:0;border-bottom:0;box-shadow:none;z-index:10;transition:none;visibility:visible}
   .drawer .close-drawer,#menuBtn{display:none}
   .h-avatar{margin-left:12px}
   .bottom{left:calc(var(--sidebar) + 50% - var(--sidebar) / 2);right:auto;width:min(620px,calc(100vw - var(--sidebar) - 48px));

@@ -1709,7 +1709,7 @@ $("#edExportCard").onclick=()=>{const a=agents.find(x=>x.id===editingId);if(a)ex
       if(Math.abs(dy)>14&&Math.abs(dy)>Math.abs(dx)){drag=null;return;}  // a scroll, not a swipe
       if(Math.abs(dx)<10)return;
       if(drag.kind==="open"&&dx<0||drag.kind==="close"&&dx>0){drag=null;return;}
-      drag.active=true;drawer.style.transition="none";scrim.style.transition="none";
+      drag.active=true;drawer.style.transition="none";scrim.style.transition="none";drawer.style.visibility="visible";scrim.style.visibility="visible";
       if(drag.kind==="open"){$("#drawerSort").value=store.sort;renderAgents();scrim.classList.add("on");}
     }
     drag.dx=dx;
@@ -1720,7 +1720,7 @@ $("#edExportCard").onclick=()=>{const a=agents.find(x=>x.id===editingId);if(a)ex
     if(!drag)return;const d=drag;drag=null;
     if(!d.active)return;
     const velocity=Math.abs(d.dx)/Math.max(1,Date.now()-d.t),open=drawerSwipeEnd(d.kind,d.dx,velocity,width());
-    drawer.style.transition="";scrim.style.transition="";drawer.style.transform="";scrim.style.opacity="";
+    drawer.style.transition="";scrim.style.transition="";drawer.style.transform="";scrim.style.opacity="";drawer.style.visibility="";scrim.style.visibility="";
     if(open){closeAll();openSheet("#drawer");}else closeAll();
   };
   document.addEventListener("touchend",finish);document.addEventListener("touchcancel",finish);
