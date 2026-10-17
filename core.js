@@ -1529,3 +1529,14 @@ function setupSummary(built){
   return lines;
 }
 /* setup-core:end */
+/* reply-mode-core:start */
+// Who replies in a group after you send: the bottom buttons (choose each time), or a fixed choice saved on the group.
+const REPLY_MODES=["buttons","everyone","auto","discuss"];
+function replyModeOf(group,memberIds){
+  const mode=String(group?.replyMode||"buttons"),ids=memberIds||[];
+  if(mode.startsWith("agent:"))return ids.includes(mode.slice(6))?{kind:"agent",id:mode.slice(6)}:{kind:"buttons"};
+  if(!REPLY_MODES.includes(mode))return {kind:"buttons"};
+  if(mode!=="buttons"&&ids.length===1)return {kind:"agent",id:ids[0]};
+  return {kind:mode};
+}
+/* reply-mode-core:end */

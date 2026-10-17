@@ -274,6 +274,7 @@ function renderResponders(){
   if(!isGroup()){bar.style.display="none";bar.innerHTML="";return;}
   const group=curGroup(),mems=groupMembers(group);
   bar.innerHTML="";bar.style.display="flex";
+  if(!sequence&&replyModeOf(group,mems.map(a=>a.id)).kind!=="buttons"){bar.style.display="none";return;}
   const busy=!!controller;
   const chip=(html,cls,onclick,title)=>{const b=document.createElement("button");b.className="chip-btn"+(cls?" "+cls:"");b.innerHTML=html;b.disabled=busy;b.onclick=onclick;if(title)b.title=title;bar.appendChild(b);return b;};
   if(sequence){
@@ -2018,6 +2019,7 @@ $("#chatMenuBtn").onclick=()=>{
   const file=messages.length?textFileFor():null;
   $("#shareTxt").hidden=!(file&&navigator.canShare?.({files:[file]}));
   for(const id of ["#dlTxt","#shareTxt","#dlMd"])$(id).disabled=!messages.length;
+  renderReplyMode();
   closeAll();openSheet("#chatMenu");
 };
 // Menu actions close the sheet first, so confirmations and toasts show over the chat.
@@ -2909,7 +2911,7 @@ function send(){
   if(controller&&!isWorkflow()&&input.value.trim()){queueMessage();return;}
   if(controller||readingImages)return;
   const text=input.value.trim();
-  if(!text&&!pendingImages.length)return;
+  if(!text&&!pendingImages.length){if(isGroup()&&!controller&&messages.length)replyAsChosen(true);return;}
   if(!anyProviderReady()){toast("Add your API key in Settings");$("#setBtn").click();return;}
   if(isWorkflow()){startWorkflowRun(text);return;}
   if(isGroup()&&whisperTarget){
@@ -2924,10 +2926,43 @@ function send(){
     if(ids.length){runSequence(ids.map(id=>agents.find(a=>a.id===id)).filter(Boolean));return;}
     // A one-character scene (for example an imported card) simply replies.
     const only=groupMembers(group);if(only.length===1){runSequence(only);return;}
+    if(replyAsChosen())return;
     renderResponders();return;
   }
   runAgent(curAgent());
 }
+
+// Runs the group's saved "Who replies" choice; false when the buttons are in charge.
+function replyAsChosen(empty){
+  const group=curGroup(),mems=groupMembers(group),mode=replyModeOf(group,mems.map(a=>a.id));
+  if(mode.kind==="buttons")return false;
+  if(empty&&!anyProviderReady()){toast("Add your API key in Settings");return true;}
+  if(mode.kind==="agent")groupRespond(agents.find(a=>a.id===mode.id));
+  else if(mode.kind==="everyone")everyoneRespond();
+  else if(mode.kind==="auto")autoRespond();
+  else if(mode.kind==="discuss")discussRespond();
+  return true;
+}
+function renderReplyMode(){
+  const box=$("#replyModeBox"),group=isGroup()?curGroup():null,mems=group?groupMembers(group):[];
+  box.hidden=!group||mems.length<2;
+  const roleplay=group&&isRoleplayGroup(group);
+  $("#moodMenu").hidden=!(roleplay&&group.moods!==false&&mems.length);
+  if(box.hidden)return;
+  const options=[["buttons","Buttons — I choose each time"],["everyone",roleplay?"Continue scene — everyone in turn":"Everyone — in turn"],
+    ["auto","Auto — the right one replies"],["discuss","Discuss ×"+groupRounds(group)+" — they talk to each other"],
+    ...mems.map(a=>["agent:"+a.id,"Only "+memberLabel(group,a)])];
+  const current=replyModeOf(group,mems.map(a=>a.id)),value=current.kind==="agent"?"agent:"+current.id:current.kind;
+  $("#replyMode").innerHTML=options.map(([v,label])=>'<option value="'+esc(v)+'"'+(v===value?" selected":"")+'>'+esc(label)+'</option>').join("");
+  $("#replyModeHint").textContent=value==="buttons"?"Buttons under the chat pick who speaks.":"Replies start by themselves; send with an empty box to let them carry on. Use @name to pick someone once.";
+}
+$("#replyMode").onchange=e=>{
+  const group=curGroup();if(!group)return;
+  group.replyMode=e.target.value==="buttons"?undefined:e.target.value;
+  try{store.groups=groups;}catch(err){toast("Could not save.");return;}
+  renderReplyMode();renderResponders();
+};
+$("#moodMenu").onclick=()=>openMoodSheet();
 
 /* ---------- Find in this chat ---------- */
 const findState={hits:[],pos:-1,timer:null};
