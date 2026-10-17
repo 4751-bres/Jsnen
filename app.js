@@ -1165,7 +1165,9 @@ function checkSetup(){
   $("#setupPreview").innerHTML="";$("#setupCreate").disabled=true;
   if(!text){$("#setupStatus").textContent="";return;}
   try{
-    const data=parseSetup(text),built=buildSetup(data,()=>"preview");
+    const data=parseSetup(text),given=(data.persona||data.user)?.name;
+    if(given&&!$("#setupName").value.trim())$("#setupName").value=String(given).trim();
+    const built=buildSetup(data,()=>"preview",$("#setupName").value);
     pastedSetup=data;
     $("#setupStatus").textContent="This will create:";
     $("#setupPreview").innerHTML=setupSummary(built).map(line=>"<li>"+esc(line)+"</li>").join("");
@@ -1173,13 +1175,14 @@ function checkSetup(){
     $("#setupCreate").disabled=false;
   }catch(e){$("#setupStatus").textContent=e.message;}
 }
-$("#setupText").addEventListener("input",checkSetup);
+$("#setupText").addEventListener("input",checkSetup);$("#setupName").addEventListener("input",checkSetup);
 $("#openSetup").onclick=()=>{closeAll();openSheet("#setupSheet");$("#setupAdult").checked=false;checkSetup();setTimeout(()=>$("#setupText").focus(),250);};
 $("#setupCreate").onclick=()=>{
   if(!pastedSetup){checkSetup();return;}
   if(controller){toast("Stop the response first");return;}
   if(!$("#setupAdultRow").hidden&&!$("#setupAdult").checked){toast("Confirm that you are an adult");return;}
-  let built;try{built=buildSetup(pastedSetup,uid);}catch(e){toast(e.message);return;}
+  if(setupGroups(pastedSetup).length&&!$("#setupName").value.trim()){toast("Enter your character name first");$("#setupName").focus();return;}
+  let built;try{built=buildSetup(pastedSetup,uid,$("#setupName").value);}catch(e){toast(e.message);return;}
   const nextAgents=[...agents,...built.agents],nextGroups=[...groups,...built.groups];
   try{store.agents=nextAgents;store.groups=nextGroups;}
   catch(e){store.agents=agents;store.groups=groups;toast("Not enough browser storage for this setup.");return;}
@@ -1188,7 +1191,7 @@ $("#setupCreate").onclick=()=>{
     const others=store.personas.filter(p=>p.name.toLowerCase()!==built.persona.name.toLowerCase());
     try{store.personas=[...others,{name:built.persona.name,description:built.persona.description}].sort((a,b)=>a.name.localeCompare(b.name));renderPersonaChoices();}catch(e){}
   }
-  $("#setupText").value="";pastedSetup=null;
+  $("#setupText").value="";$("#setupName").value="";pastedSetup=null;
   if(built.groups.length)selectGroup(built.groups[0].id);else selectAgent(built.agents[0].id);
   toast("Setup created");
 };

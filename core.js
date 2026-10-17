@@ -1431,11 +1431,9 @@ function parseSetup(text){
     if(keys.has(setupKey(a)))throw new Error("Two characters share the key "+setupKey(a)+".");
     keys.add(setupKey(a));
   });
-  const persona=data.persona||data.user;
   for(const g of setupGroups(data)){
     if(!g||typeof g!=="object")throw new Error("A group in the setup is empty.");
     for(const m of Array.isArray(g.members)?g.members:[])if(!keys.has(String(m).trim().toLowerCase()))throw new Error((setupText(g.name,80)||"The group")+" lists "+m+", who is not in the setup.");
-    if(!setupText((g.user||g.persona||persona)?.name,80))throw new Error("Add a persona with your character's name.");
   }
   return data;
 }
@@ -1448,9 +1446,10 @@ function setupWorld(list,name){
   return entries.length?{name:setupText(name,80),entries}:undefined;
 }
 function setupMemory(list){return (Array.isArray(list)?list:[]).map(s=>setupText(s,600)).filter(Boolean).slice(0,40);}
-function buildSetup(data,idFactory){
-  const mature=data.mature!==false,user=data.persona||data.user||{};
-  const persona=setupText(user.name,80)?{name:setupText(user.name,80),description:setupText(user.description,4000),save:user.save!==false}:null;
+// userName (typed in the app) replaces the persona's name, so a shared setup works for anyone.
+function buildSetup(data,idFactory,userName){
+  const mature=data.mature!==false,user=data.persona||data.user||{},name=setupText(userName,80)||setupText(user.name,80);
+  const persona=name?{name,description:setupText(user.description,4000),save:user.save!==false}:null;
   const byKey={};
   const agents=data.agents.map(a=>{
     const description=setupText(a.description||a.prompt,20000),temp=a.temp===""||a.temp==null?NaN:+a.temp;
@@ -1493,7 +1492,7 @@ function setupSummary(built){
   for(const g of built.groups){
     const extras=[g.memory&&g.memory.length+(g.memory.length===1?" memory line":" memory lines"),g.lorebook&&g.lorebook.entries.length+(g.lorebook.entries.length===1?" world entry":" world entries"),
       g.thoughts&&"thoughts",g.bond&&"relationships",g.clock&&"story clock",g.initiative&&"messages first ("+g.initiative+")"].filter(Boolean);
-    lines.push("Group: "+g.emoji+" "+g.name+" · you play "+g.roleplay.user.name+(extras.length?" · "+extras.join(", "):""));
+    lines.push("Group: "+g.emoji+" "+g.name+" · you play "+(g.roleplay.user.name||"…")+(extras.length?" · "+extras.join(", "):""));
   }
   if(built.persona?.save)lines.push("Saved persona: "+built.persona.name);
   return lines;

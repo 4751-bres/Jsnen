@@ -22,7 +22,7 @@ test('bad setups explain what is wrong',()=>{
   assert.throws(()=>core.parseSetup('{"agents":[]}'),/no characters/);
   assert.throws(()=>core.parseSetup(JSON.stringify({...setup,app:'other'})),/different app/);
   assert.throws(()=>core.parseSetup(JSON.stringify({...setup,group:{...setup.group,members:['ioana','mihai']}})),/mihai/);
-  assert.throws(()=>core.parseSetup(JSON.stringify({...setup,persona:undefined})),/persona/);
+  assert.equal(core.parseSetup(JSON.stringify({...setup,persona:undefined})).agents.length,2);
   assert.throws(()=>core.parseSetup(JSON.stringify({...setup,agents:[{name:'X'}]})),/no description/);
 });
 test('buildSetup creates mature agents, a full roleplay group and the persona',()=>{
@@ -42,6 +42,11 @@ test('buildSetup creates mature agents, a full roleplay group and the persona',(
   const lines=core.setupSummary(built);
   assert.ok(lines.some(l=>/Group: 🏢 Arcadia Soft · you play Andrei · 1 memory line, 2 world entries, thoughts, relationships, story clock/.test(l)));
 });
+test('the name typed in the app replaces the persona name',()=>{
+  const built=core.buildSetup(core.parseSetup(JSON.stringify({...setup,persona:{description:'32, CEO.'}})),()=>'z',' Vlad ');
+  assert.equal(built.groups[0].roleplay.user.name,'Vlad');assert.equal(built.groups[0].roleplay.user.description,'32, CEO.');assert.equal(built.persona.name,'Vlad');
+  assert.equal(core.buildSetup(core.parseSetup(JSON.stringify(setup)),()=>'z','Mihnea').groups[0].roleplay.user.name,'Mihnea');
+});
 test('characters without a group become solo chats; members default to everyone',()=>{
   const solo=core.buildSetup(core.parseSetup(JSON.stringify({agents:[{name:'Max',description:'A friend, 30.'}]})),()=>'x');
   assert.equal(solo.groups.length,0);assert.equal(solo.persona,null);
@@ -51,6 +56,6 @@ test('characters without a group become solo chats; members default to everyone'
 test('the library opens a Paste setup sheet that saves everything and opens the chat',()=>{
   const page=source();
   assert.match(page,/id="openSetup"/);assert.match(page,/id="setupSheet"/);assert.match(page,/id="setupText"/);
-  assert.match(page,/buildSetup\(pastedSetup,uid\)/);
+  assert.match(page,/buildSetup\(pastedSetup,uid,\$\("#setupName"\)\.value\)/);
   assert.match(page,/selectGroup\(built\.groups\[0\]\.id\)/);
 });
