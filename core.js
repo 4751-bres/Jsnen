@@ -1179,8 +1179,11 @@ function searchResultsBlock(query,results,now){
 }
 // Exa's REST API only accepts browsers on its own allow-list (not GitHub Pages), so the app falls back to Exa's hosted
 // MCP endpoint, which allows any site. Its search tool answers with text blocks: "Title: …\nURL: …\nPublished: …\nHighlights:\n…".
+// Exa's MCP tool requires an "objective" (since Exa 3.0, October 2026): what the search should find.
 function exaMcpRequest(query,count){
-  return {jsonrpc:"2.0",id:Date.now(),method:"tools/call",params:{name:"web_search_exa",arguments:{query:String(query||"").slice(0,400),numResults:Math.max(1,Math.min(10,count||5))}}};
+  const q=String(query||"").slice(0,400);
+  return {jsonrpc:"2.0",id:Date.now(),method:"tools/call",params:{name:"web_search_exa",arguments:{query:q,numResults:Math.max(1,Math.min(10,count||5)),
+    objective:"Find current, reliable pages that answer: "+q+". Rank primary and recent sources first and pull out the key facts, figures and dates."}}};
 }
 function parseExaMcpText(text){
   return String(text||"").split(/\n(?=Title: )/).map(block=>{

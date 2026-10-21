@@ -62,7 +62,7 @@ test('a searching reply sends results in the prompt and saves its sources',async
 
 test('Exa MCP fallback: request shape, text parsing, SSE body and key errors',()=>{
   const req=core.exaMcpRequest('paris',20);
-  assert.equal(req.method,'tools/call');assert.equal(req.params.name,'web_search_exa');assert.equal(req.params.arguments.numResults,10);
+  assert.equal(req.method,'tools/call');assert.equal(req.params.name,'web_search_exa');assert.equal(req.params.arguments.numResults,10);assert.match(req.params.arguments.objective,/answer: paris\./);
   const text='Title: Paris Weather\nURL: https://exa.ai/w/paris\nPublished: 2026-10-15T00:11:59Z\nAuthor: N/A\nHighlights:\n# Weather\n\nMainly clear.\n\nTitle: BBC\nURL: https://bbc.com/w\nPublished: N/A\nText: Light winds.';
   const r=core.parseExaMcpText(text);
   assert.deepEqual(JSON.parse(JSON.stringify(r)),[{title:'Paris Weather',url:'https://exa.ai/w/paris',date:'2026-10-15',text:'# Weather Mainly clear.'},{title:'BBC',url:'https://bbc.com/w',date:'',text:'Light winds.'}]);
