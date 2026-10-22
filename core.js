@@ -428,10 +428,12 @@ function canEditWorkflowRun(run){
 
 /* flash-migration:start */
 function migrateAllAgentsToFlash(storage,agentList,workflowList){
-  const marker="ds_all_agents_flash_v1";
+  // v2: deepseek-flash is now served by DeepSeek-V4.1-Flash-1017; agents on other providers keep their model.
+  const marker="ds_all_agents_flash_v2";
   if(storage.getItem(marker))return {agents:agentList,workflows:workflowList};
-  const nextAgents=agentList.map(a=>({...a,model:"deepseek-flash"}));
-  const nextWorkflows=workflowList.map(w=>({...w,roles:w.roles.map(r=>({...r,...(r.agent?{agent:{...r.agent,model:"deepseek-flash"}}:{})}))}));
+  const toFlash=a=>a.provider?a:{...a,model:"deepseek-flash"};
+  const nextAgents=agentList.map(toFlash);
+  const nextWorkflows=workflowList.map(w=>({...w,roles:w.roles.map(r=>({...r,...(r.agent?{agent:toFlash(r.agent)}:{})}))}));
   // Mark complete only after every write succeeds; quota failures can retry on reload.
   storage.setItem("ds_agents",JSON.stringify(nextAgents));
   storage.setItem("ds_workflows",JSON.stringify(nextWorkflows));

@@ -21,5 +21,10 @@ test('later manual model choices are respected on reload',()=>{
 test('failed persistence does not mark migration complete',()=>{
   const {fn,storage,data}=setup();const original=storage.setItem;
   storage.setItem=(k,v)=>{if(k==='ds_workflows')throw Error('quota');original(k,v);};
-  assert.throws(()=>fn(storage,[],[]),/quota/);assert.equal(data.has('ds_all_agents_flash_v1'),false);
+  assert.throws(()=>fn(storage,[],[]),/quota/);assert.equal(data.has('ds_all_agents_flash_v2'),false);
+});
+test('v2 re-runs after v1 and keeps agents on other providers',()=>{
+  const {fn,storage,data}=setup();data.set('ds_all_agents_flash_v1','1');
+  const result=fn(storage,[{model:'deepseek-v4-pro'},{provider:'p1',model:'gpt-x'}],[{roles:[{agent:{provider:'p1',model:'gpt-x'}}]}]);
+  assert.equal(result.agents[0].model,'deepseek-flash');assert.equal(result.agents[1].model,'gpt-x');assert.equal(result.workflows[0].roles[0].agent.model,'gpt-x');
 });

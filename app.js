@@ -1446,7 +1446,7 @@ async function fetchModels(provider){
   return ids;
 }
 function fillModelList(listId,providerId){
-  const ids=store.modelCache[providerId||"default"]||(providerId?[]:["deepseek-flash","deepseek-v4-pro"]);
+  const ids=store.modelCache[providerId||"default"]||(providerId?[]:["deepseek-flash"]);
   $("#"+listId).innerHTML=ids.map(id=>'<option value="'+esc(id)+'"></option>').join("");
 }
 function renderProviderList(){

@@ -103,7 +103,7 @@ That's it — it now behaves like a native app with its own icon.
   you can inspect results, retry a role, add guidance, cancel, or approve final synthesis.
 - **Safe recovery** — stop and resume the current role; interrupted runs recover as
   stopped after reload instead of silently restarting API requests.
-- **Model per agent** — `deepseek-flash` (fast, cheap, sees images) or `deepseek-v4-pro`
+- **Model per agent** — `deepseek-flash` (DeepSeek-V4.1-Flash-1017: fast, cheap, sees images) or `deepseek-v4-pro`
   (flagship reasoning, text only).
   Type any model name your key can access.
 - **Thinking mode per agent** — Off / Low / Medium / High. Reasoning streams into a
