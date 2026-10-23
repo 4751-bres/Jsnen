@@ -1407,11 +1407,15 @@ function applyDeviceProfile(){
   if(meta)meta.setAttribute("content",safe?SAFE_VIEWPORT:ORIGINAL_VIEWPORT);
   if(safe)root.style.removeProperty("--app-h");else fitToViewport();
 }
+let lastViewportH=window.visualViewport?.height||0;
 function fitToViewport(){
   const vv=window.visualViewport;if(!vv)return;
   if(safeDevice())return; // Honor / Other: the browser handles the keyboard on its own
+  const shrank=lastViewportH-vv.height>80;lastViewportH=vv.height;
   document.documentElement.style.setProperty("--app-h",Math.round(vv.height)+"px");
   if(window.scrollY)window.scrollTo(0,0);
+  // Keyboard opening: keep the newest message in view if the user was at the bottom.
+  if(shrank&&typeof chatFollowing!=="undefined"&&chatFollowing){const chat=document.getElementById("chat");if(chat)requestAnimationFrame(()=>{chat.scrollTop=chat.scrollHeight;});}
 }
 applyDeviceProfile();
 $("#deviceSelect").value=devicePref();
