@@ -2772,7 +2772,7 @@ function mentionCandidates(group){
 async function pickNextSpeaker(group){
   const mems=groupMembers(group),ids=mems.map(a=>a.id),last=lastSpeakerId();
   const candidates=mems.map(a=>({id:a.id,name:memberLabel(group,a)}));
-  const recent=messages.filter(isContextMessage).slice(-12).map(m=>"["+(m.role==="user"?"User":(m.characterName||m.agentName||"Agent"))+"]: "+messageText(m.content).slice(0,600)).join("\n");
+  const recent=messages.filter(isContextMessage).filter(m=>!m.whisperTo).slice(-12).map(m=>"["+(m.role==="user"?"User":(m.characterName||m.agentName||"Agent"))+"]: "+messageText(m.content).slice(0,600)).join("\n");
   try{
     const answer=await withBusy(signal=>quickCompletion([
       {role:"system",content:"You choose who speaks next in a group conversation. Answer with exactly one participant name from the list and nothing else."},
