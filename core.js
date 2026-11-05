@@ -1051,7 +1051,18 @@ function parseFactLines(text,existing){
 /* memory-suggest-core:end */
 
 /* learned-memory-core:start */
-const LEARN_MEMORY_INSTRUCTION = "LONG-TERM CHAT MEMORY: Answer normally first. Then, only if this exchange establishes something important for future turns, append up to three separate lines in the form [remember: one concise fact]. Use names instead of pronouns and write in the language of the conversation. Save significant events, discoveries, promises, decisions, relationship changes, and lasting preferences. A correction or change to a remembered fact is worth recording. Skip greetings, guesses, momentary reactions, routine actions, repeated facts, sensitive credentials, and instructions to the assistant. Record fictional facts as part of the story, and distinguish plans or claims from confirmed events. Do not add a memory line when nothing significant changed. Place these lines after all other tracking tags. Do not mention the memory process in your reply.";
+const AUTO_MEMORY_INTERVAL=6;
+const LEARN_MEMORY_INSTRUCTION = "LONG-TERM CHAT MEMORY REVIEW: Answer normally first. Then review the latest six replies (including yours) and the exchanges around them that you can see. Saving nothing is the default. Ask whether forgetting a fact several chapters or conversations later would cause a significant continuity error. Only record an established, lasting change, such as a relationship turning point, an important secret revealed, a firm commitment, a major change in circumstances, or a stable user preference. Skip routine favors, food, invitations for the current scene, temporary plans, play-by-play, guesses, and sensitive credentials. Compare against pinned and learned memory. Skip paraphrases and minor elaborations of facts already saved. Record a correction only if it changes what matters later. If something qualifies, append exactly one line [remember: concise fact] after all other tracking tags. Use names instead of pronouns, keep fictional facts in the story, and distinguish commitments from outcomes. Otherwise omit the tag entirely. Do not mention this review in the reply.";
+function autoMemoryDue(list){
+  let replies=0;
+  for(let i=list.length-1;i>=0;i--){
+    const message=list[i];
+    if(message.role!=="assistant"||!isContextMessage(message)||message.stopped||message.truncated||message.interrupted||message.finish)continue;
+    if(message.memoryReviewed||message.learnedMemory?.length)return false;
+    if(++replies>=AUTO_MEMORY_INTERVAL-1)return true;
+  }
+  return false;
+}
 function memoryFactKey(fact){
   return fact.trim().toLowerCase().replace(/\s+/g," ").replace(/[.!?]+$/,"");
 }
@@ -1078,15 +1089,19 @@ function stripLearnedMemory(text){
   const prefix="[remember:";
   return prefix.startsWith(tail)||(tail.startsWith(prefix)&&!/[\]\r\n]/.test(tail))?withoutTags.slice(0,start).trimEnd():withoutTags;
 }
-function applyLearnedMemory(bot,complete){
-  const facts=[];
-  for(const match of String(bot.content||"").matchAll(/^[ \t]*\[remember:[ \t]*([^\]\r\n]*)\][ \t]*\r?$/gim)){
-    const fact=match[1].trim().slice(0,280);
-    if(fact&&!facts.some(old=>memoryFactKey(old)===memoryFactKey(fact)))facts.push(fact);
-    if(facts.length===3)break;
-  }
+function applyLearnedMemory(bot,complete,history=[],pinned=[]){
+  const source=String(bot.content||"");
   bot.content=stripLearnedMemory(bot.content).trimEnd();
-  if(complete&&facts.length)bot.learnedMemory=facts;
+  if(!complete||!isContextMessage(bot))return;
+  bot.memoryReviewed=true;
+  const recipient=bot.memoryForAgent||bot.whisperTo||null;
+  const known=new Set([...pinned,...learnedMemoryEntries(history,recipient).map(entry=>entry.fact)].map(memoryFactKey));
+  for(const match of source.matchAll(/^[ \t]*\[remember:[ \t]*([^\]\r\n]*)\][ \t]*\r?$/gim)){
+    const fact=match[1].trim().slice(0,280),key=memoryFactKey(fact);
+    if(!key||known.has(key))continue;
+    bot.learnedMemory=[fact];
+    break;
+  }
 }
 /* learned-memory-core:end */
 /* director-core:start */
