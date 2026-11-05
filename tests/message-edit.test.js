@@ -99,6 +99,8 @@ test('deleting a message removes it at once and Undo restores it',()=>{
   c.deleteMessage(original[1]);
   assert.deepEqual([...c.messages.map(m=>m.content)],['Hi','Later']);
   assert.equal(state.saved.at(-1).list.length,2);assert.equal(state.toasts.at(-1),'Message deleted');
+  assert.equal(state.action.duration,5000);
+  assert.equal(state.action.swipe,true);
   state.action.run();
   assert.equal(c.messages,original);assert.equal(state.saved.at(-1).list.length,3);
 });

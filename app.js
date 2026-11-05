@@ -194,11 +194,61 @@ let currentRun = null;
 let controller = null; // AbortController for streaming
 
 /* ---------- UI helpers ---------- */
-function toast(t,action){
-  const el=$("#toast");el.textContent=t;el.classList.toggle("actionable",!!action);
-  if(action){const b=document.createElement("button");b.type="button";b.textContent=action.label;b.onclick=()=>{el.classList.remove("on","actionable");clearTimeout(el._t);action.run();};el.append(" ",b);}
-  el.classList.add("on");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("on","actionable"),action?6000:2200);
+const toastEl=$("#toast");
+let toastDrag=null;
+function dismissToast(direction=0){
+  clearTimeout(toastEl._t);
+  toastDrag=null;
+  toastEl.classList.remove("on","actionable","swipeable","dragging");
+  toastEl.classList.toggle("dismissed",!!direction);
+  toastEl.style.setProperty("--toast-x",direction?direction*100+"vw":"0px");
+  const button=toastEl.querySelector("button");
+  if(button)button.disabled=true;
 }
+function toast(t,action){
+  dismissToast();
+  toastEl.textContent=t;
+  toastEl.classList.toggle("actionable",!!action);
+  toastEl.classList.toggle("swipeable",!!action?.swipe);
+  if(action){
+    const button=document.createElement("button");
+    button.type="button";button.textContent=action.label;
+    button.onclick=()=>{dismissToast();action.run();};
+    toastEl.append(" ",button);
+  }
+  toastEl.classList.add("on");
+  toastEl._t=setTimeout(dismissToast,action?.duration??(action?6000:2200));
+}
+toastEl.addEventListener("pointerdown",e=>{
+  if(e.isPrimary&&e.button===0&&toastEl.classList.contains("swipeable")){
+    toastDrag={id:e.pointerId,x:e.clientX,y:e.clientY,horizontal:false};
+  }
+});
+toastEl.addEventListener("pointermove",e=>{
+  if(toastDrag?.id!==e.pointerId)return;
+  const dx=e.clientX-toastDrag.x,dy=e.clientY-toastDrag.y;
+  if(!toastDrag.horizontal){
+    if(Math.abs(dy)>10&&Math.abs(dy)>=Math.abs(dx)){toastDrag=null;return;}
+    if(Math.abs(dx)<10)return;
+    toastDrag.horizontal=true;
+    toastEl.setPointerCapture(e.pointerId);
+    toastEl.classList.add("dragging");
+  }
+  toastEl.style.setProperty("--toast-x",dx+"px");
+});
+function finishToastDrag(e){
+  if(toastDrag?.id!==e.pointerId)return;
+  const dx=e.clientX-toastDrag.x,dy=e.clientY-toastDrag.y;
+  if(e.type==="pointerup"&&Math.abs(dx)>=36&&Math.abs(dx)>Math.abs(dy)*1.4){
+    dismissToast(Math.sign(dx));
+    return;
+  }
+  toastDrag=null;
+  toastEl.classList.remove("dragging");
+  toastEl.style.setProperty("--toast-x","0px");
+}
+toastEl.addEventListener("pointerup",finishToastDrag);
+toastEl.addEventListener("pointercancel",finishToastDrag);
 function openSheet(id){$("#scrim").classList.add("on");$(id).classList.add("on");}
 function closeAll(){$("#scrim").classList.remove("on");document.querySelectorAll(".sheet.on").forEach(s=>s.classList.remove("on"));}
 $("#scrim").onclick=closeAll;
@@ -413,7 +463,7 @@ function deleteMessage(message){
   const id=currentId,kind=currentKind,before=messages,next=[...messages.slice(0,index),...messages.slice(index+1)];
   try{store.saveConv(id,next);}catch(error){toast("Could not delete: browser storage is full.");return;}
   messages=next;renderChat();renderResponders();refreshHeader();
-  toast("Message deleted",{label:"Undo",run(){
+  toast("Message deleted",{label:"Undo",duration:5000,swipe:true,run(){
     if(currentId!==id||currentKind!==kind||controller||messages!==next)return;
     try{store.saveConv(id,before);}catch(error){toast("Could not restore: browser storage is full.");return;}
     messages=before;renderChat();renderResponders();refreshHeader();
