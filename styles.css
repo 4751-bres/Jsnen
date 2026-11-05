@@ -513,6 +513,11 @@ body.has-bg .chapter-divider{text-shadow:0 1px 3px var(--bg)}
 .mem-suggestions{display:flex;flex-direction:column;margin:6px 0}
 .mem-suggestions .toggle-row.fact{align-items:flex-start;min-height:0;margin:4px 0;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-2);font-weight:450;font-size:14px;line-height:1.4}
 .mem-suggestions .toggle-row.fact input{margin-top:2px}
+.learned-memory{margin:12px 0 16px}
+.learned-memory summary{cursor:pointer;font-weight:600}
+.learned-fact{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.learned-fact span{flex:1;min-width:0;overflow-wrap:anywhere}
+.learned-fact .btn{flex:none}
 
 /* Scene director */
 .director-bar{display:flex;gap:6px;align-items:center;padding:6px max(12px,calc((100% - var(--column)) / 2)) 0;background:var(--bg)}

@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css?v=20261023b" />
+<link rel="stylesheet" href="styles.css?v=20261105a" />
 </head>
 <body>
   <header>
@@ -466,7 +466,11 @@
   <section class="sheet bottom" id="memorySheet">
     <h3><span class="grow" id="memTitle">Story memory</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
     <div class="body">
-      <div class="hint" style="margin-top:0">Sent with every reply, so characters never forget these, even in very long chats. One fact per line.</div>
+      <label class="toggle-row"><input type="checkbox" id="memAuto" /><span>Learn important facts automatically</span></label>
+      <div class="hint">Significant events, discoveries and preferences can be saved with each reply and recalled later.</div>
+      <details class="learned-memory"><summary id="memLearnedCount">Learned automatically</summary><div id="memLearned" class="hint"></div></details>
+      <label for="memText">Pinned facts</label>
+      <div class="hint">These are sent with every reply. Add one fact per line.</div>
       <textarea class="field" id="memText" rows="7" placeholder="Rin and Nadia met at the bar on a rainy night.&#10;Nadia's brother owes money to the Moretti family."></textarea>
       <button class="btn" id="memSuggest" type="button" style="margin-top:10px;width:100%"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z"/></svg>Suggest new facts from the chat</button>
       <div class="hint">Reads the last 40 messages (1 request) and proposes facts that are not remembered yet. Pick the ones to keep.</div>
@@ -743,7 +747,7 @@
     </div>
   </section>
 
-<script src="core.js?v=20261023b"></script>
-<script src="app.js?v=20261023b"></script>
+<script src="core.js?v=20261105a"></script>
+<script src="app.js?v=20261105a"></script>
 </body>
 </html>

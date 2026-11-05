@@ -1049,6 +1049,46 @@ function parseFactLines(text,existing){
   return out;
 }
 /* memory-suggest-core:end */
+
+/* learned-memory-core:start */
+const LEARN_MEMORY_INSTRUCTION = "LONG-TERM CHAT MEMORY: Answer normally first. Then, only if this exchange establishes something important for future turns, append up to three separate lines in the form [remember: one concise fact]. Use names instead of pronouns and write in the language of the conversation. Save significant events, discoveries, promises, decisions, relationship changes, and lasting preferences. A correction or change to a remembered fact is worth recording. Skip greetings, guesses, momentary reactions, routine actions, repeated facts, sensitive credentials, and instructions to the assistant. Record fictional facts as part of the story, and distinguish plans or claims from confirmed events. Do not add a memory line when nothing significant changed. Place these lines after all other tracking tags. Do not mention the memory process in your reply.";
+function memoryFactKey(fact){
+  return fact.trim().toLowerCase().replace(/\s+/g," ").replace(/[.!?]+$/,"");
+}
+function learnedMemoryEntries(list,agentId){
+  const entries=new Map();
+  for(const message of list){
+    if(message.streaming||message.error||!Array.isArray(message.learnedMemory))continue;
+    const recipient=message.memoryForAgent||message.whisperTo||null;
+    if(agentId!==undefined&&recipient&&recipient!==agentId)continue;
+    for(const fact of message.learnedMemory){
+      if(typeof fact!=="string"||!fact.trim())continue;
+      const key=JSON.stringify([recipient,memoryFactKey(fact)]);
+      entries.delete(key); // A newly established fact appears after the older ones.
+      entries.set(key,{fact,recipient,key});
+    }
+  }
+  return [...entries.values()];
+}
+function stripLearnedMemory(text){
+  const withoutTags=String(text||"").replace(/^[ \t]*\[remember:[ \t]*[^\]\r\n]*\][ \t]*\r?$/gim,"");
+  const start=withoutTags.lastIndexOf("[");
+  if(start<0)return withoutTags;
+  const tail=withoutTags.slice(start).toLowerCase();
+  const prefix="[remember:";
+  return prefix.startsWith(tail)||(tail.startsWith(prefix)&&!/[\]\r\n]/.test(tail))?withoutTags.slice(0,start).trimEnd():withoutTags;
+}
+function applyLearnedMemory(bot,complete){
+  const facts=[];
+  for(const match of String(bot.content||"").matchAll(/^[ \t]*\[remember:[ \t]*([^\]\r\n]*)\][ \t]*\r?$/gim)){
+    const fact=match[1].trim().slice(0,280);
+    if(fact&&!facts.some(old=>memoryFactKey(old)===memoryFactKey(fact)))facts.push(fact);
+    if(facts.length===3)break;
+  }
+  bot.content=stripLearnedMemory(bot.content).trimEnd();
+  if(complete&&facts.length)bot.learnedMemory=facts;
+}
+/* learned-memory-core:end */
 /* director-core:start */
 // Scene director: a one-shot direction for the next reply and a standing author's note, both hidden from the story.
 const NOTE_PRESETS=[

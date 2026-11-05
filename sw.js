@@ -87,7 +87,7 @@ function replyPreview(raw) {
     if (!line.startsWith("data:")) continue;
     try { text += JSON.parse(line.slice(5)).choices?.[0]?.delta?.content || ""; } catch (e) { /* keep-alive or [DONE] */ }
   }
-  text = text.replace(/\[\s*(?:mood|thoughts?|inner thoughts?|bond|relationship|affection)\s*:[^\]]*\]/gi, "").replace(/^\s*\[char\]\s*:\s*/i, "").replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim();
+  text = text.replace(/\[remember:[^\]\r\n]*(?:\]|$)/gi, "").replace(/\[\s*(?:mood|thoughts?|inner thoughts?|bond|relationship|affection)\s*:[^\]]*\]/gi, "").replace(/^\s*\[char\]\s*:\s*/i, "").replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim();
   return text.length > 160 ? text.slice(0, 157) + "…" : text;
 }
 async function notifyReply(meta, raw) {
