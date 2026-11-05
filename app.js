@@ -2475,7 +2475,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     // A reply that has private context can only contribute memory for its own character.
     if(meta.whisperTo||conversationMessages.some(m=>m.whisperTo===agent.id||m.memoryForAgent===agent.id))bot.memoryForAgent=meta.whisperTo||agent.id;
   }
-  delete bot.noSearch;delete bot.forceSearch;delete bot.opener;if(search)bot.searching=true;if(meta.proactive)bot.proactive=true;
+  delete bot.noSearch;delete bot.forceSearch;delete bot.opener;delete bot.continueTurn;if(search)bot.searching=true;if(meta.proactive)bot.proactive=true;
   if(typeof thoughtsWanted==="function"&&thoughtsWanted(agent,meta))bot.thoughtsTracked=true;
   let bondBefore;
   if(typeof clockWanted==="function"&&clockWanted(meta))bot.sceneTracked=true;
@@ -2504,8 +2504,9 @@ async function streamCompletion(agent,apiMessages,meta={}){
     }
     if(bot.thoughtsTracked)payload.messages=[...payload.messages,{role:"system",content:THOUGHTS_INSTRUCTION}];
     if(meta.opener)payload.messages=[...payload.messages,{role:"user",content:OPENER_NUDGE}];
+    if(meta.continueTurn)payload.messages=[...payload.messages,{role:"system",content:"The user pressed Continue and did not write a new message. Take a fresh turn that naturally follows the conversation. Build on the last exchange without repeating it or writing dialogue or actions for the user. If the chat has just opened, start naturally from the character or scene setup."}];
     if(meta.proactive){const rp=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;payload.messages=[...payload.messages,{role:"system",content:proactiveInstruction(meta.proactive.hours,rp?.user?.name)}];}
-    if(meta.whisperTo)payload.messages=[...payload.messages,{role:"system",content:"PRIVATE: the user just whispered to you alone; the others did not hear it. Answer quietly, just to them."}];
+    if(meta.whisperTo)payload.messages=[...payload.messages,{role:"system",content:meta.continueTurn?"PRIVATE: continue quietly with the user alone.":"PRIVATE: the user just whispered to you alone; the others did not hear it. Answer quietly, just to them."}];
     if(bot.sceneTracked)payload.messages=[...payload.messages,{role:"system",content:clockInstruction(latestScene(conversationMessages.slice(0,-1)))}];
     if(bot.bondTracked){const rp=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;payload.messages=[...payload.messages,{role:"system",content:bondInstruction(bondBefore,rp?.user?.name)}];}
     const chapterLine=!meta.workflowRoleId&&typeof chaptersFor==="function"?chapterNote(chaptersFor(convId)):"";
@@ -3010,12 +3011,28 @@ $("#resumeWorkflow").onclick=resumeWorkflow;
 $("#cancelWorkflow").onclick=cancelWorkflow;
 
 /* ---------- Composer send ---------- */
+const CONTINUE_TURN={extraMeta:{continueTurn:true}};
+function continueChat(){
+  if(!isGroup()){runAgent(curAgent(),CONTINUE_TURN);return;}
+  const members=groupMembers(curGroup());
+  if(whisperTarget){
+    const agent=members.find(a=>a.id===whisperTarget);
+    if(agent)runAgent(agent,{extraMeta:{continueTurn:true,whisperTo:agent.id}});
+    return;
+  }
+  if(replyAsChosen(true))return;
+  const last=messages.findLast(m=>m.role==="assistant"&&!m.whisperTo&&isContextMessage(m)&&members.some(a=>a.id===m.agentId));
+  const agent=members.find(a=>a.id===last?.agentId)||members[0];
+  if(agent)runAgent(agent,CONTINUE_TURN);
+}
 function send(){
   if(controller&&!isWorkflow()&&input.value.trim()){queueMessage();return;}
   if(controller||readingImages)return;
   const text=input.value.trim();
-  if(!text&&!pendingImages.length){if(isGroup()&&!controller&&messages.length)replyAsChosen(true);return;}
+  const empty=!text&&!pendingImages.length;
+  if(empty&&(isWorkflow()||sequence))return;
   if(!anyProviderReady()){toast("Add your API key in Settings");$("#setBtn").click();return;}
+  if(empty){continueChat();return;}
   if(isWorkflow()){startWorkflowRun(text);return;}
   if(isGroup()&&whisperTarget){
     const agent=agents.find(a=>a.id===whisperTarget);
@@ -3039,11 +3056,11 @@ function send(){
 function replyAsChosen(empty){
   const group=curGroup(),mems=groupMembers(group),mode=replyModeOf(group,mems.map(a=>a.id));
   if(mode.kind==="buttons")return false;
-  if(empty&&!anyProviderReady()){toast("Add your API key in Settings");return true;}
-  if(mode.kind==="agent")groupRespond(agents.find(a=>a.id===mode.id));
-  else if(mode.kind==="everyone")everyoneRespond();
-  else if(mode.kind==="auto")autoRespond();
-  else if(mode.kind==="discuss")discussRespond();
+  const options=empty?CONTINUE_TURN:undefined;
+  if(mode.kind==="agent")groupRespond(agents.find(a=>a.id===mode.id),options);
+  else if(mode.kind==="everyone")everyoneRespond(options);
+  else if(mode.kind==="auto")autoRespond(options);
+  else if(mode.kind==="discuss")discussRespond(options);
   return true;
 }
 function renderReplyMode(){
@@ -3207,37 +3224,37 @@ function chooseWhisper(){
 $("#whisperBtn").onclick=chooseWhisper;
 
 /* ---------- Group: one agent replies ---------- */
-function groupRespond(agent){
+function groupRespond(agent,options){
   if(controller||readingImages)return;
   const text=input.value.trim();
   if((text||pendingImages.length)&&!commitComposer())return;
-  runAgent(agent);
+  runAgent(agent,options);
 }
 
 /* ---------- Group: every member replies once, in order ---------- */
-async function everyoneRespond(){
+async function everyoneRespond(options){
   if(controller||readingImages)return;
   const text=input.value.trim();
   if((text||pendingImages.length)&&!commitComposer())return;
-  await runSequence(groupMembers(curGroup()));
+  await runSequence(groupMembers(curGroup()),options);
 }
 
 /* ---------- Group: agents discuss among themselves for N rounds ---------- */
-async function discussRespond(){
+async function discussRespond(options){
   if(controller||readingImages)return;
   const text=input.value.trim();
   if((text||pendingImages.length)&&!commitComposer())return;
   const group=curGroup(),ids=discussionOrder(groupMembers(group).map(a=>a.id),groupRounds(group),lastSpeakerId());
-  await runSequence(ids.map(id=>agents.find(a=>a.id===id)).filter(Boolean),{discussion:true});
+  await runSequence(ids.map(id=>agents.find(a=>a.id===id)).filter(Boolean),{...options,discussion:true});
 }
 
 /* ---------- Group: a quick model call picks the next speaker ---------- */
-async function autoRespond(){
+async function autoRespond(options){
   if(controller||readingImages)return;
   const text=input.value.trim();
   if((text||pendingImages.length)&&!commitComposer())return;
   const id=await pickNextSpeaker(curGroup());if(!id)return;
-  const agent=agents.find(a=>a.id===id);if(agent)await runSequence([agent]);
+  const agent=agents.find(a=>a.id===id);if(agent)await runSequence([agent],options);
 }
 
 /* ---------- Arrivals from Android: the share sheet and home-screen shortcuts ---------- */
