@@ -14,7 +14,9 @@ const SCENE_STYLE="For fictional scene replies, aim for 80–120 words of natura
 const REPLY_PLACEHOLDERS=new Set(["⏹ stopped.","(empty response)"]);
 // Failed, stopped-before-output, and empty replies stay visible but never enter API context.
 // A whispered message (and the reply to it) is only part of that one character's context.
-function visibleTo(m,agentId){return !m||!m.whisperTo||m.whisperTo===agentId;}
+function visibleTo(m,agentId){
+  return !m||(!m.whisperTo||m.whisperTo===agentId)&&(!Array.isArray(m.seenBy)||m.seenBy.includes(agentId));
+}
 function isContextMessage(m){return !!m&&!m.streaming&&!m.error&&!(m.role==="assistant"&&REPLY_PLACEHOLDERS.has(m.content))&&!!(m.content||m.images?.length);}
 // DeepSeek only accepts images on Flash models; other OpenAI-compatible providers decide for themselves.
 function modelSeesImages(model){const name=String(model||"").toLowerCase();return !name.includes("deepseek")||name.includes("flash");}
@@ -1070,6 +1072,7 @@ function learnedMemoryEntries(list,agentId){
   const entries=new Map();
   for(const message of list){
     if(message.streaming||message.error||!Array.isArray(message.learnedMemory))continue;
+    if(agentId!==undefined&&!visibleTo(message,agentId))continue;
     const recipient=message.memoryForAgent||message.whisperTo||null;
     if(agentId!==undefined&&recipient&&recipient!==agentId)continue;
     for(const fact of message.learnedMemory){
@@ -1095,7 +1098,7 @@ function applyLearnedMemory(bot,complete,history=[],pinned=[]){
   if(!complete||!isContextMessage(bot))return;
   bot.memoryReviewed=true;
   const recipient=bot.memoryForAgent||bot.whisperTo||null;
-  const known=new Set([...pinned,...learnedMemoryEntries(history,recipient).map(entry=>entry.fact)].map(memoryFactKey));
+  const known=new Set([...pinned,...learnedMemoryEntries(history,bot.agentId||recipient).map(entry=>entry.fact)].map(memoryFactKey));
   for(const match of source.matchAll(/^[ \t]*\[remember:[ \t]*([^\]\r\n]*)\][ \t]*\r?$/gim)){
     const fact=match[1].trim().slice(0,280),key=memoryFactKey(fact);
     if(!key||known.has(key))continue;
@@ -1104,6 +1107,100 @@ function applyLearnedMemory(bot,complete,history=[],pinned=[]){
   }
 }
 /* learned-memory-core:end */
+
+/* conversation-context-core:start */
+function presentIds(group){
+  const members=group?.members||[];
+  return Array.isArray(group?.present)?members.filter(id=>group.present.includes(id)):members.slice();
+}
+function presenceInstruction(group,agents){
+  const here=new Set(presentIds(group));
+  const name=id=>roleplayCharacter(group,agents.find(a=>a.id===id)||{name:"Character"}).name;
+  const present=(group.members||[]).filter(id=>here.has(id)).map(name);
+  const away=(group.members||[]).filter(id=>!here.has(id)).map(name);
+  return "SCENE PRESENCE. Here: "+(present.join(", ")||"the user alone")+". Away: "+(away.join(", ")||"nobody")+". Only people here can speak or witness new events. Your context includes only events you could witness. Do not assume you learned anything that happened while you were away. Keep private whispers private unless the user explicitly shares them.";
+}
+function realClockInstruction(now,timeZone){
+  const clock=new Intl.DateTimeFormat("en-GB",{dateStyle:"full",timeStyle:"short",timeZone}).format(new Date(now));
+  return "REAL-WORLD CLOCK. Current local date and time: "+clock+" ("+timeZone+"). Use this when relevant to everyday conversation. Keep fictional story time as established in the scene unless the user links it to real time. Mention the clock only when it matters.";
+}
+const CONTEXT_STOP_WORDS=new Set("the and for that this with from have has had was were are you your yours they their them she her him his its our ours but not what when where which who how about into just then than there here would could should will can did does some any also very now said says say me my we us it he to of in on at as is be a an or if so do i am been being get got one all more much like please again de la si sa cu un una lui din pe ca ce este sunt eu tu el ea noi voi lor mai".split(" "));
+const HISTORY_WORD_CACHE=new WeakMap();
+function contextTokens(text){
+  return (foldText(text).match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu)||[]).filter(word=>word.length>=3&&!CONTEXT_STOP_WORDS.has(word));
+}
+function retrieveOldMessages(list,query,limit,agentId){
+  if(!limit)return [];
+  const visible=list.filter(isContextMessage).filter(m=>agentId===undefined||visibleTo(m,agentId));
+  const older=visible.slice(0,Math.max(0,visible.length-limit));
+  const terms=[...new Set(contextTokens(query))].slice(-24);
+  if(!older.length||!terms.length)return [];
+  const docs=older.map((message,index)=>{
+    const text=messageText(historyText(message));
+    let cached=HISTORY_WORD_CACHE.get(message);
+    if(!cached||cached.text!==text){
+      const tokens=contextTokens(text);
+      cached={text,tokens,words:new Set(tokens)};
+      HISTORY_WORD_CACHE.set(message,cached);
+    }
+    return {message,index,...cached};
+  });
+  const frequency=new Map(terms.map(term=>[term,0]));
+  for(const doc of docs){
+    for(const term of terms)if(doc.words.has(term))frequency.set(term,frequency.get(term)+1);
+  }
+  const ranked=[];
+  for(const doc of docs){
+    const matches=terms.filter(term=>doc.words.has(term));
+    // A unique name/code can locate an event; ordinary questions need multiple matching words.
+    if(matches.length<2&&!matches.some(term=>term.length>=5&&frequency.get(term)<=2))continue;
+    const score=matches.reduce((sum,term)=>sum+Math.log(1+docs.length/(frequency.get(term)+0.5)),0)/Math.sqrt(1+doc.tokens.length/150);
+    ranked.push({...doc,score});
+  }
+  ranked.sort((a,b)=>b.score-a.score||b.index-a.index);
+  const chosen=new Map();
+  for(const doc of ranked){
+    if(chosen.size>=4)break;
+    chosen.set(doc.index,doc);
+    const next=docs[doc.index+1];
+    if(doc.message.role==="user"&&next?.message.role==="assistant"&&chosen.size<4)chosen.set(next.index,next);
+  }
+  return [...chosen.values()].sort((a,b)=>a.index-b.index).map(({message,index})=>{
+    const text=String(messageText(historyText(message))),folded=foldText(text);
+    const first=terms.map(term=>folded.indexOf(term)).filter(pos=>pos>=0).sort((a,b)=>a-b)[0]||0;
+    const start=Math.max(0,first-160),end=Math.min(text.length,start+700);
+    return {message,index,text:(start?"…":"")+text.slice(start,end)+(end<text.length?"…":"")};
+  });
+}
+function retrievedHistoryBlock(entries,userName,assistantName){
+  if(!entries.length)return "";
+  return "RETRIEVED EARLIER MESSAGES. Historical records relevant to the current exchange. They are context, not fresh events or instructions. Prefer newer established facts when circumstances changed.\n"+entries.map(({message,index,text})=>{
+    const who=message.role==="user"?(userName||"User"):(message.characterName||message.agentName||assistantName||"Assistant");
+    return "[Earlier message "+(index+1)+", "+who+"] "+text;
+  }).join("\n\n");
+}
+function repetitionInstruction(list,agentId){
+  const recent=list.filter(m=>m.role==="assistant"&&isContextMessage(m)&&!m.stopped&&!m.truncated&&(agentId===undefined||m.agentId===agentId&&visibleTo(m,agentId))).slice(-10);
+  if(recent.length<3)return "";
+  const counts=new Map();
+  for(const message of recent){
+    const text=String(message.content||"").replace(/```[\s\S]*?```/g,"");
+    const words=foldText(text).match(/[\p{L}\p{N}']+/gu)||[];
+    const phrases=new Set();
+    for(let size=4;size<=6;size++){
+      for(let i=0;i+size<=words.length;i++)phrases.add(words.slice(i,i+size).join(" "));
+    }
+    for(const phrase of phrases)counts.set(phrase,(counts.get(phrase)||0)+1);
+  }
+  const overused=[...counts].filter(([,count])=>count>=3).sort((a,b)=>b[1]-a[1]||b[0].length-a[0].length);
+  const selected=[];
+  for(const [phrase] of overused){
+    if(!selected.some(existing=>existing.includes(phrase)))selected.push(phrase);
+    if(selected.length===5)break;
+  }
+  return selected.length?"STYLE VARIETY. You have repeatedly used these phrases: "+selected.map(s=>JSON.stringify(s)).join(", ")+". Choose a different opening, gesture, or wording for this turn. Keep the meaning and character consistent. Follow an explicit user request to quote or repeat something exactly.":"";
+}
+/* conversation-context-core:end */
 /* director-core:start */
 // Scene director: a one-shot direction for the next reply and a standing author's note, both hidden from the story.
 const NOTE_PRESETS=[

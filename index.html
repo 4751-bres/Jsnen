@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css?v=20261105d" />
+<link rel="stylesheet" href="styles.css?v=20261109a" />
 </head>
 <body>
   <header>
@@ -482,6 +482,16 @@
     </div>
   </section>
 
+  <!-- Scene presence -->
+  <section class="sheet bottom" id="presenceSheet">
+    <h3><span class="grow">Who’s here</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
+    <div class="body">
+      <div class="hint" style="margin-top:0">Choose who is present for future messages. Away characters cannot reply or see events they missed. New messages record their witnesses; older untracked messages are treated as shared.</div>
+      <div id="presenceList"></div>
+    </div>
+    <div class="foot"><button class="btn primary" id="savePresence" type="button">Save presence</button></div>
+  </section>
+
   <!-- Scene director -->
   <section class="sheet bottom" id="directorSheet">
     <h3><span class="grow">Scene director</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h3>
@@ -518,6 +528,7 @@
       <button class="menu-item" id="moodMenu" type="button" title="See and set each character's mood" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg><span><b>Moods</b></span></button>
       <button class="menu-item" id="chapterMenu" type="button" title="Name the story's turning points and jump between them"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h9a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h9M9 8h5"/></svg><span><b>Chapters</b></span></button>
       <button class="menu-item" id="memMenu" type="button" title="Facts the characters always remember; AI suggestions"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 4.6L19 8.2l-3.8 3.4 1.1 5L12 14.1 7.7 16.6l1.1-5L5 8.2l5.1-.6z"/></svg><span><b>Memory</b></span></button>
+      <button class="menu-item" id="presenceMenu" type="button" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M21 20v-3a6 6 0 0 0-3-5"/></svg><span><b>Who’s here</b></span></button>
       <button class="menu-item" id="worldMenu" type="button" title="Places, people and lore sent when they come up"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5c.8 0 1.5-.7 1.5-1.5z"/><path d="M7 8h2M7 11h2M15 8h2M15 11h2"/></svg><span><b>World info</b></span></button>
       <button class="menu-item" id="bookmarkMenu" type="button" title="Messages you starred, to jump back to"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.9l-5.3 2.7 1-5.8-4.2-4.1 5.9-.9z"/></svg><span><b>Bookmarks</b></span></button>
       </div>
@@ -527,6 +538,7 @@
       <button class="menu-item" id="findMenu" type="button" title="Search this chat's messages"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><span><b>Find</b></span></button>
       <button class="menu-item" id="statsMenu" type="button" title="Messages, words, tokens and who talks most"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span><b>Stats</b></span></button>
       <button class="menu-item" id="duplicateChatBtn" type="button" title="An independent copy with all messages"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span><b>Duplicate</b></span></button>
+      <button class="menu-item" id="clockMenu" type="button" aria-pressed="false" title="Let this chat know your current local date and time"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span><b>Real-time clock</b><small id="clockMenuState">Off</small></span></button>
       <button class="menu-item danger" id="clearBtn" type="button" title="You can undo for a few seconds"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M6.5 16.5l8-8a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L13 18H8z"/></svg><span><b>Clear chat</b></span></button>
       </div>
       <div class="menu-sect">Save &amp; share</div>
@@ -747,7 +759,7 @@
     </div>
   </section>
 
-<script src="core.js?v=20261105d"></script>
-<script src="app.js?v=20261105d"></script>
+<script src="core.js?v=20261109a"></script>
+<script src="app.js?v=20261109a"></script>
 </body>
 </html>

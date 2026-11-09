@@ -285,6 +285,7 @@ function curAgent(){return agents.find(a=>a.id===currentId)||agents[0];}
 function curGroup(){return groups.find(g=>g.id===currentId);}
 function isGroup(){return currentKind==="group" && !!curGroup();}
 function groupMembers(g){return (g.members||[]).map(id=>agents.find(a=>a.id===id)).filter(Boolean);}
+function presentMembers(g){const here=new Set(presentIds(g));return groupMembers(g).filter(a=>here.has(a.id));}
 function curWorkflow(){return workflows.find(w=>w.id===currentId);}
 function isWorkflow(){return currentKind==="workflow" && !!curWorkflow();}
 function conversationTokens(list){return (list||[]).reduce((n,m)=>n+(m.usage?(m.usage.prompt||0)+(m.usage.completion||0):0),0);}
@@ -309,6 +310,7 @@ function refreshHeader(){
     $("#hAgent").textContent=g.name;
     const scene=roleplay&&g.clock?latestScene(messages):"";
     $("#hSub").textContent=roleplay?(scene?sceneEmoji(scene)+" "+scene:"Roleplay · "+(g.roleplay.user.name||"you")):n+" agent"+(n===1?"":"s")+usedText;
+    if(Array.isArray(g.present))$("#hSub").textContent+=" · "+presentMembers(g).length+"/"+n+" here";
     $("#input").placeholder=roleplay?"Continue the scene, or @name…":"Message the group, or @name…";
   }else{
     const a=curAgent();
@@ -322,7 +324,7 @@ function memberLabel(group,agent){return isRoleplayGroup(group)?roleplayCharacte
 function renderResponders(){
   const bar=$("#responders");
   if(!isGroup()){bar.style.display="none";bar.innerHTML="";return;}
-  const group=curGroup(),mems=groupMembers(group);
+  const group=curGroup(),mems=presentMembers(group);
   bar.innerHTML="";bar.style.display="flex";
   if(!sequence&&replyModeOf(group,mems.map(a=>a.id)).kind!=="buttons"){bar.style.display="none";return;}
   const busy=!!controller;
@@ -339,6 +341,7 @@ function renderResponders(){
     updateChipFade();return;
   }
   const roleplay=isRoleplayGroup(group),rounds=groupRounds(group);
+  if(!mems.length)chip(icon("users")+'<span>Who’s here</span>',"all",openPresence,"Bring a character into this scene");
   const continueChip=()=>chip(roleplay?icon("book")+'<span>Continue scene</span>':icon("users")+'<span>Everyone</span>',"all",()=>everyoneRespond());
   // In a scene the main action leads; in an ordinary group the members do.
   if(roleplay&&mems.length>1)continueChip();
@@ -369,7 +372,7 @@ function editedMessage(message,text){
   if(!text.trim()&&!message.images?.length)throw new Error("A message needs text or an image.");
   return {...message,content:text,reasoning:"",error:false,edited:true,usage:null,stopped:false,truncated:false,interrupted:null,finish:null,learnedMemory:undefined,memoryForAgent:undefined,memoryReviewed:undefined};
 }
-function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",error:!!message.error,edited:!!message.edited,usage:message.usage||null,stopped:!!message.stopped,truncated:!!message.truncated,interrupted:message.interrupted||null,finish:message.finish||null,learnedMemory:message.learnedMemory,memoryForAgent:message.memoryForAgent,memoryReviewed:message.memoryReviewed};}
+function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",error:!!message.error,edited:!!message.edited,usage:message.usage||null,stopped:!!message.stopped,truncated:!!message.truncated,interrupted:message.interrupted||null,finish:message.finish||null,learnedMemory:message.learnedMemory,memoryForAgent:message.memoryForAgent,memoryReviewed:message.memoryReviewed,seenBy:message.seenBy};}
 function captureMessageVersions(list,index){
   const message=list[index];
   if(!message)throw new Error("Message not found.");
@@ -426,7 +429,7 @@ $("#saveRegenEdit").onclick=()=>{
   if(reply?.role==="assistant"){regenerateMessage(reply);return;}
   if(index!==messages.length-1)return;
   if(!isGroup()){runAgent(curAgent());return;}
-  const members=groupMembers(curGroup());
+  const members=presentMembers(curGroup());
   if(members.length===1){runSequence(members);return;}
   renderResponders();toast("Message updated. Choose who replies.");
 };
@@ -450,7 +453,7 @@ async function regenerateMessage(message){
   messages=branch.prefix;
   const mood=moodOptions(agent);Object.assign(meta,moodMeta(mood));
   try{
-    const context=await prepareContext(buildApiMessages(agent,{mood}));
+    const context=await prepareContext(buildApiMessages(agent,{mood}),agent);
     if(!context){messages=previous;renderChat();return;}
     const result=await streamCompletion(agent,context,meta);
     if(result===false){messages=previous;renderChat();}
@@ -793,6 +796,7 @@ function branchFromMessage(m){
   let id;do{id=uid();}while(agents.some(a=>a.id===id)||groups.some(g=>g.id===id)||workflows.some(w=>w.id===id)||store.raw("ds_conv_"+id)!==null);
   const copy=JSON.parse(JSON.stringify({...original,id,name:branchName(original.name,list.map(x=>x.name))}));
   const history=branchMessages(messages,index),cutoff=m.at||Date.now(),key="ds_conv_"+id,next=[...list,copy];
+  if(kind==="group")copy.present=history.findLast(message=>Array.isArray(message.seenBy))?.seenBy.slice()||copy.members.slice();
   try{
     store.setRaw(key,JSON.stringify(history));
     if(kind==="group")store.groups=next;else store.agents=next;
@@ -1139,7 +1143,7 @@ $("#cardImportBtn").onclick=()=>{
 function memoryOwner(){return isWorkflow()?null:isGroup()?curGroup():curAgent();}
 function memoryFor(agent){
   const owner=memoryOwner();if(!owner)return "";
-  const recent=messages.filter(isContextMessage).slice(-6).map(m=>messageText(m.content));
+  const recent=messages.filter(isContextMessage).filter(m=>!isGroup()||visibleTo(m,agent?.id)).slice(-6).map(m=>messageText(m.content));
   const lore=[...activeLore(agent?.lorebook,recent),...(owner!==agent?activeLore(owner.lorebook,recent):[])];
   const known=new Set((owner.memory||[]).map(memoryFactKey));
   const learned=learnedMemoryEntries(messages,agent?.id||null).filter(({fact})=>!known.has(memoryFactKey(fact)));
@@ -1153,6 +1157,11 @@ function pinToMemory(m){
   const text=cleanCharacterReply(m.content||"").replace(/\*/g,"").replace(/\s+/g," ").trim();
   if(!text){toast("Nothing to remember in this message.");return;}
   const fact=who+": "+(text.length>240?text.slice(0,237)+"…":text);
+  if(isGroup()){
+    const next=messages.map(message=>message===m?{...message,learnedMemory:[...new Set([...(message.learnedMemory||[]),fact])]}:message);
+    try{store.saveConv(currentId,next);}catch(e){toast("Could not save to memory.");return;}
+    messages=next;renderChat();toast("Pinned for the characters who witnessed this message");return;
+  }
   owner.memory=[...(owner.memory||[]).filter(f=>f!==fact),fact];
   try{if(isGroup())store.groups=groups;else store.agents=agents;}catch(e){toast("Could not save to memory.");return;}
   toast("Added to story memory · edit it in the "+(isGroup()?"group":"agent")+" editor");
@@ -2032,8 +2041,9 @@ $("#memSuggest").onclick=async()=>{
   const b=$("#memSuggest"),label=b.innerHTML;b.disabled=true;b.innerHTML=icon("sparkle")+"Reading the story…";
   try{
     const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
-    const existing=[...memoryLines($("#memText").value),...learnedMemoryEntries(messages,null).map(entry=>entry.fact)];
-    const facts=parseFactLines(await quickCompletion(memoryExtractMessages(messages.filter(m=>!m.whisperTo),existing,roleplay?.user?.name),undefined,700),existing);
+    const shared=messages.filter(m=>!m.whisperTo&&(!isGroup()||curGroup().members.every(id=>visibleTo(m,id))));
+    const existing=[...memoryLines($("#memText").value),...learnedMemoryEntries(shared).filter(entry=>!entry.recipient).map(entry=>entry.fact)];
+    const facts=parseFactLines(await quickCompletion(memoryExtractMessages(shared,existing,roleplay?.user?.name),undefined,700),existing);
     $("#memSuggestions").innerHTML=facts.length?facts.map((f,i)=>'<label class="toggle-row fact"><input type="checkbox" checked data-i="'+i+'" /><span>'+esc(f)+'</span></label>').join(""):'<div class="hint">Nothing new worth remembering yet.</div>';
     $("#memSuggestions")._facts=facts;$("#memAddPicked").hidden=!facts.length;
   }catch(e){toast("Could not get suggestions: "+e.message);}
@@ -2096,6 +2106,47 @@ $("#dirTwist").onclick=async()=>{
 $("#dirMenu").onclick=openDirector;
 
 /* ---------- Chat options menu: download as text / Markdown, share, duplicate, clear ---------- */
+function chatOwner(){return isWorkflow()?curWorkflow():isGroup()?curGroup():curAgent();}
+function saveChatOption(patch){
+  const owner=chatOwner(),list=isWorkflow()?workflows:isGroup()?groups:agents;
+  const next=list.map(item=>item.id===owner.id?{...item,...patch}:item);
+  try{
+    if(isWorkflow())store.workflows=next;else if(isGroup())store.groups=next;else store.agents=next;
+  }catch(e){toast("Could not save this chat setting.");return false;}
+  if(isWorkflow())workflows=next;else if(isGroup())groups=next;else agents=next;
+  return true;
+}
+function renderContextMenu(){
+  const clock=chatOwner()?.realClock===true;
+  $("#clockMenu").setAttribute("aria-pressed",String(clock));
+  $("#clockMenuState").textContent=clock?"On":"Off";
+  $("#presenceMenu").hidden=!isGroup();
+  $("#presenceMenu").disabled=!!controller||!!sequence;
+}
+$("#clockMenu").onclick=()=>{
+  const realClock=chatOwner()?.realClock!==true;
+  if(saveChatOption({realClock}))toast("Real-time clock "+(realClock?"on":"off"));
+};
+let presenceTarget=null;
+function openPresence(){
+  if(!isGroup()||controller||sequence){toast("Finish the current reply before changing who’s here.");return;}
+  const group=curGroup(),here=new Set(presentIds(group));
+  presenceTarget=group.id;
+  const list=$("#presenceList");list.replaceChildren();
+  for(const agent of groupMembers(group)){
+    const label=document.createElement("label"),check=document.createElement("input"),name=document.createElement("span");
+    label.className="toggle-row";check.type="checkbox";check.checked=here.has(agent.id);check.dataset.agentId=agent.id;
+    name.textContent=memberLabel(group,agent);label.append(check,name);list.append(label);
+  }
+  closeAll();openSheet("#presenceSheet");
+}
+$("#presenceMenu").onclick=openPresence;
+$("#savePresence").onclick=()=>{
+  if(!isGroup()||currentId!==presenceTarget||controller||sequence)return;
+  const present=[...$("#presenceList").querySelectorAll("input:checked")].map(el=>el.dataset.agentId);
+  if(!saveChatOption({present}))return;
+  renderResponders();renderWhisper();refreshHeader();closeAll();toast(present.length+" character"+(present.length===1?"":"s")+" in the scene");
+};
 function currentChatExport(){
   const item=isWorkflow()?curWorkflow():isGroup()?curGroup():curAgent();
   const roleplay=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;
@@ -2109,6 +2160,7 @@ $("#chatMenuBtn").onclick=()=>{
   $("#shareTxt").hidden=!(file&&navigator.canShare?.({files:[file]}));
   for(const id of ["#dlTxt","#shareTxt","#dlMd"])$(id).disabled=!messages.length;
   renderReplyMode();
+  renderContextMenu();
   closeAll();openSheet("#chatMenu");
 };
 // Menu actions close the sheet first, so confirmations and toasts show over the chat.
@@ -2384,7 +2436,7 @@ function commitComposer(extra={}){
   if(readingImages){toast("Wait for the images to finish loading");return false;}
   const text=input.value.trim();
   if(!text&&!pendingImages.length)return false;
-  const message={role:"user",content:text,at:Date.now(),...(pendingImages.length?{images:pendingImages.slice()}:{}),...extra};
+  const message={role:"user",content:text,at:Date.now(),...(pendingImages.length?{images:pendingImages.slice()}:{}),...(isGroup()?{seenBy:presentIds(curGroup())}:{}),...extra};
   try{store.saveConv(currentId,[...messages,message]);}
   catch(error){toast("Browser storage is full. Remove an attachment or clear an old chat first.");return false;}
   messages.push(message);pendingImages=[];input.value="";clearDraft();autoGrow();renderAttachments();renderChat();
@@ -2448,6 +2500,33 @@ function flushQueuedMessage(){
 }
 
 /* ---------- Build OpenAI-compatible message list for a given responder ---------- */
+function withRetrievedHistory(apiMessages,agent){
+  if(isWorkflow())return apiMessages;
+  const limit=currentHistoryLimit();
+  if(!limit)return apiMessages;
+  const responder=agent||(!isGroup()?curAgent():null);
+  if(!responder)return apiMessages;
+  const visible=messages.filter(isContextMessage).filter(m=>!isGroup()||visibleTo(m,responder.id));
+  const latestUsers=visible.filter(m=>m.role==="user").slice(-2);
+  const query=(latestUsers.length?latestUsers:visible.slice(-3)).map(m=>messageText(m.content)).join("\n");
+  const found=retrieveOldMessages(messages,query,limit,isGroup()?responder.id:undefined);
+  const userName=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay.user.name:"User";
+  const block=retrievedHistoryBlock(found,userName,responder.name);
+  return block?[...apiMessages,{role:"system",content:block}]:apiMessages;
+}
+function runtimeContext(agent,meta,list){
+  const owner=chatOwner(),blocks=[];
+  if(owner?.realClock){
+    const zone=Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC";
+    blocks.push(realClockInstruction(Date.now(),zone));
+  }
+  if(!meta.workflowRoleId){
+    if(isGroup())blocks.push(presenceInstruction(curGroup(),agents));
+    const readable=list.filter(m=>!m.whisperTo||m.whisperTo===meta.whisperTo);
+    blocks.push(repetitionInstruction(readable,isGroup()?agent.id:undefined));
+  }
+  return blocks.filter(Boolean).join("\n\n");
+}
 function buildApiMessages(agent,options={}){
   const sys=[];
   if(isGroup()){
@@ -2465,15 +2544,18 @@ function buildApiMessages(agent,options={}){
 async function streamCompletion(agent,apiMessages,meta={}){
   const provider=typeof providerFor==="function"?providerFor(agent):{name:"DeepSeek",base:store.base,key:store.k,model:store.model};
   if(!provider.key&&!isLocalBase(provider.base)){toast("Add an API key for "+provider.name+" in Settings");$("#setBtn").click();return false;}
+  if(!meta.workflowRoleId&&typeof isGroup==="function"&&isGroup()&&!presentIds(curGroup()).includes(agent.id)){toast(agent.name+" is away from this scene.");return false;}
   if(!modelSeesImages(agent.model||provider.model||store.model)&&apiMessages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url"))){toast("This chat contains images. Set this agent's model to deepseek-flash for vision.");return false;}
   const convId=currentId,conversationMessages=messages;
   const search=webSearchWanted(agent,meta);
   const bot={role:"assistant",content:"",reasoning:"",streaming:true,at:Date.now(),...meta};
+  const group=!meta.workflowRoleId&&typeof isGroup==="function"&&isGroup()?curGroup():null;
+  if(group)bot.seenBy=presentIds(group);
   const memory=typeof memoryOwner==="function"?memoryOwner():null;
   if(!meta.workflowRoleId&&memory&&memory.autoMemory!==false&&autoMemoryDue(conversationMessages)){
     bot.memoryTracked=true;
     // A reply that has private context can only contribute memory for its own character.
-    if(meta.whisperTo||conversationMessages.some(m=>m.whisperTo===agent.id||m.memoryForAgent===agent.id))bot.memoryForAgent=meta.whisperTo||agent.id;
+    if(meta.whisperTo||conversationMessages.some(m=>visibleTo(m,agent.id)&&(m.whisperTo||m.memoryForAgent===agent.id||group&&Array.isArray(m.seenBy)&&group.members.some(id=>!m.seenBy.includes(id)))))bot.memoryForAgent=meta.whisperTo||agent.id;
   }
   delete bot.noSearch;delete bot.forceSearch;delete bot.opener;delete bot.continueTurn;if(search)bot.searching=true;if(meta.proactive)bot.proactive=true;
   if(typeof thoughtsWanted==="function"&&thoughtsWanted(agent,meta))bot.thoughtsTracked=true;
@@ -2518,9 +2600,13 @@ async function streamCompletion(agent,apiMessages,meta={}){
       usedNext=!meta.noSearch&&!!direction.next;
     }
     if(bot.memoryTracked)payload.messages=[...payload.messages,{role:"system",content:LEARN_MEMORY_INSTRUCTION}];
+    if(typeof runtimeContext==="function"){
+      const context=runtimeContext(agent,meta,conversationMessages.slice(0,-1));
+      if(context)payload.messages=[...payload.messages,{role:"system",content:context}];
+    }
     // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
-      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","bondTracked","sceneTracked","memoryTracked","memoryForAgent","whisperTo","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
+      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","bondTracked","sceneTracked","memoryTracked","memoryForAgent","whisperTo","seenBy","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
     if(!meta.workflowRoleId&&store.notifyReplies&&globalThis.Notification?.permission==="granted")jobMeta.notify=(bot.characterName||bot.agentName||agent.name||"Your agent")+" replied";
     if(jobMeta.notify&&currentLock())jobMeta.notifyPrivate=true;
     const res=await fetchWithRetry(()=>backgroundFetch(request.url,{
@@ -2658,7 +2744,7 @@ async function runAgentResult(agent,options={}){
   const character=isGroup()&&isRoleplayGroup(curGroup())?roleplayCharacter(curGroup(),agent):null;
   const mood=moodOptions(agent);
   const meta={...(isGroup()?{agentId:agent.id,agentName:agent.name,agentEmoji:agent.emoji,...(character?{characterName:character.name}:{})}:{}),...moodMeta(mood),...(options.extraMeta||{})};
-  const context=await prepareContext(buildApiMessages(agent,{...options,mood}));
+  const context=await prepareContext(buildApiMessages(agent,{...options,mood}),agent);
   if(!context)return {ok:false,aborted:true};
   const result=await streamCompletion(agent,context,meta);
   afterMoodReply(agent,result);
@@ -2814,11 +2900,12 @@ function currentHistoryLimit(){
   return effectiveHistoryLimit(item?.historyLimit,store.ctxLimit);
 }
 // Applies the "history sent to AI" setting. Returns null when the user stopped a summary request.
-async function prepareContext(apiMessages){
+async function prepareContext(apiMessages,agent){
   const {kept,dropped}=limitApiHistory(apiMessages,currentHistoryLimit());
-  if(!dropped.length||!store.ctxSummary)return kept;
+  const contextual=typeof withRetrievedHistory==="function"?withRetrievedHistory(kept,agent):kept;
+  if(!dropped.length||!store.ctxSummary)return contextual;
   // A shared summary cannot safely cache different characters' private histories.
-  if(isGroup()&&messages.some(m=>m.whisperTo))return kept;
+  if(isGroup()&&messages.some(m=>m.whisperTo||Array.isArray(m.seenBy)&&curGroup().members.some(id=>!m.seenBy.includes(id))))return contextual;
   const convId=currentId;let summary=store.summary(convId);
   if(summary&&summary.covered>dropped.length)summary=null; // history was cleared or rewound; rebuild
   if(!summary||dropped.length-summary.covered>=SUMMARY_STEP){
@@ -2836,7 +2923,7 @@ async function prepareContext(apiMessages){
       toast("Could not summarize older messages; sending recent ones only.");
     }
   }
-  return withSummary(kept,summary?.text);
+  return withSummary(contextual,summary?.text);
 }
 
 /* ---------- Group sequences: Everyone, Discuss, @mentions ---------- */
@@ -2864,13 +2951,13 @@ function dropSkippedReply(result){
 function groupRounds(group){return Math.min(10,Math.max(1,Number(group?.discussRounds)||2));}
 function lastSpeakerId(){return [...messages].reverse().find(m=>m.role==="assistant"&&m.agentId)?.agentId||null;}
 function mentionCandidates(group){
-  const mems=groupMembers(group),list=mems.map(a=>({id:a.id,name:memberLabel(group,a)}));
+  const mems=presentMembers(group),list=mems.map(a=>({id:a.id,name:memberLabel(group,a)}));
   return isRoleplayGroup(group)?list.concat(mems.map(a=>({id:a.id,name:a.name}))):list;
 }
 async function pickNextSpeaker(group){
-  const mems=groupMembers(group),ids=mems.map(a=>a.id),last=lastSpeakerId();
+  const mems=presentMembers(group),ids=mems.map(a=>a.id),last=lastSpeakerId();
   const candidates=mems.map(a=>({id:a.id,name:memberLabel(group,a)}));
-  const recent=messages.filter(isContextMessage).filter(m=>!m.whisperTo).slice(-12).map(m=>"["+(m.role==="user"?"User":(m.characterName||m.agentName||"Agent"))+"]: "+messageText(m.content).slice(0,600)).join("\n");
+  const recent=messages.filter(isContextMessage).filter(m=>!m.whisperTo).filter(m=>mems.every(a=>visibleTo(m,a.id))).slice(-12).map(m=>"["+(m.role==="user"?"User":(m.characterName||m.agentName||"Agent"))+"]: "+messageText(m.content).slice(0,600)).join("\n");
   try{
     const answer=await withBusy(signal=>quickCompletion([
       {role:"system",content:"You choose who speaks next in a group conversation. Answer with exactly one participant name from the list and nothing else."},
@@ -2890,7 +2977,7 @@ async function continueMessage(message){
   const agent=isGroup()?agents.find(a=>a.id===message.agentId):curAgent();
   if(!agent){toast("The original agent is no longer available.");return;}
   const mood=moodOptions(agent);
-  const base=await prepareContext(buildApiMessages(agent,{mood}));if(!base)return;
+  const base=await prepareContext(buildApiMessages(agent,{mood}),agent);if(!base)return;
   const payload=[...base,{role:"user",content:"Continue your previous reply exactly where it stopped. Do not repeat anything already written and do not add a preamble."}];
   const meta={noSearch:true};for(const key of ["agentId","agentName","agentEmoji","characterName","whisperTo"])if(message[key])meta[key]=message[key];
   Object.assign(meta,moodMeta(mood));
@@ -3015,7 +3102,8 @@ $("#cancelWorkflow").onclick=cancelWorkflow;
 const CONTINUE_TURN={extraMeta:{continueTurn:true}};
 function continueChat(){
   if(!isGroup()){runAgent(curAgent(),CONTINUE_TURN);return;}
-  const members=groupMembers(curGroup());
+  const members=presentMembers(curGroup());
+  if(!members.length){toast("Bring a character into the scene with ⋯ → Who’s here.");return;}
   if(whisperTarget){
     const agent=members.find(a=>a.id===whisperTarget);
     if(agent)runAgent(agent,{extraMeta:{continueTurn:true,whisperTo:agent.id}});
@@ -3035,6 +3123,7 @@ function send(){
   if(!anyProviderReady()){toast("Add your API key in Settings");$("#setBtn").click();return;}
   if(empty){continueChat();return;}
   if(isWorkflow()){startWorkflowRun(text);return;}
+  if(isGroup()&&!presentMembers(curGroup()).length){toast("Bring a character into the scene with ⋯ → Who’s here.");return;}
   if(isGroup()&&whisperTarget){
     const agent=agents.find(a=>a.id===whisperTarget);
     if(agent&&commitComposer({whisperTo:agent.id}))runAgent(agent,{extraMeta:{whisperTo:agent.id}});
@@ -3046,7 +3135,7 @@ function send(){
     const group=curGroup(),ids=findMentions(text,mentionCandidates(group));
     if(ids.length){runSequence(ids.map(id=>agents.find(a=>a.id===id)).filter(Boolean));return;}
     // A one-character scene (for example an imported card) simply replies.
-    const only=groupMembers(group);if(only.length===1){runSequence(only);return;}
+    const only=presentMembers(group);if(only.length===1){runSequence(only);return;}
     if(replyAsChosen())return;
     renderResponders();return;
   }
@@ -3055,7 +3144,7 @@ function send(){
 
 // Runs the group's saved "Who replies" choice; false when the buttons are in charge.
 function replyAsChosen(empty){
-  const group=curGroup(),mems=groupMembers(group),mode=replyModeOf(group,mems.map(a=>a.id));
+  const group=curGroup(),mems=presentMembers(group),mode=replyModeOf(group,mems.map(a=>a.id));
   if(mode.kind==="buttons")return false;
   const options=empty?CONTINUE_TURN:undefined;
   if(mode.kind==="agent")groupRespond(agents.find(a=>a.id===mode.id),options);
@@ -3195,7 +3284,7 @@ async function maybeReachOut(){
   if(reachingOut||controller||sequence||isWorkflow()||document.hidden||!anyProviderReady())return;
   const owner=isGroup()?curGroup():curAgent();if(!owner||!owner.initiative)return;
   const hit=shouldReachOut(owner.initiative,messages,Date.now());if(!hit)return;
-  const agent=isGroup()?agents.find(a=>a.id===pickInitiator(messages,(owner.members||[]).filter(id=>agents.some(a=>a.id===id)))):owner;
+  const agent=isGroup()?agents.find(a=>a.id===pickInitiator(messages,presentMembers(owner).map(a=>a.id))):owner;
   if(!agent)return;
   reachingOut=true;
   try{await runAgentResult(agent,{extraMeta:{proactive:hit}});refreshHeader();renderResponders();}
@@ -3207,7 +3296,7 @@ document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout
 /* ---------- Whisper (groups): a private line to one character ---------- */
 let whisperTarget=null;
 function renderWhisper(){
-  const bar=$("#whisperBar"),agent=whisperTarget&&isGroup()?agents.find(a=>a.id===whisperTarget):null;
+  const bar=$("#whisperBar"),agent=whisperTarget&&isGroup()?presentMembers(curGroup()).find(a=>a.id===whisperTarget):null;
   if(!agent){whisperTarget=null;bar.hidden=true;bar.innerHTML="";input.placeholder=isGroup()?(isRoleplayGroup(curGroup())?"Continue the scene, or @name…":"Message the group, or @name…"):input.placeholder;return;}
   const name=memberLabel(curGroup(),agent);
   bar.hidden=false;bar.innerHTML='<span class="whisper-pill">🤫 Only '+esc(name)+' hears this</span><button type="button" class="dir-x" aria-label="Stop whispering">'+icon("x")+'</button>';
@@ -3216,7 +3305,7 @@ function renderWhisper(){
 }
 function chooseWhisper(){
   if(!isGroup()){toast("Whisper works in group chats.");return;}
-  const group=curGroup(),members=groupMembers(group);
+  const group=curGroup(),members=presentMembers(group);
   const row=$("#ideaRow");row.hidden=false;document.body.classList.add("ideas-open");
   row.innerHTML='<div class="whisper-pick"><b>🤫 Whisper to…</b>'+members.map(a=>'<button type="button" class="chip-btn" data-id="'+esc(a.id)+'"><span class="av">'+avatarInner(a)+'</span><span>'+esc(memberLabel(group,a))+'</span></button>').join("")+'</div>';
   row.querySelectorAll("[data-id]").forEach(b=>b.onclick=()=>{whisperTarget=b.dataset.id;hideIdeas();renderWhisper();input.focus();});
@@ -3237,7 +3326,7 @@ async function everyoneRespond(options){
   if(controller||readingImages)return;
   const text=input.value.trim();
   if((text||pendingImages.length)&&!commitComposer())return;
-  await runSequence(groupMembers(curGroup()),options);
+  await runSequence(presentMembers(curGroup()),options);
 }
 
 /* ---------- Group: agents discuss among themselves for N rounds ---------- */
@@ -3245,7 +3334,7 @@ async function discussRespond(options){
   if(controller||readingImages)return;
   const text=input.value.trim();
   if((text||pendingImages.length)&&!commitComposer())return;
-  const group=curGroup(),ids=discussionOrder(groupMembers(group).map(a=>a.id),groupRounds(group),lastSpeakerId());
+  const group=curGroup(),ids=discussionOrder(presentMembers(group).map(a=>a.id),groupRounds(group),lastSpeakerId());
   await runSequence(ids.map(id=>agents.find(a=>a.id===id)).filter(Boolean),{...options,discussion:true});
 }
 

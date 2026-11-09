@@ -29,7 +29,7 @@ test('empty Send takes a new agent turn without saving a user message',()=>{
   const context=vm.createContext({
     controller:null,readingImages:false,sequence:null,input:{value:'  '},pendingImages:[],messages:[],
     isWorkflow:()=>false,isGroup:()=>false,anyProviderReady:()=>true,curAgent:()=>agents[0],
-    curGroup:()=>({}),groupMembers:()=>agents,whisperTarget:null,agents,
+    curGroup:()=>({}),groupMembers:()=>agents,presentMembers:()=>agents,whisperTarget:null,agents,
     replyModeOf:core.replyModeOf,isContextMessage:core.isContextMessage,
     runAgent:(agent,options)=>runs.push([agent.id,plain(options.extraMeta)]),
     commitComposer:()=>assert.fail('Empty Send must never commit a user message'),
