@@ -1118,11 +1118,11 @@ function presenceInstruction(group,agents){
   const name=id=>roleplayCharacter(group,agents.find(a=>a.id===id)||{name:"Character"}).name;
   const present=(group.members||[]).filter(id=>here.has(id)).map(name);
   const away=(group.members||[]).filter(id=>!here.has(id)).map(name);
-  return "SCENE PRESENCE. Here: "+(present.join(", ")||"the user alone")+". Away: "+(away.join(", ")||"nobody")+". Only people here can speak or witness new events. Your context includes only events you could witness. Do not assume you learned anything that happened while you were away. Keep private whispers private unless the user explicitly shares them.";
+  return "SCENE PRESENCE. Here: "+(present.join(", ")||"the user alone")+". Away: "+(away.join(", ")||"nobody")+". Only people here can speak or witness new events. Messages delivered in this context were available to you. Accept the user's narration of in-scene actions as events you can witness unless that narration explicitly places you elsewhere. Do not demand extra sensory evidence for a narrated action. Do not assume you learned anything that happened while you were away. Keep private whispers private unless the user explicitly shares them.";
 }
 function realClockInstruction(now,timeZone){
   const clock=new Intl.DateTimeFormat("en-GB",{dateStyle:"full",timeStyle:"short",timeZone}).format(new Date(now));
-  return "REAL-WORLD CLOCK. Current local date and time: "+clock+" ("+timeZone+"). Use this when relevant to everyday conversation. Keep fictional story time as established in the scene unless the user links it to real time. Mention the clock only when it matters.";
+  return "REAL-WORLD CLOCK. The app supplies your device's current local date and time: "+clock+" ("+timeZone+"). You can use this provided clock directly when asked about the real date, weekday or time, including during roleplay; you do not need a physical clock in the scene. Keep fictional story time as established in the scene unless the user links it to real time. Mention the clock only when it matters.";
 }
 const CONTEXT_STOP_WORDS=new Set("the and for that this with from have has had was were are you your yours they their them she her him his its our ours but not what when where which who how about into just then than there here would could should will can did does some any also very now said says say me my we us it he to of in on at as is be a an or if so do i am been being get got one all more much like please again de la si sa cu un una lui din pe ca ce este sunt eu tu el ea noi voi lor mai".split(" "));
 const HISTORY_WORD_CACHE=new WeakMap();
