@@ -548,6 +548,7 @@ function updateChatRow(m,d){
     if(m.memoryTracked&&m.streaming)live=stripLearnedMemory(live);
     if(m.bondTracked&&m.streaming)live=stripBondWhileStreaming(live);
     if(m.sceneTracked&&m.streaming)live=stripSceneWhileStreaming(live);
+    if(m.thoughtsTracked&&!m.moodTracked&&m.streaming)live=stripPartialMoodTag(live);
     const shown=m.role==="assistant"?cleanCharacterReply(m.moodTracked&&m.streaming?stripPartialMoodTag(live):live):m.content||"";
     const who=m.characterName||m.agentName||(!isGroup()&&!isWorkflow()?curAgent()?.name:"")||"";
     d._text.innerHTML=m.searching?'<span class="searching">'+icon("globe")+'Searching the web…</span>'
@@ -2676,6 +2677,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     if(!bot.error&&bot.content)bot.content=bot.content.replace(/^(?:\s*\[char\]\s*:\s*)+/i,"");
     if(bot.memoryTracked)applyLearnedMemory(bot,!aborted&&!bot.error&&!bot.interrupted&&!bot.truncated&&!bot.finish,conversationMessages,memory?.memory);
     if(bot.thoughtsTracked&&!bot.error)applyThoughtsTag(bot);
+    if(bot.thoughtsTracked&&!bot.moodTracked)bot.content=stripPartialMoodTag(bot.content);
     if(bot.bondTracked&&!bot.error)applyBondTag(bot,bondBefore);
     if(bot.sceneTracked&&!bot.error)applySceneTag(bot);
     if(bot.moodTracked&&!bot.error)applyMoodTag(bot);
@@ -3636,6 +3638,7 @@ function adoptJob(job,interrupted){
     applyLearnedMemory(bot,owner?.autoMemory!==false&&autoMemoryDue(list)&&!bot.interrupted&&!bot.truncated&&!r.error&&!r.finish,list,owner?.memory);
   }
   if(bot.thoughtsTracked)applyThoughtsTag(bot);
+  if(bot.thoughtsTracked&&!bot.moodTracked)bot.content=stripPartialMoodTag(bot.content);
   if(bot.bondTracked)applyBondTag(bot,lastBond(list,bot.agentId));
   if(bot.sceneTracked)applySceneTag(bot);
   if(bot.moodTracked)applyMoodTag(bot);

@@ -51,6 +51,7 @@ test('thoughts start the reply and only the character receives its own last thre
 test('thought-only and interrupted thought tags never leak into visible text',()=>{
   assert.equal(core.applyThoughtsTag({content:'[thoughts: My secret plan.]'}).content,'');
   assert.equal(core.applyThoughtsTag({content:'[thoughts: My unfinished secret'}).content,'');
+  assert.equal(core.stripPartialMoodTag('Visible reply.\n[mood: quietly amused | intent: something private]'),'Visible reply.');
 });
 
 test('changing mood leaves the group request prefix stable',()=>{

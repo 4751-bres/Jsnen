@@ -967,7 +967,7 @@ function makeWorldEntry(fields){
 /* world-core:end */
 /* thoughts-core:start */
 // Inner thoughts: a hidden [thoughts: …] line the app lifts out of the reply and shows under it.
-const THOUGHTS_INSTRUCTION="INNER THOUGHTS: Begin with one line in exactly this form: [thoughts: …] containing your character's private thoughts in first person, 1–2 sentences about what they feel, intend or are hiding. Then write the visible reply, letting your intentions guide it. Nobody else hears these thoughts. Express only what your character chooses to say or do in the visible reply. Put mood and other tracking tags after the visible reply.";
+const THOUGHTS_INSTRUCTION="INNER THOUGHTS: Begin with one line in exactly this form: [thoughts: …] containing your character's private thoughts in first person, 1–2 sentences about what they feel, intend or are hiding. Then write the visible reply, letting your intentions guide it. Nobody else hears these thoughts. Express only what your character chooses to say or do in the visible reply. Add other tracking tags only when separately requested, and place those after the visible reply.";
 function privateThoughtsBlock(list,agentId){
   const notes=list.filter(m=>m.role==="assistant"&&isContextMessage(m)&&!m.stopped&&!m.truncated&&m.thoughts&&(agentId===undefined||m.agentId===agentId&&visibleTo(m,agentId))).slice(-3);
   return notes.length?"YOUR PREVIOUS PRIVATE THOUGHTS, oldest to newest. These are your intentions and impressions, not established external facts. Carry forward unresolved plans when appropriate and update them as events change. Other characters cannot read them.\n"+notes.map(m=>"- "+String(m.thoughts).slice(0,1200)).join("\n"):"";
