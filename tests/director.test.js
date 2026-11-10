@@ -61,3 +61,40 @@ test('a failed or continued reply keeps the one-shot direction',async()=>{
   await cont.ctx.streamCompletion({temp:1,think:'off'},[{role:'user',content:'Continue'}],{noSearch:true});
   assert.doesNotMatch(cont.bodies[0].messages.at(-1).content,/Twist/);assert.equal(cont.saved.get('chat').next,'Twist');
 });
+
+test('director instructions identify the character and the human author',()=>{
+  const block=core.directionBlock({next:'I hand you a key.'},{actorName:'Elise',userName:'Alex'});
+  assert.match(block,/\[char\] \(agent label: Elise\)/);
+  assert.match(block,/\[user\], is Alex/);
+  assert.match(block,/I\/me\/my refer to \[user\]/);
+  assert.match(block,/I hand you a key\.$/);
+});
+
+test('a cut-off reply does not consume the direction and a newer direction survives completion',async()=>{
+  const cut=harness({next:'Original',note:''},'Some text');
+  const originalFetch=cut.ctx.fetch;
+  cut.ctx.fetch=async(...args)=>{const response=await originalFetch(...args);const text=await response.text();return new Response(text+'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n',{status:200});};
+  await cut.ctx.streamCompletion({name:'Elise',temp:1,think:'off'},[{role:'user',content:'Hi'}]);
+  assert.equal(cut.saved.get('chat').next,'Original');
+  const changed=harness({next:'Original',note:''},'ok');
+  const fetch=changed.ctx.fetch;
+  changed.ctx.fetch=async(...args)=>{const response=await fetch(...args);changed.saved.set('chat',{next:'New direction',note:''});return response;};
+  await changed.ctx.streamCompletion({name:'Elise',temp:1,think:'off'},[{role:'user',content:'Hi'}]);
+  assert.equal(changed.saved.get('chat').next,'New direction');
+});
+
+test('a completed background reply consumes only the direction it was sent',()=>{
+  const ctx=loadCore(),code=require('./source').read('app.js');
+  let direction={next:'Thunder',note:'Slow burn'};
+  ctx.store={conv:()=>[],saveConv(){}};
+  ctx.directionFor=()=>direction;
+  ctx.saveDirection=(id,value)=>{direction=value;};
+  vm.runInContext(code.slice(code.indexOf('function adoptJob('),code.indexOf('function refreshIfShowing(')),ctx);
+  const job={status:'done',httpStatus:200,meta:{convId:'chat',at:123,directorNext:'Thunder'},raw:'data: '+JSON.stringify({choices:[{delta:{content:'The windows rattle.'},finish_reason:'stop'}]})+'\n'};
+  ctx.adoptJob(job,false);
+  assert.equal(direction.next,'');assert.equal(direction.note,'Slow burn');
+  direction={next:'A newer direction',note:''};ctx.adoptJob(job,false);
+  assert.equal(direction.next,'A newer direction');
+  direction={next:'Thunder',note:''};ctx.adoptJob(job,true);
+  assert.equal(direction.next,'Thunder');
+});

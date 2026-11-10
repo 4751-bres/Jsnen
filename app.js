@@ -2575,7 +2575,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
   controller=new AbortController();
   const signal=controller.signal;
   setSending(true);renderResponders();renderChat();acquireWakeLock();
-  let aborted=false,usedNext=false;
+  let aborted=false,usedNext=false,sentDirectionNext="";
   const waitTicker=typeof setInterval==="function"?setInterval(()=>{if(bot.streaming&&!bot.content&&!bot.reasoning)scheduleStreamPaint(bot);else clearInterval(waitTicker);},1000):null;
   try{
     if(search){
@@ -2597,20 +2597,23 @@ async function streamCompletion(agent,apiMessages,meta={}){
     if(bot.bondTracked){const rp=isGroup()&&isRoleplayGroup(curGroup())?curGroup().roleplay:null;payload.messages=[...payload.messages,{role:"system",content:bondInstruction(bondBefore,rp?.user?.name)}];}
     const chapterLine=!meta.workflowRoleId&&typeof chaptersFor==="function"?chapterNote(chaptersFor(convId)):"";
     if(chapterLine)payload.messages=[...payload.messages,{role:"system",content:chapterLine}];
-    // Scene director: the author's note always; the one-shot direction except when continuing a cut-off reply.
-    const direction=meta.workflowRoleId?null:directionFor(convId);
-    if(direction&&(direction.note||direction.next)){
-      payload.messages=withDirection(payload.messages,direction,{includeNext:!meta.noSearch});
-      usedNext=!meta.noSearch&&!!direction.next;
-    }
     if(bot.memoryTracked)payload.messages=[...payload.messages,{role:"system",content:LEARN_MEMORY_INSTRUCTION}];
     if(typeof runtimeContext==="function"){
       const context=runtimeContext(agent,meta,conversationMessages.slice(0,-1));
       if(context)payload.messages=[...payload.messages,{role:"system",content:context}];
     }
+    // Apply the scene direction last, with the author and replying character explicitly identified.
+    const direction=meta.workflowRoleId?null:directionFor(convId);
+    if(direction&&(direction.note||direction.next)){
+      const userName=typeof isGroup==="function"&&isGroup()?curGroup()?.roleplay?.user?.name:undefined;
+      payload.messages=withDirection(payload.messages,direction,{includeNext:!meta.noSearch,actorName:meta.characterName||agent.name,userName});
+      usedNext=!meta.noSearch&&!!direction.next;
+      sentDirectionNext=usedNext?direction.next:"";
+    }
     // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
       ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","bondTracked","sceneTracked","memoryTracked","memoryForAgent","whisperTo","seenBy","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
+    if(usedNext)jobMeta.directorNext=sentDirectionNext;
     if(!meta.workflowRoleId&&store.notifyReplies&&globalThis.Notification?.permission==="granted")jobMeta.notify=(bot.characterName||bot.agentName||agent.name||"Your agent")+" replied";
     if(jobMeta.notify&&currentLock())jobMeta.notifyPrivate=true;
     const res=await fetchWithRetry(()=>backgroundFetch(request.url,{
@@ -2690,7 +2693,10 @@ async function streamCompletion(agent,apiMessages,meta={}){
   if(store.autoSpeak&&!aborted&&!bot.error&&bot.content&&!REPLY_PLACEHOLDERS.has(bot.content)&&convId===currentId&&!meta.workflowRoleId&&!meta.noSearch&&globalThis.document?.visibilityState!=="hidden")
     try{speakMessage(bot,true);}catch(e){}
   // A one-shot direction is used up once a reply has actually been written.
-  if(usedNext&&!aborted&&!bot.error&&bot.content&&!REPLY_PLACEHOLDERS.has(bot.content)){const d=directionFor(convId);saveDirection(convId,{...d,next:""});if(convId===currentId)renderDirectorBar();}
+  if(usedNext&&!aborted&&!bot.error&&!bot.interrupted&&!bot.truncated&&!bot.finish&&bot.content&&!REPLY_PLACEHOLDERS.has(bot.content)){
+    const d=directionFor(convId);
+    if(d.next===sentDirectionNext){saveDirection(convId,{...d,next:""});if(convId===currentId)renderDirectorBar();}
+  }
   return {ok:!aborted&&!bot.error&&!bot.interrupted,aborted,bot};
 }
 // Runs the request in the service worker when one controls the page, so the reply keeps streaming while the app
@@ -3644,6 +3650,10 @@ function adoptJob(job,interrupted){
   if(bot.moodTracked)applyMoodTag(bot);
   if(!bot.content&&!bot.reasoning)bot.content="(empty response)";
   try{store.saveConv(meta.convId,[...list,bot]);}catch(e){return false;}
+  if(meta.directorNext&&!bot.interrupted&&!bot.truncated&&!r.error&&!r.finish&&bot.content&&!REPLY_PLACEHOLDERS.has(bot.content)){
+    const direction=directionFor(meta.convId);
+    if(direction.next===meta.directorNext)saveDirection(meta.convId,{...direction,next:""});
+  }
   return meta.convId;
 }
 function refreshIfShowing(convId){
