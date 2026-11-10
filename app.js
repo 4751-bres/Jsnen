@@ -62,7 +62,7 @@ const store = {
   set appearance(v){localStorage.setItem("ds_appearance",JSON.stringify(normalizeAppearance(v)));},
   get sort(){return localStorage.getItem("ds_sort")||"recent"}, set sort(v){localStorage.setItem("ds_sort",v)},
   get activity(){try{return JSON.parse(localStorage.getItem("ds_activity"))||{}}catch(e){return {}}},
-  touch(id){try{const a=this.activity;a[id]=Date.now();localStorage.setItem("ds_activity",JSON.stringify(a));}catch(e){/* Sorting hint only. */}},
+  touch(id){try{const a=this.activity;a[id]=Date.now();localStorage.setItem("ds_rev_"+id,String(a[id]));localStorage.setItem("ds_activity",JSON.stringify(a));}catch(e){/* Sorting and sync hints only. */}},
   // Conversations, runs, and summaries are large: IndexedDB holds them when available (records mirrors it in memory
   // as JSON strings so reads stay synchronous); otherwise they fall back to localStorage.
   records:null,db:null,onWriteError:null,
@@ -117,8 +117,8 @@ const store = {
   saveRun(id,v){if(v)this.setRaw("ds_run_"+id,JSON.stringify(v));else this.removeRaw("ds_run_"+id)},
   clearRun(id){this.removeRaw("ds_run_"+id)},
   conv(id){try{return JSON.parse(this.raw("ds_conv_"+id))||[]}catch(e){return []}},
-  saveConv(id,m){this.setRaw("ds_conv_"+id,JSON.stringify(m));this.touch(id);try{this.setPreview(id,previewOf(m));}catch(e){/* List preview only. */}},
-  clearConv(id){this.removeRaw("ds_conv_"+id);this.removeRaw("ds_sum_"+id);this.setPreview(id,undefined);},
+  saveConv(id,m){this.setRaw("ds_conv_"+id,JSON.stringify(m));this.touch(id);try{this.setPreview(id,previewOf(m));}catch(e){/* List preview only. */}if(typeof scheduleAutoSync==="function")scheduleAutoSync();},
+  clearConv(id){this.removeRaw("ds_conv_"+id);this.removeRaw("ds_sum_"+id);this.touch(id);this.setPreview(id,undefined);if(typeof scheduleAutoSync==="function")scheduleAutoSync();},
   get previews(){try{return JSON.parse(localStorage.getItem("ds_previews"))||{}}catch(e){return {}}},
   setPreview(id,value){try{const p=this.previews;if(value===undefined)delete p[id];else p[id]=value;localStorage.setItem("ds_previews",JSON.stringify(p));}catch(e){/* List preview only. */}},
   summary(id){try{return JSON.parse(this.raw("ds_sum_"+id))}catch(e){return null}},
@@ -370,9 +370,9 @@ addEventListener("resize",updateChipFade);
 /* message-edit-core:start */
 function editedMessage(message,text){
   if(!text.trim()&&!message.images?.length)throw new Error("A message needs text or an image.");
-  return {...message,content:text,reasoning:"",error:false,edited:true,usage:null,stopped:false,truncated:false,interrupted:null,finish:null,learnedMemory:undefined,memoryForAgent:undefined,memoryReviewed:undefined};
+  return {...message,content:text,reasoning:"",thoughts:undefined,error:false,edited:true,usage:null,stopped:false,truncated:false,interrupted:null,finish:null,learnedMemory:undefined,memoryForAgent:undefined,memoryReviewed:undefined};
 }
-function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",error:!!message.error,edited:!!message.edited,usage:message.usage||null,stopped:!!message.stopped,truncated:!!message.truncated,interrupted:message.interrupted||null,finish:message.finish||null,learnedMemory:message.learnedMemory,memoryForAgent:message.memoryForAgent,memoryReviewed:message.memoryReviewed,seenBy:message.seenBy};}
+function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",thoughts:message.thoughts,error:!!message.error,edited:!!message.edited,usage:message.usage||null,stopped:!!message.stopped,truncated:!!message.truncated,interrupted:message.interrupted||null,finish:message.finish||null,learnedMemory:message.learnedMemory,memoryForAgent:message.memoryForAgent,memoryReviewed:message.memoryReviewed,seenBy:message.seenBy};}
 function captureMessageVersions(list,index){
   const message=list[index];
   if(!message)throw new Error("Message not found.");
@@ -2522,6 +2522,9 @@ function runtimeContext(agent,meta,list){
   }
   if(!meta.workflowRoleId){
     if(isGroup())blocks.push(presenceInstruction(curGroup(),agents));
+    if(thoughtsWanted(agent,meta))blocks.push(privateThoughtsBlock(list,isGroup()?agent.id:undefined));
+    const mood=meta.moodTracked?moodOptions(agent):null;
+    if(mood)blocks.push(moodInstruction(mood.current,mood.mature));
     const readable=list.filter(m=>!m.whisperTo||m.whisperTo===meta.whisperTo);
     blocks.push(repetitionInstruction(readable,isGroup()?agent.id:undefined));
   }
@@ -2530,10 +2533,10 @@ function runtimeContext(agent,meta,list){
 function buildApiMessages(agent,options={}){
   const sys=[];
   if(isGroup()){
-    return buildGroupApiMessages(curGroup(),agent,messages,{...options,memory:typeof memoryFor==="function"?memoryFor(agent):""});
+    return buildGroupApiMessages(curGroup(),agent,messages,{...options,mood:null,memory:typeof memoryFor==="function"?memoryFor(agent):""});
   }
   const memory=typeof memoryFor==="function"?memoryFor(agent):"";
-  const instructions=agentInstructions(agent)+(memory?"\n\n"+memory:"")+(options.mood?.track?"\n"+moodInstruction(options.mood.current,options.mood.mature):"");
+  const instructions=agentInstructions(agent)+(memory?"\n\n"+memory:"");
   const grounded=groundSystem(instructions,messages);
   if(grounded) sys.push({role:"system",content:grounded});
   const hist=messages.filter(m=>(m.role==="user"||m.role==="assistant")&&isContextMessage(m)).map(m=>({role:m.role,content:speakerContent(m.role==="user"?"user":"char",m.role==="user"?m.content:historyText(m),m.role==="user"?m.images:undefined)}));
@@ -2676,6 +2679,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     if(bot.bondTracked&&!bot.error)applyBondTag(bot,bondBefore);
     if(bot.sceneTracked&&!bot.error)applySceneTag(bot);
     if(bot.moodTracked&&!bot.error)applyMoodTag(bot);
+    if(!bot.content&&!bot.reasoning)bot.content="(empty response)";
     cancelStreamPaint();releaseWakeLock();
     controller=null;setSending(false);
     renderChat();try{store.saveConv(convId,conversationMessages);}catch(error){toast("Response received, but browser storage is full. This reply is not saved.");}renderResponders();
@@ -2990,6 +2994,7 @@ async function continueMessage(message){
     if(bot.reasoning)message.reasoning=(message.reasoning?message.reasoning+"\n\n":"")+bot.reasoning;
     message.stopped=!!bot.stopped;message.truncated=!!bot.truncated;message.interrupted=bot.interrupted||null;message.finish=bot.finish||null;
     if(bot.mood){message.mood=bot.mood;message.moodTracked=true;}
+    if(bot.thoughts)message.thoughts=bot.thoughts;
     if(bot.memoryReviewed)message.memoryReviewed=true;
     if(bot.learnedMemory){
       message.learnedMemory=[...(message.learnedMemory||[]),...bot.learnedMemory];
@@ -3377,7 +3382,8 @@ function handleArrival(){
 const syncPrefs={
   get token(){return localStorage.getItem("ds_sync_token")||"";},get pass(){return localStorage.getItem("ds_sync_pass")||"";},
   get gist(){return localStorage.getItem("ds_sync_gist")||"";},get device(){return localStorage.getItem("ds_sync_device")||"";},
-  get ready(){return !!(this.token&&this.pass);}
+  get ready(){return !!(this.token&&this.pass);},
+  get auto(){return localStorage.getItem("ds_sync_auto")!=="0";}
 };
 function syncSet(key,value){try{if(value)localStorage.setItem(key,value);else localStorage.removeItem(key);}catch(e){}}
 async function gh(path,options={}){
@@ -3408,19 +3414,97 @@ function localSyncData(){
   for(const k of store.bigKeys())if(isSyncKey(k)){const v=store.raw(k);if(typeof v==="string")data[k]=v;}
   for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(isSyncKey(k))data[k]=localStorage.getItem(k);}
   data.ds_provider_list=JSON.stringify(store.providers.map(({key,...rest})=>rest));
+  for(const key of Object.keys(data))if(key.startsWith("ds_rev_")){
+    const conversation="ds_conv_"+key.slice(7);
+    if(!(conversation in data))data[conversation]="[]";
+  }
   return data;
 }
+let autoSyncTimer=null,lastAutoSnapshot=null,hiddenSyncSent=false;
+function acceptSyncResult(result){
+  if(!syncPrefs.ready)return;
+  if(result.at&&result.at<Number(localStorage.getItem("ds_sync_last")))return;
+  if(result.ok){
+    syncSet("ds_sync_gist",result.gist);syncSet("ds_sync_last",String(result.at));syncSet("ds_sync_error","");
+    if(localStorage.getItem("ds_sync_pending")===result.requestId)syncSet("ds_sync_pending","");
+    $("#syncSummary").textContent="Encrypted backup · "+messageTime(result.at);
+  }else{
+    lastAutoSnapshot=null;syncSet("ds_sync_error",result.error||"Sync failed");
+    $("#syncSummary").textContent="Backup pending · check Sync settings";
+  }
+}
+function uploadSyncSnapshot(data){
+  const snapshot={data,token:syncPrefs.token,pass:syncPrefs.pass,gist:syncPrefs.gist,device:syncPrefs.device};
+  const requestId=Date.now().toString(36)+"-"+uid();
+  syncSet("ds_sync_pending",requestId);
+  const direct=async()=>{
+    const upload=()=>uploadEncryptedSync(snapshot);
+    const result=navigator.locks?await navigator.locks.request("ds-sync-upload",upload):await upload();
+    return {ok:true,requestId,...result};
+  };
+  const worker=navigator.serviceWorker?.controller;
+  const task=worker&&typeof MessageChannel!=="undefined"?new Promise((resolve,reject)=>{
+    const channel=new MessageChannel();
+    let started=false;
+    const timeout=setTimeout(()=>{channel.port1.close();reject(new Error("Backup is pending; check again when the app reopens."));},120000);
+    const fallback=setTimeout(()=>{
+      if(started)return;
+      clearTimeout(timeout);channel.port1.close();direct().then(resolve,reject);
+    },2000);
+    channel.port1.onmessage=e=>{
+      if(e.data?.type==="sync-started"){started=true;clearTimeout(fallback);return;}
+      if(e.data?.type!=="sync-result")return;
+      clearTimeout(timeout);clearTimeout(fallback);channel.port1.close();
+      if(e.data.ok)resolve(e.data);else reject(new Error(e.data.error||"Sync failed"));
+    };
+    worker.postMessage({type:"sync-backup",requestId,snapshot},[channel.port2]);
+  }):direct();
+  return task.then(result=>{acceptSyncResult(result);return result;},error=>{
+    acceptSyncResult({ok:false,requestId,error:error.message,at:Date.now()});throw error;
+  });
+}
+function runAutoSync(force=false){
+  if(!syncPrefs.ready||!syncPrefs.auto)return;
+  if(navigator.onLine===false){syncSet("ds_sync_error","Offline. The backup will retry when connected.");return;}
+  clearTimeout(autoSyncTimer);
+  const data=localSyncData(),serialized=JSON.stringify(data);
+  if(!force&&serialized===lastAutoSnapshot)return;
+  lastAutoSnapshot=serialized;
+  uploadSyncSnapshot(data).catch(()=>{});
+}
+function scheduleAutoSync(){
+  clearTimeout(autoSyncTimer);
+  autoSyncTimer=setTimeout(()=>runAutoSync(),5000);
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){hiddenSyncSent=true;runAutoSync(true);}
+  else{hiddenSyncSent=false;scheduleAutoSync();}
+});
+addEventListener("pagehide",()=>{if(!hiddenSyncSent)runAutoSync(true);});
+addEventListener("online",()=>{lastAutoSnapshot=null;scheduleAutoSync();});
+setInterval(()=>runAutoSync(),60000);
+$("#syAuto").onchange=e=>{
+  syncSet("ds_sync_auto",e.target.checked?"1":"0");
+  if(e.target.checked)scheduleAutoSync();else clearTimeout(autoSyncTimer);
+};
 function syncStatusText(file){
   if(!syncPrefs.ready)return "Not set up on this device.";
   if(!file)return "Set up. Nothing uploaded yet.";
   return "Synced copy from "+(file.device||"a device")+", "+messageTime(file.at)+" · "+(file.chats??"?")+" chat"+(file.chats===1?"":"s")+".";
 }
+$("#setBtn").addEventListener("click",()=>{
+  if(!syncPrefs.ready)return;
+  const last=Number(localStorage.getItem("ds_sync_last"));
+  if(localStorage.getItem("ds_sync_error"))$("#syncSummary").textContent="Backup pending · check Sync settings";
+  else if(last)$("#syncSummary").textContent="Encrypted backup · "+messageTime(last);
+});
 async function refreshSyncStatus(){
   $("#syncStatus").textContent=syncStatusText(null);$("#syncSummary").textContent=syncStatusText(null);
   $("#syncReady").hidden=!syncPrefs.ready;$("#syncSetup").hidden=syncPrefs.ready;$("#syForget").hidden=!syncPrefs.ready;
+  $("#syAuto").checked=syncPrefs.auto;
   if(!syncPrefs.ready)return;
   $("#syncStatus").textContent="Checking GitHub…";
-  try{const file=await readSyncFile(await findSyncGist());const t=syncStatusText(file);$("#syncStatus").textContent=t;$("#syncSummary").textContent=t;}
+  try{const file=await readSyncFile(await findSyncGist());const t=syncStatusText(file);$("#syncStatus").textContent=t;$("#syncSummary").textContent=t;if(localStorage.getItem("ds_sync_error"))$("#syncStatus").textContent+=" Last automatic backup failed: "+localStorage.getItem("ds_sync_error");}
   catch(e){$("#syncStatus").textContent="⚠ "+e.message;}
 }
 function openSyncSheet(){
@@ -3438,18 +3522,14 @@ $("#sySave").onclick=async()=>{
   syncSet("ds_sync_device",device);syncSet("ds_sync_token",token);if(pass)syncSet("ds_sync_pass",pass);
   $("#syToken").value="";$("#syPass").value="";
   await refreshSyncStatus();
+  scheduleAutoSync();
   if(!/⚠/.test($("#syncStatus").textContent))toast("Sync is set up on this device");
 };
 $("#syUp").onclick=async()=>{
   if(controller){toast("Wait for the reply to finish.");return;}
   const b=$("#syUp");b.disabled=true;$("#syncStatus").textContent="Encrypting and uploading…";
   try{
-    const data=localSyncData(),env=await sealSync({data},syncPrefs.pass);
-    const file={app:"DeepSeek Agents sync",device:syncPrefs.device||"A device",at:Date.now(),chats:countChats(data),env};
-    const body=JSON.stringify({description:"DeepSeek Agents sync (encrypted)",files:{[SYNC_FILE]:{content:JSON.stringify(file)}}});
-    const existing=await findSyncGist();
-    const saved=existing?await gh("/gists/"+existing.id,{method:"PATCH",body}):await gh("/gists",{method:"POST",body:JSON.stringify({...JSON.parse(body),public:false})});
-    syncSet("ds_sync_gist",saved.id);
+    const file=await uploadSyncSnapshot(localSyncData());
     $("#syncStatus").textContent=syncStatusText(file);$("#syncSummary").textContent=syncStatusText(file);
     toast("⬆ Uploaded "+file.chats+" chat"+(file.chats===1?"":"s")+" (encrypted)");
   }catch(e){$("#syncStatus").textContent="⚠ "+e.message;}
@@ -3514,6 +3594,7 @@ store.init().finally(()=>{
   else remindBackup();
   recoverBackgroundReplies();
   cleanCharLabelsOnce();
+  scheduleAutoSync();
   handleArrival();
   // Opened from a reply notification: go to that chat.
   const fromHash=/^#chat=(.+)$/.exec(location.hash);if(fromHash){openChatById(decodeURIComponent(fromHash[1]));history.replaceState(null,"",location.pathname+location.search);}
@@ -3558,6 +3639,7 @@ function adoptJob(job,interrupted){
   if(bot.bondTracked)applyBondTag(bot,lastBond(list,bot.agentId));
   if(bot.sceneTracked)applySceneTag(bot);
   if(bot.moodTracked)applyMoodTag(bot);
+  if(!bot.content&&!bot.reasoning)bot.content="(empty response)";
   try{store.saveConv(meta.convId,[...list,bot]);}catch(e){return false;}
   return meta.convId;
 }
@@ -3570,6 +3652,7 @@ async function recoverBackgroundReplies(){
   let jobs=[];try{jobs=await readJobs();}catch(e){return;}
   let added=0;
   for(const job of jobs){
+    if(job.id==="sync-status"){acceptSyncResult(job);continue;}
     // A recent heartbeat means the worker is still streaming it: wait for it to finish.
     if(job.status==="running"&&Date.now()-(job.heartbeat||0)<15000){watchJob(job.id);continue;}
     const convId=adoptJob(job,job.status==="running");

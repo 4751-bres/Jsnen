@@ -28,9 +28,9 @@ test('roleplay prompts ask for the tag and carry the current or steered mood',()
   const group={members:['a'],roleplay:{enabled:true,opening:'',setting:'',user:{name:'Rin',description:''},characters:{a:{name:'Elise',description:''}}}};
   const agent={id:'a',name:'A'};
   assert.ok(!core.buildGroupApiMessages(group,agent,[])[0].content.includes('EMOTION TRACKING'));
-  const carried=core.buildGroupApiMessages(group,agent,[],{mood:{track:true,current:{mood:'sad',level:6}}})[0].content;
+  const carried=core.buildGroupApiMessages(group,agent,[],{mood:{track:true,current:{mood:'sad',level:6}}}).at(-1).content;
   assert.match(carried,/EMOTION TRACKING[\s\S]*currently feels sad at 6\/10\. Carry it/);
-  const steered=core.buildGroupApiMessages(group,agent,[],{mood:{track:true,current:{mood:'angry',level:9,steered:true}}})[0].content;
+  const steered=core.buildGroupApiMessages(group,agent,[],{mood:{track:true,current:{mood:'angry',level:9,steered:true}}}).at(-1).content;
   assert.match(steered,/angry at 9\/10\. The user set this mood/);
   assert.match(core.moodInstruction(null),/\[mood: NAME N\]/);
   assert.ok(!core.moodInstruction(null).includes('currently feels'));
@@ -51,7 +51,7 @@ test('mature moods appear only in mature mode; otherwise they fall back to gener
   const bot={content:'Closer. [mood: lustful 9]',moodMature:true};core.applyMoodTag(bot);
   assert.equal(bot.content,'Closer.');assert.equal(bot.mood.mood,'horny');
   const group={members:['a'],roleplay:{enabled:true,mature:true,opening:'',setting:'',user:{name:'Rin',description:''},characters:{a:{name:'Elise',description:''}}}};
-  assert.match(core.buildGroupApiMessages(group,{id:'a',name:'A'},[],{mood:{track:true,mature:true}})[0].content,/flirty,[a-z, ]*horny/);
+  assert.match(core.buildGroupApiMessages(group,{id:'a',name:'A'},[],{mood:{track:true,mature:true}}).at(-1).content,/flirty,[a-z, ]*horny/);
 });
 
 test('the full mature set and its fallbacks',()=>{

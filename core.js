@@ -59,6 +59,7 @@ function roleplayCharacter(group,agent){
   return {name:String(sheet.name||agent.name||"Character"),description:String(sheet.description||"")};
 }
 function buildGroupApiMessages(group,agent,messages,options={}){
+  const moodTail=options.mood?.track?[{role:"system",content:moodInstruction(options.mood.current,options.mood.mature)}]:[];
   if(!isRoleplayGroup(group)){
     const base=agent.prompt?agent.prompt+"\n\n":"";
     const discussion=options.discussion?" This is an open discussion between the agents: respond directly to the other participants' latest points — build on them, question them, or disagree — and keep it brief.":"";
@@ -67,15 +68,14 @@ function buildGroupApiMessages(group,agent,messages,options={}){
       ?{role:"user",content:imageContent(m.content,m.images)}
       :m.agentId===agent.id?{role:"assistant",content:historyText(m)}
       :{role:"user",content:"["+(m.agentName||"Agent")+"]: "+historyText(m)});
-    return [{role:"system",content:groundSystem(system,messages)},...history];
+    return [{role:"system",content:groundSystem(system,messages)},...history,...moodTail];
   }
   const rp=group.roleplay,character=roleplayCharacter(group,agent);
   const cast=(group.members||[]).filter(id=>id!==agent.id).map(id=>rp.characters[id]).filter(Boolean).map(c=>c.name+": "+c.description).join("\n");
   const system=[agent.prompt,"Within this scene, you are "+character.name+" ([char]). Speak as I from your own perspective, with your established personality and knowledge.","Character: "+character.description,
     "User character: "+rp.user.name+" — "+rp.user.description,"Setting: "+rp.setting,
     cast&&"Other characters:\n"+cast,rp.opening&&"Opening scene (already shown to the user before the conversation began):\n"+rp.opening,rp.mature&&"Mature mode: on. All characters are adults (18+); this app sets no content limits. Follow the user's lead on how explicit or intense the story becomes.",
-    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE,options.memory,
-    options.mood?.track&&moodInstruction(options.mood.current,options.mood.mature)
+    "Remain in character, preserve continuity, never control the user's character, and do not prefix the reply with your name.",SPEAKER_RULES,NARRATION_RULES,SCENE_STYLE,options.memory
   ].filter(Boolean).join("\n\n");
   const history=messages.filter(isContextMessage).filter(m=>visibleTo(m,agent.id)).map(m=>{
     if(m.role==="user"){
@@ -84,7 +84,7 @@ function buildGroupApiMessages(group,agent,messages,options={}){
     if(m.agentId===agent.id)return {role:"assistant",content:speakerContent("char",historyText(m))};
     return {role:"user",content:speakerContent("character: "+(m.characterName||m.agentName||"Character"),historyText(m))};
   });
-  return [{role:"system",content:groundSystem(system,messages)},...history];
+  return [{role:"system",content:groundSystem(system,messages)},...history,...moodTail];
 }
 // @Name mentions, in the order they appear. Candidates: [{id,name}]. Longer names win so "@Al" never steals "@Alice".
 function findMentions(text,candidates){
@@ -679,7 +679,7 @@ function pickInitiator(list,memberIds){
 const SYNC_FILE="deepseek-agents-sync.json";
 function isSyncKey(key){
   return /^ds_(agents|groups|workflows|personas|pins|model|base|ctx_limit|ctx_summary|provider_list|bg__all)$/.test(key)||
-    /^ds_(conv|run|sum|bg|dir|chap)_.+$/.test(key);
+    /^ds_(conv|run|sum|bg|dir|chap|rev)_.+$/.test(key);
 }
 function lastActivity(raw){
   let list=[];try{list=JSON.parse(raw)||[];}catch(e){}
@@ -705,11 +705,12 @@ function mergeSyncData(local,remote){
     const k="ds_conv_"+id,inL=k in (local||{}),inR=k in (remote||{});
     if(!inL){winner[id]="remote";continue;}if(!inR){winner[id]="local";continue;}
     const a=lastActivity(local[k]),b=lastActivity(remote[k]);
+    a.t=Math.max(a.t,Number(local["ds_rev_"+id])||0);b.t=Math.max(b.t,Number(remote["ds_rev_"+id])||0);
     winner[id]=b.t>a.t||(b.t===a.t&&b.n>a.n)?"remote":"local";
   }
   for(const [k,v] of Object.entries(remote||{})){
     if(!isSyncKey(k)||typeof v!=="string")continue;
-    const m=/^ds_(conv|run|sum|bg|dir|chap)_(.+)$/.exec(k);
+    const m=/^ds_(conv|run|sum|bg|dir|chap|rev)_(.+)$/.exec(k);
     if(m&&k!=="ds_bg__all"){if(winner[m[2]]==="remote"||!(k in out))out[k]=v;continue;}
     if(k==="ds_agents"||k==="ds_groups"||k==="ds_workflows"){out[k]=k in out?mergeListById(out[k],v,winner):v;continue;}
     if(k==="ds_personas"){out[k]=k in out?mergeListById(out[k],v,{},"name"):v;continue;}
@@ -750,6 +751,51 @@ async function openSync(env,pass){
   return JSON.parse(new TextDecoder().decode(plain));
 }
 /* sync-core:end */
+
+/* sync-upload-core:start */
+async function uploadEncryptedSync(snapshot,request=fetch){
+  if(!snapshot.token||!snapshot.pass)throw new Error("Set up Sync on this device first.");
+  const api=async(path,options={})=>{
+    const response=await request("https://api.github.com"+path,{...options,signal:AbortSignal.timeout(60000),headers:{Accept:"application/vnd.github+json",Authorization:"Bearer "+snapshot.token,...(options.body?{"Content-Type":"application/json"}:{})}});
+    if(!response.ok){
+      if(response.status===401||response.status===403)throw new Error("GitHub rejected the sync token. Check Sync settings.");
+      if(response.status===404)return null;
+      throw new Error("Sync failed (GitHub HTTP "+response.status+").");
+    }
+    return response.json();
+  };
+  let gist=null;
+  if(snapshot.gist&&/^[a-f0-9]+$/i.test(snapshot.gist))gist=await api("/gists/"+snapshot.gist);
+  if(!gist){
+    for(let page=1;page<=5;page++){
+      const list=await api("/gists?per_page=100&page="+page);
+      const found=list?.find(item=>item.files?.[SYNC_FILE]);
+      if(found){gist=await api("/gists/"+found.id);break;}
+      if(!list||list.length<100)break;
+    }
+  }
+  let data=Object.fromEntries(Object.entries(snapshot.data||{}).filter(([key,value])=>isSyncKey(key)&&typeof value==="string"));
+  const previous=gist?.files?.[SYNC_FILE];
+  if(previous){
+    let text=previous.content;
+    if(previous.truncated||!text){
+      const url=new URL(previous.raw_url);
+      if(url.origin!=="https://gist.githubusercontent.com")throw new Error("Unexpected sync file location.");
+      const response=await request(url.href,{signal:AbortSignal.timeout(60000)});
+      if(!response.ok)throw new Error("Could not read the previous sync copy.");
+      text=await response.text();
+    }
+    const remote=JSON.parse(text);
+    const opened=await openSync(remote.env,snapshot.pass);
+    data=mergeSyncData(data,opened.data||{}).data;
+  }
+  const file={app:"DeepSeek Agents sync",device:snapshot.device||"A device",at:Date.now(),chats:countChats(data),env:await sealSync({data},snapshot.pass)};
+  const payload={description:"DeepSeek Agents sync (encrypted)",files:{[SYNC_FILE]:{content:JSON.stringify(file)}}};
+  const saved=gist?await api("/gists/"+gist.id,{method:"PATCH",body:JSON.stringify(payload)}):await api("/gists",{method:"POST",body:JSON.stringify({...payload,public:false})});
+  if(!saved?.id)throw new Error("GitHub did not save the encrypted sync copy.");
+  return {gist:saved.id,at:file.at,chats:file.chats,device:file.device};
+}
+/* sync-upload-core:end */
 /* char-label-migration:start */
 // Older replies were saved with a leading "[char]:" speaker label; remove it from replies and their versions.
 const CHAR_LABEL=/^(?:\s*\[char\]\s*:\s*)+/i;
@@ -921,7 +967,11 @@ function makeWorldEntry(fields){
 /* world-core:end */
 /* thoughts-core:start */
 // Inner thoughts: a hidden [thoughts: …] line the app lifts out of the reply and shows under it.
-const THOUGHTS_INSTRUCTION="INNER THOUGHTS: After your reply (and before any [mood] line), add one line in exactly this form: [thoughts: …] with your character's private thoughts in first person, 1–2 sentences: what they really feel, want, or are hiding. Nobody else in the story hears these thoughts; never refer to them in the story itself.";
+const THOUGHTS_INSTRUCTION="INNER THOUGHTS: Begin with one line in exactly this form: [thoughts: …] containing your character's private thoughts in first person, 1–2 sentences about what they feel, intend or are hiding. Then write the visible reply, letting your intentions guide it. Nobody else hears these thoughts. Express only what your character chooses to say or do in the visible reply. Put mood and other tracking tags after the visible reply.";
+function privateThoughtsBlock(list,agentId){
+  const notes=list.filter(m=>m.role==="assistant"&&isContextMessage(m)&&!m.stopped&&!m.truncated&&m.thoughts&&(agentId===undefined||m.agentId===agentId&&visibleTo(m,agentId))).slice(-3);
+  return notes.length?"YOUR PREVIOUS PRIVATE THOUGHTS, oldest to newest. These are your intentions and impressions, not established external facts. Carry forward unresolved plans when appropriate and update them as events change. Other characters cannot read them.\n"+notes.map(m=>"- "+String(m.thoughts).slice(0,1200)).join("\n"):"";
+}
 const THOUGHT_TAG=/\[\s*(?:inner\s+)?thoughts?\s*:\s*([^\]]*)\]/gi;
 function parseThoughtsTag(text){
   const source=String(text||"");let thoughts="";
@@ -935,7 +985,9 @@ function stripThoughtsWhileStreaming(text){
 }
 function applyThoughtsTag(bot){
   const parsed=parseThoughtsTag(bot.content);
-  if(parsed.thoughts){bot.thoughts=parsed.thoughts.slice(0,1200);bot.content=parsed.text||bot.content;}
+  if(parsed.thoughts)bot.thoughts=parsed.thoughts.slice(0,1200);
+  const visible=stripThoughtsWhileStreaming(parsed.text);
+  bot.content=parsed.thoughts?visible.trim():visible;
   return bot;
 }
 /* thoughts-core:end */

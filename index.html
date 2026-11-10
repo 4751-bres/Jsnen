@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css?v=20261109b" />
+<link rel="stylesheet" href="styles.css?v=20261110a" />
 </head>
 <body>
   <header>
@@ -365,6 +365,8 @@
     <div class="body">
       <div class="sync-status" id="syncStatus" aria-live="polite">Not set up on this device.</div>
       <div id="syncReady" hidden>
+        <label class="toggle-row"><input type="checkbox" id="syAuto" checked /><span>Automatically back up when I leave</span></label>
+        <div class="hint">Also saves shortly after chat changes. A background worker attempts to finish the encrypted upload after closing. Offline or interrupted uploads retry when you reopen the app.</div>
         <div class="row2" style="margin-top:12px">
           <button class="btn primary" id="syUp" type="button">⬆ Upload this device</button>
           <button class="btn" id="syDown" type="button">⬇ Get synced chats</button>
@@ -374,7 +376,7 @@
           <button class="btn primary" id="syMerge" type="button" style="width:100%">Merge: keep both, newest version of each chat wins</button>
           <button class="btn danger" id="syReplace" type="button" style="width:100%;margin-top:8px">Replace this device with the synced copy</button>
         </div>
-        <div class="hint">Upload when you finish on one device; Get synced chats on the other. Looks, text size, Phone, app lock and API keys stay per device.</div>
+        <div class="hint">Use Get synced chats on your other device to merge the latest copy. Looks, text size, Phone, app lock and API keys stay per device.</div>
       </div>
       <div id="syncSetup">
         <div class="hint" style="margin-top:0">Your chats travel through a private Gist in your own GitHub account, encrypted on this device with your sync password, so nobody, GitHub included, can read them.</div>
@@ -759,7 +761,7 @@
     </div>
   </section>
 
-<script src="core.js?v=20261109b"></script>
-<script src="app.js?v=20261109b"></script>
+<script src="core.js?v=20261110a"></script>
+<script src="app.js?v=20261110a"></script>
 </body>
 </html>

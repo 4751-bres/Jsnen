@@ -1,6 +1,7 @@
 // Offline shell for the installed app. Network first, so a new GitHub Pages deploy is picked up on the next
 // online load; the cached copy is used only when the network fails. API calls (other origins) are never cached.
-const CACHE = "ds-agents-shell-v6";
+importScripts("core.js?v=20261110a");
+const CACHE = "ds-agents-shell-v7";
 const SHELL = ["./", "index.html", "styles.css", "core.js", "app.js", "manifest.json", "icon-192.png", "icon-96.png"];
 
 self.addEventListener("install", event => {
@@ -76,9 +77,33 @@ async function writeJob(job, remove) {
 self.addEventListener("message", event => {
   const message = event.data || {};
   if (message.type === "generate") event.waitUntil(runJob(message));
+  else if (message.type === "sync-backup") {
+    event.ports[0]?.postMessage({type:"sync-started"});
+    event.waitUntil(queueSyncBackup(message,event.ports[0]));
+  }
   else if (message.type === "abort") activeJobs.get(message.id)?.abort();
   else if (message.type === "forget") event.waitUntil(writeJob(message.id, true));
 });
+
+// Credentials stay in this task's memory. Only the outcome is persisted for the next app visit.
+let syncQueue=Promise.resolve();
+function queueSyncBackup(message,port){
+  const task=async()=>{
+    let status;
+    try{
+      const upload=()=>uploadEncryptedSync(message.snapshot);
+      const result=self.navigator.locks?await self.navigator.locks.request("ds-sync-upload",upload):await upload();
+      status={id:"sync-status",requestId:message.requestId,type:"sync-result",ok:true,...result};
+    }catch(error){
+      status={id:"sync-status",requestId:message.requestId,type:"sync-result",ok:false,error:String(error.message||"Sync failed"),at:Date.now()};
+    }
+    await writeJob(status);
+    try{port?.postMessage(status);}catch(e){/* The page may already be closed. */}
+    port?.close();
+  };
+  syncQueue=syncQueue.catch(()=>{}).then(task);
+  return syncQueue;
+}
 
 // The reply text from a saved event stream, without the hidden tags the app strips.
 function replyPreview(raw) {

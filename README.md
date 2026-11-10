@@ -39,6 +39,9 @@ That's it — it now behaves like a native app with its own icon.
 ---
 
 ## Features
+- **Private-thought continuity** — when 💭 thoughts are enabled, each character receives its own three most recent thought notes. New replies generate the hidden thought first and then the visible response. Thoughts follow reply versions and stay outside other characters' context.
+- **Automatic encrypted backup** — once Sync has a GitHub token and password, automatic backup is on by default. Chat changes trigger a short delayed backup, and leaving the app triggers one immediately. The service worker attempts to finish after the page closes. Pending or offline backups retry on the next visit. Check ⚙️ Settings → Sync for the last result or to turn automatic backup off. Force-stopping the browser or losing connectivity can interrupt an upload.
+- **Stable mood context** — the current mood is appended after conversation history so a mood change preserves the earlier request prefix for provider caching. Latency gains depend on the provider and have not been benchmarked.
 - **Real-time clock per chat** — ⋯ → **Real-time clock**, between Duplicate and Clear chat, lets that chat use the device's current local date, time and timezone. It starts off. Fictional story time follows the scene.
 - **Relevant old moments** — when history is limited, a local keyword search adds up to four relevant excerpts from older messages to the next request. It searches the active conversation and respects whispers and scene witnesses. Retrieval uses no additional API request.
 - **Who’s here** — ⋯ → **Who’s here** in a group sets which characters are present. Away characters stop replying and miss new events. Returning characters retain what they witnessed earlier. Presence is recorded on new messages; older untracked messages are treated as shared.
