@@ -34,8 +34,9 @@ test('original agent sees copied replies as its own; another agent sees them att
 
 function harness(fail=false){
   const data=new Map([['ds_conv_sera',JSON.stringify(history)],['ds_dir_sera','{"note":"Slow pace"}'],['ds_chap_sera','[{"title":"Bakery"}]'],['ds_bg_sera','{"dim":0.5}'],['ds_sum_sera','{"summary":"Earlier"}']]);
-  const notices=[],store={raw:key=>data.get(key)??null,setRaw:(key,value)=>data.set(key,value),removeRaw:key=>data.delete(key),set groups(value){if(fail)throw Error('quota');this.savedGroups=value;},touch(){},setPreview(){}};
-  const ctx=vm.createContext({currentKind:'agent',currentId:'sera',controller:null,sequence:null,readingImages:false,agents:[agent],groups:[],workflows:[],messages:history,store,pendingImages:[],uid:()=> 'new',agentChatGroup:core.agentChatGroup,previewOf:()=>null,toast:t=>notices.push(t),loadConv(){ctx.messages=JSON.parse(data.get('ds_conv_'+ctx.currentId));},renderAttachments(){},renderAgents(){},openGroupEditor:id=>{ctx.editor=id;}});
+  const notices=[],store={raw:key=>/^ds_(conv|bg|sum)_/.test(key)?data.get(key)??null:null,setRaw:(key,value)=>{assert.match(key,/^ds_(conv|bg|sum)_/);data.set(key,value);},removeRaw:key=>data.delete(key),set groups(value){if(fail)throw Error('quota');this.savedGroups=value;},touch(){},setPreview(){}};
+  const localStorage={getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,value),removeItem:key=>data.delete(key)};
+  const ctx=vm.createContext({currentKind:'agent',currentId:'sera',controller:null,sequence:null,readingImages:false,agents:[agent],groups:[],workflows:[],messages:history,store,localStorage,pendingImages:[],uid:()=> 'new',agentChatGroup:core.agentChatGroup,previewOf:()=>null,toast:t=>notices.push(t),loadConv(){ctx.messages=JSON.parse(data.get('ds_conv_'+ctx.currentId));},renderAttachments(){},renderAgents(){},openGroupEditor:id=>{ctx.editor=id;}});
   const source=read('app.js');vm.runInContext(source.slice(source.indexOf('function copyCurrentChatToGroup(){'),source.indexOf('$("#copyToGroupBtn").onclick')),ctx);
   return {ctx,data,notices};
 }

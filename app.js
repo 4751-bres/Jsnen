@@ -799,14 +799,14 @@ function copyCurrentChatToGroup(){
   while(groups.some(g=>g.name===name))name=base+" "+n++;
   const built=agentChatGroup(original,messages,id,name),next=[...groups,built.group],written=[];
   try{
-    const key="ds_conv_"+id;written.push(key);store.setRaw(key,JSON.stringify(built.messages));
-    for(const prefix of ["ds_dir_","ds_chap_","ds_bg_","ds_sum_"]){
-      const value=store.raw(prefix+currentId);
-      if(value!==null){written.push(prefix+id);store.setRaw(prefix+id,value);}
+    const key="ds_conv_"+id;written.push([key,true]);store.setRaw(key,JSON.stringify(built.messages));
+    for(const [prefix,large] of [["ds_dir_",false],["ds_chap_",false],["ds_bg_",true],["ds_sum_",true]]){
+      const value=large?store.raw(prefix+currentId):localStorage.getItem(prefix+currentId);
+      if(value!==null){written.push([prefix+id,large]);if(large)store.setRaw(prefix+id,value);else localStorage.setItem(prefix+id,value);}
     }
     store.groups=next;
   }catch(error){
-    for(const key of written)try{store.removeRaw(key);}catch(e){}
+    for(const [key,large] of written)try{if(large)store.removeRaw(key);else localStorage.removeItem(key);}catch(e){}
     toast("Not enough browser storage to copy this chat to a group. The original is unchanged.");return;
   }
   groups=next;currentKind="group";currentId=id;
