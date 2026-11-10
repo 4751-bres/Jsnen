@@ -789,6 +789,34 @@ function duplicateCurrentChat(){
 }
 $("#duplicateChatBtn").onclick=duplicateCurrentChat;
 
+/* ---------- Continue a personal conversation in a new group ---------- */
+function copyCurrentChatToGroup(){
+  if(currentKind!=="agent")return;
+  if(controller||sequence||readingImages){toast("Wait for the current response or image upload to finish.");return;}
+  const original=agents.find(a=>a.id===currentId);if(!original)return;
+  let id;do{id=uid();}while(agents.some(a=>a.id===id)||groups.some(g=>g.id===id)||workflows.some(w=>w.id===id)||store.raw("ds_conv_"+id)!==null);
+  const base=original.name+" group";let name=base,n=2;
+  while(groups.some(g=>g.name===name))name=base+" "+n++;
+  const built=agentChatGroup(original,messages,id,name),next=[...groups,built.group],written=[];
+  try{
+    const key="ds_conv_"+id;written.push(key);store.setRaw(key,JSON.stringify(built.messages));
+    for(const prefix of ["ds_dir_","ds_chap_","ds_bg_","ds_sum_"]){
+      const value=store.raw(prefix+currentId);
+      if(value!==null){written.push(prefix+id);store.setRaw(prefix+id,value);}
+    }
+    store.groups=next;
+  }catch(error){
+    for(const key of written)try{store.removeRaw(key);}catch(e){}
+    toast("Not enough browser storage to copy this chat to a group. The original is unchanged.");return;
+  }
+  groups=next;currentKind="group";currentId=id;
+  try{store.cur=id;store.kind="group";store.touch(id);store.setPreview(id,previewOf(built.messages));}catch(e){/* The group remains available in the drawer. */}
+  const draftImages=pendingImages;loadConv();pendingImages=draftImages;renderAttachments();renderAgents();
+  openGroupEditor(id);toast("Chat copied to a group · add another agent and save");
+  if(typeof scheduleAutoSync==="function")scheduleAutoSync();
+}
+$("#copyToGroupBtn").onclick=copyCurrentChatToGroup;
+
 /* ---------- Branch from a message: a new chat with the story up to that point ---------- */
 function branchFromMessage(m){
   if(controller||readingImages||isWorkflow()){toast("Wait for the current reply to finish.");return;}
@@ -2157,6 +2185,8 @@ function chatAsText(){const c=currentChatExport();return {name:chatFileName(c.it
 function textFileFor(){const {name,text}=chatAsText();try{return new File([text],name,{type:"text/plain"});}catch(e){return null;}}
 $("#chatMenuBtn").onclick=()=>{
   const c=currentChatExport();$("#chatMenuTitle").textContent=c.title;
+  $("#copyToGroupBtn").hidden=currentKind!=="agent";
+  $("#copyToGroupBtn").disabled=!!controller||!!sequence||!!readingImages;
   const file=messages.length?textFileFor():null;
   $("#shareTxt").hidden=!(file&&navigator.canShare?.({files:[file]}));
   for(const id of ["#dlTxt","#shareTxt","#dlMd"])$(id).disabled=!messages.length;

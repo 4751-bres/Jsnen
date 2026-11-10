@@ -1253,6 +1253,25 @@ function repetitionInstruction(list,agentId){
   return selected.length?"STYLE VARIETY. You have repeatedly used these phrases: "+selected.map(s=>JSON.stringify(s)).join(", ")+". Choose a different opening, gesture, or wording for this turn. Keep the meaning and character consistent. Follow an explicit user request to quote or repeat something exactly.":"";
 }
 /* conversation-context-core:end */
+/* chat-to-group-core:start */
+function agentChatGroup(agent,list,id,name){
+  const group={id,name,emoji:"👥",members:[agent.id],replyMode:"buttons"};
+  for(const key of ["memory","lorebook","historyLimit","moods","matureMoods","thoughts","bond","autoMemory","realClock","clock","initiative"]){
+    if(agent[key]!==undefined)group[key]=agent[key];
+  }
+  const history=JSON.parse(JSON.stringify(list));
+  function attribute(message){
+    if(message.role==="assistant"){
+      message.agentId=agent.id;message.agentName=agent.name;message.agentEmoji=agent.emoji||"";
+      if(!message.characterName)message.characterName=agent.name;
+      if(message.memoryForAgent)message.memoryForAgent=agent.id;
+    }
+    for(const version of message.versions||[])for(const turn of version.tail||[])attribute(turn);
+  }
+  history.forEach(attribute);
+  return {group:JSON.parse(JSON.stringify(group)),messages:history};
+}
+/* chat-to-group-core:end */
 /* director-core:start */
 // Scene director: a one-shot direction for the next reply and a standing author's note, both hidden from the story.
 const NOTE_PRESETS=[
