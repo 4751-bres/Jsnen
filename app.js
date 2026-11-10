@@ -969,7 +969,7 @@ $("#saveAgent").onclick=()=>{
   const data={emoji:$("#edEmoji").value.trim(),name,prompt:$("#edPrompt").value.trim(),
     model:$("#edModel").value.trim(),temp:parseFloat($("#edTemp").value),think:$("#edThink").value,historyLimit:$("#edHistory").value,maxTokens:$("#edMaxTokens").value,moods:$("#edMoods").checked,matureMoods:$("#edMatureMoods").checked,avatar:editingAvatar,voice:$("#edVoice").value,provider:$("#edProvider").value||undefined,webSearch:$("#edWebSearch").checked||undefined,thoughts:$("#edThoughts").checked||undefined,opener:$("#edOpener").value==="off"?undefined:$("#edOpener").value,greeting:$("#edGreeting").value.trim()||undefined,initiative:$("#edInitiative").value==="off"?undefined:$("#edInitiative").value,bond:$("#edBond").checked||undefined,color:editingColor||undefined,memory:memoryLines($("#edMemory").value)};
   if(editingId){Object.assign(agents.find(a=>a.id===editingId),data);}
-  else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentId=a.id;store.cur=a.id;}
+  else{const a={id:uid(),...data,think:newAgentThink(data.think)};agents.push(a);currentKind="agent";currentId=a.id;store.kind="agent";store.cur=a.id;}
   store.agents=agents;renderAgents();loadConv();closeAll();toast("Agent saved");
 };
 $("#dupAgent").onclick=()=>{
