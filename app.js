@@ -370,9 +370,9 @@ addEventListener("resize",updateChipFade);
 /* message-edit-core:start */
 function editedMessage(message,text){
   if(!text.trim()&&!message.images?.length)throw new Error("A message needs text or an image.");
-  return {...message,content:text,reasoning:"",thoughts:undefined,error:false,edited:true,usage:null,stopped:false,truncated:false,interrupted:null,finish:null,learnedMemory:undefined,memoryForAgent:undefined,memoryReviewed:undefined};
+  return {...message,content:text,reasoning:"",thoughts:undefined,error:false,edited:true,usage:null,stopped:false,truncated:false,interrupted:null,finish:null,learnedMemory:undefined,pinnedMemory:undefined,memoryForAgent:undefined,memoryReviewed:undefined,memoryAuditReviewed:undefined,memoryUpdates:undefined};
 }
-function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",thoughts:message.thoughts,error:!!message.error,edited:!!message.edited,usage:message.usage||null,stopped:!!message.stopped,truncated:!!message.truncated,interrupted:message.interrupted||null,finish:message.finish||null,learnedMemory:message.learnedMemory,memoryForAgent:message.memoryForAgent,memoryReviewed:message.memoryReviewed,seenBy:message.seenBy};}
+function variantText(message){return {content:message.content||"",reasoning:message.reasoning||"",thoughts:message.thoughts,error:!!message.error,edited:!!message.edited,usage:message.usage||null,stopped:!!message.stopped,truncated:!!message.truncated,interrupted:message.interrupted||null,finish:message.finish||null,learnedMemory:message.learnedMemory,pinnedMemory:message.pinnedMemory,memoryForAgent:message.memoryForAgent,memoryReviewed:message.memoryReviewed,memoryAuditReviewed:message.memoryAuditReviewed,memoryUpdates:message.memoryUpdates,seenBy:message.seenBy};}
 function captureMessageVersions(list,index){
   const message=list[index];
   if(!message)throw new Error("Message not found.");
@@ -546,6 +546,7 @@ function updateChatRow(m,d){
   if(d._contentValue!==m.content||d._streaming!==!!m.streaming||d._searching!==!!m.searching||(waiting&&d._waitKey!==waitKey)){
     let live=m.thoughtsTracked&&m.streaming?stripThoughtsWhileStreaming(m.content):m.content;
     if(m.memoryTracked&&m.streaming)live=stripLearnedMemory(live);
+    if(m.memoryAuditTracked&&m.streaming)live=stripMemoryAudit(live);
     if(m.bondTracked&&m.streaming)live=stripBondWhileStreaming(live);
     if(m.sceneTracked&&m.streaming)live=stripSceneWhileStreaming(live);
     if(m.thoughtsTracked&&!m.moodTracked&&m.streaming)live=stripPartialMoodTag(live);
@@ -1187,7 +1188,7 @@ function pinToMemory(m){
   if(!text){toast("Nothing to remember in this message.");return;}
   const fact=who+": "+(text.length>240?text.slice(0,237)+"…":text);
   if(isGroup()){
-    const next=messages.map(message=>message===m?{...message,learnedMemory:[...new Set([...(message.learnedMemory||[]),fact])]}:message);
+    const next=messages.map(message=>message===m?{...message,learnedMemory:[...new Set([...(message.learnedMemory||[]),fact])],pinnedMemory:[...new Set([...(message.pinnedMemory||[]),fact])]}:message);
     try{store.saveConv(currentId,next);}catch(e){toast("Could not save to memory.");return;}
     messages=next;renderChat();toast("Pinned for the characters who witnessed this message");return;
   }
@@ -2033,13 +2034,15 @@ $("#worldMenu").onclick=openWorldSheet;
 /* ---------- Story memory sheet: edit facts from the chat, and let the AI suggest new ones ---------- */
 function renderLearnedMemory(){
   const wrap=$("#memLearned"),entries=learnedMemoryEntries(messages).reverse();
+  const review=messages.findLast(m=>m.memoryAuditReviewed&&!m.error&&!m.streaming);
+  $("#memAuditStatus").textContent=review?"Last memory review: "+(review.memoryUpdates?.length||0)+" adjustment"+(review.memoryUpdates?.length===1?"":"s")+". Earlier versions remain recoverable in the chat.":"Existing learned memories are reviewed every 24 messages (yours and the characters’). Pinned facts are never rewritten.";
   wrap.replaceChildren();
   $("#memLearnedCount").textContent=entries.length?"Learned automatically · "+entries.length:"Learned automatically";
   if(!entries.length){wrap.textContent="Nothing saved yet. Significant facts and events appear here after a reply.";return;}
-  for(const {fact,recipient,key} of entries){
+  for(const {fact,recipient,key,pinned} of entries){
     const row=document.createElement("div"),label=document.createElement("span"),forget=document.createElement("button");
     row.className="learned-fact";
-    label.textContent=recipient?(agentById(recipient)?.name||"One character")+" only · "+fact:fact;
+    label.textContent=(pinned?"Pinned · ":"")+(recipient?(agentById(recipient)?.name||"One character")+" only · "+fact:fact);
     forget.type="button";forget.className="btn";forget.textContent="Forget";
     forget.onclick=()=>forgetLearnedMemory(key);
     row.append(label,forget);wrap.append(row);
@@ -2047,12 +2050,7 @@ function renderLearnedMemory(){
 }
 function forgetLearnedMemory(key){
   if(controller||sequence){toast("Wait for the reply to finish.");return;}
-  const next=messages.map(message=>{
-    if(!Array.isArray(message.learnedMemory))return message;
-    const recipient=message.memoryForAgent||message.whisperTo||null;
-    const learnedMemory=message.learnedMemory.filter(fact=>JSON.stringify([recipient,memoryFactKey(fact)])!==key);
-    return learnedMemory.length===message.learnedMemory.length?message:{...message,learnedMemory};
-  });
+  const next=forgetLearnedFact(messages,key);
   try{store.saveConv(currentId,next);}catch(e){toast("Could not forget this memory.");return;}
   messages=next;renderLearnedMemory();renderChat();
 }
@@ -2586,10 +2584,15 @@ async function streamCompletion(agent,apiMessages,meta={}){
   const group=!meta.workflowRoleId&&typeof isGroup==="function"&&isGroup()?curGroup():null;
   if(group)bot.seenBy=presentIds(group);
   const memory=typeof memoryOwner==="function"?memoryOwner():null;
-  if(!meta.workflowRoleId&&memory&&memory.autoMemory!==false&&autoMemoryDue(conversationMessages)){
-    bot.memoryTracked=true;
+  let auditPlan=null;
+  if(!meta.workflowRoleId&&memory&&memory.autoMemory!==false){
     // A reply that has private context can only contribute memory for its own character.
     if(meta.whisperTo||conversationMessages.some(m=>visibleTo(m,agent.id)&&(m.whisperTo||m.memoryForAgent===agent.id||group&&Array.isArray(m.seenBy)&&group.members.some(id=>!m.seenBy.includes(id)))))bot.memoryForAgent=meta.whisperTo||agent.id;
+    if(autoMemoryDue(conversationMessages))bot.memoryTracked=true;
+    if(memoryAuditDue(conversationMessages,bot.memoryForAgent||null)){
+      bot.memoryAuditTracked=true;
+      auditPlan=memoryAuditPlan(conversationMessages,group?agent.id:undefined,bot.memoryForAgent,memory.memory||[]);
+    }
   }
   delete bot.noSearch;delete bot.forceSearch;delete bot.opener;delete bot.continueTurn;if(search)bot.searching=true;if(meta.proactive)bot.proactive=true;
   if(typeof thoughtsWanted==="function"&&thoughtsWanted(agent,meta))bot.thoughtsTracked=true;
@@ -2628,6 +2631,7 @@ async function streamCompletion(agent,apiMessages,meta={}){
     const chapterLine=!meta.workflowRoleId&&typeof chaptersFor==="function"?chapterNote(chaptersFor(convId)):"";
     if(chapterLine)payload.messages=[...payload.messages,{role:"system",content:chapterLine}];
     if(bot.memoryTracked)payload.messages=[...payload.messages,{role:"system",content:LEARN_MEMORY_INSTRUCTION}];
+    if(auditPlan){const auditInstruction=memoryAuditInstruction(auditPlan);if(auditInstruction)payload.messages=[...payload.messages,{role:"system",content:auditInstruction}];}
     if(typeof runtimeContext==="function"){
       const context=runtimeContext(agent,meta,conversationMessages.slice(0,-1));
       if(context)payload.messages=[...payload.messages,{role:"system",content:context}];
@@ -2642,7 +2646,8 @@ async function streamCompletion(agent,apiMessages,meta={}){
     }
     // Enough to rebuild this reply if it finishes after the page was closed (workflows simply resume instead).
     const jobMeta=meta.workflowRoleId?{workflow:true}:{convId,at:bot.at,fields:Object.fromEntries(
-      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","bondTracked","sceneTracked","memoryTracked","memoryForAgent","whisperTo","seenBy","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
+      ["agentId","agentName","agentEmoji","characterName","moodTracked","moodMature","thoughtsTracked","bondTracked","sceneTracked","memoryTracked","memoryAuditTracked","memoryForAgent","whisperTo","seenBy","sources","searchQuery"].filter(k=>bot[k]!==undefined).map(k=>[k,bot[k]]))};
+    if(auditPlan)jobMeta.memoryAuditPlan=auditPlan;
     if(usedNext)jobMeta.directorNext=sentDirectionNext;
     if(!meta.workflowRoleId&&store.notifyReplies&&globalThis.Notification?.permission==="granted")jobMeta.notify=(bot.characterName||bot.agentName||agent.name||"Your agent")+" replied";
     if(jobMeta.notify&&currentLock())jobMeta.notifyPrivate=true;
@@ -2708,12 +2713,15 @@ async function streamCompletion(agent,apiMessages,meta={}){
     delete bot.keepAlives;delete bot.waitingOn;
     // A leading "[char]:" speaker label is display noise; keep it out of the saved text, exports and notifications.
     if(!bot.error&&bot.content)bot.content=bot.content.replace(/^(?:\s*\[char\]\s*:\s*)+/i,"");
+    const auditSource=bot.content;
+    if(bot.memoryAuditTracked)bot.content=stripMemoryAudit(bot.content);
     if(bot.memoryTracked)applyLearnedMemory(bot,!aborted&&!bot.error&&!bot.interrupted&&!bot.truncated&&!bot.finish,conversationMessages,memory?.memory);
     if(bot.thoughtsTracked&&!bot.error)applyThoughtsTag(bot);
     if(bot.thoughtsTracked&&!bot.moodTracked)bot.content=stripPartialMoodTag(bot.content);
     if(bot.bondTracked&&!bot.error)applyBondTag(bot,bondBefore);
     if(bot.sceneTracked&&!bot.error)applySceneTag(bot);
     if(bot.moodTracked&&!bot.error)applyMoodTag(bot);
+    if(bot.memoryAuditTracked)applyMemoryAudit(bot,!aborted&&!bot.error&&!bot.interrupted&&!bot.truncated&&!bot.finish,auditPlan,conversationMessages.slice(0,-1),memory?.memory||[],auditSource);
     if(!bot.content&&!bot.reasoning)bot.content="(empty response)";
     cancelStreamPaint();releaseWakeLock();
     controller=null;setSending(false);
@@ -3034,6 +3042,7 @@ async function continueMessage(message){
     if(bot.mood){message.mood=bot.mood;message.moodTracked=true;}
     if(bot.thoughts)message.thoughts=bot.thoughts;
     if(bot.memoryReviewed)message.memoryReviewed=true;
+    if(bot.memoryAuditReviewed){message.memoryAuditReviewed=true;message.memoryUpdates=bot.memoryUpdates;}
     if(bot.learnedMemory){
       message.learnedMemory=[...(message.learnedMemory||[]),...bot.learnedMemory];
       if(bot.memoryForAgent)message.memoryForAgent=bot.memoryForAgent;
@@ -3669,6 +3678,8 @@ function adoptJob(job,interrupted){
   if(r.usage)bot.usage=r.usage;
   if(r.finish){if(r.finish!=="length")bot.finish=r.finish;if(r.finish!=="content_filter")bot.truncated=true;}
   if(interrupted||job.status!=="done"){bot.interrupted="The app was closed before this reply finished";bot.truncated=true;}
+  const auditSource=bot.content;
+  if(bot.memoryAuditTracked)bot.content=stripMemoryAudit(bot.content);
   if(bot.memoryTracked){
     const owner=agents.find(a=>a.id===meta.convId)||groups.find(g=>g.id===meta.convId);
     applyLearnedMemory(bot,owner?.autoMemory!==false&&autoMemoryDue(list)&&!bot.interrupted&&!bot.truncated&&!r.error&&!r.finish,list,owner?.memory);
@@ -3678,6 +3689,10 @@ function adoptJob(job,interrupted){
   if(bot.bondTracked)applyBondTag(bot,lastBond(list,bot.agentId));
   if(bot.sceneTracked)applySceneTag(bot);
   if(bot.moodTracked)applyMoodTag(bot);
+  if(bot.memoryAuditTracked){
+    const owner=agents.find(a=>a.id===meta.convId)||groups.find(g=>g.id===meta.convId);
+    applyMemoryAudit(bot,owner?.autoMemory!==false&&!bot.interrupted&&!bot.truncated&&!r.error&&!r.finish,meta.memoryAuditPlan,list,owner?.memory||[],auditSource);
+  }
   if(!bot.content&&!bot.reasoning)bot.content="(empty response)";
   try{store.saveConv(meta.convId,[...list,bot]);}catch(e){return false;}
   if(meta.directorNext&&!bot.interrupted&&!bot.truncated&&!r.error&&!r.finish&&bot.content&&!REPLY_PLACEHOLDERS.has(bot.content)){

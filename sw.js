@@ -1,6 +1,6 @@
 // Offline shell for the installed app. Network first, so a new GitHub Pages deploy is picked up on the next
 // online load; the cached copy is used only when the network fails. API calls (other origins) are never cached.
-importScripts("core.js?v=20261110f");
+importScripts("core.js?v=20261117a");
 const CACHE = "ds-agents-shell-v7";
 const SHELL = ["./", "index.html", "styles.css", "core.js", "app.js", "manifest.json", "icon-192.png", "icon-96.png"];
 
@@ -112,7 +112,7 @@ function replyPreview(raw) {
     if (!line.startsWith("data:")) continue;
     try { text += JSON.parse(line.slice(5)).choices?.[0]?.delta?.content || ""; } catch (e) { /* keep-alive or [DONE] */ }
   }
-  text = text.replace(/\[remember:[^\]\r\n]*(?:\]|$)/gi, "").replace(/\[\s*(?:mood|thoughts?|inner thoughts?|bond|relationship|affection)\s*:[^\]]*\]/gi, "").replace(/^\s*\[char\]\s*:\s*/i, "").replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim();
+  text = stripMemoryAudit(text).replace(/\[remember:[^\]\r\n]*(?:\]|$)/gi, "").replace(/\[\s*(?:mood|thoughts?|inner thoughts?|bond|relationship|affection)\s*:[^\]]*\]/gi, "").replace(/^\s*\[char\]\s*:\s*/i, "").replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim();
   return text.length > 160 ? text.slice(0, 157) + "…" : text;
 }
 async function notifyReply(meta, raw) {

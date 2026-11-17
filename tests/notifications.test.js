@@ -1,14 +1,16 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm');
-const {read,source}=require('./source');
+const {read,source,loadCore}=require('./source');
 
 test('the worker previews a reply without hidden tags for the notification',()=>{
   const sw=read('sw.js');
-  const ctx=vm.createContext({self:{addEventListener(){}},caches:{},indexedDB:{}});
+  const ctx=loadCore({self:{addEventListener(){}},caches:{},indexedDB:{}});
   vm.runInContext(sw.slice(sw.indexOf('function replyPreview'),sw.indexOf('async function notifyReply')),ctx);
   const raw=['data: {"choices":[{"delta":{"content":"*She smiles.* Hello"}}]}','data: {"choices":[{"delta":{"content":" there.\\n[thoughts: hm]\\n[bond: 60]\\n[mood: calm 3]"}}]}','data: [DONE]'].join('\n');
   assert.equal(ctx.replyPreview(raw),'She smiles. Hello there.');
+  const auditRaw='data: '+JSON.stringify({choices:[{delta:{content:'Hello.\n[memory-update: {"id":1,"fact":"New fact"}]\n[memory-reviewed]'}}]});
+  assert.equal(ctx.replyPreview(auditRaw),'Hello.');
   assert.equal(ctx.replyPreview('data: {"choices":[{"delta":{"content":"'+'x'.repeat(300)+'"}}]}').length,158);
 });
 test('install metadata has PNG icons and a declared colour scheme (Samsung Internet)',()=>{

@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="color-scheme" content="dark light" />
 <title>DeepSeek Agents</title>
-<link rel="stylesheet" href="styles.css?v=20261110f" />
+<link rel="stylesheet" href="styles.css?v=20261117a" />
 </head>
 <body>
   <header>
@@ -470,6 +470,7 @@
     <div class="body">
       <label class="toggle-row"><input type="checkbox" id="memAuto" /><span>Learn important facts automatically</span></label>
       <div class="hint">Every six completed replies, the AI checks for a lasting change and can save one note.</div>
+      <div class="hint" id="memAuditStatus">Existing learned memories are reviewed every 24 messages. Pinned facts are never rewritten.</div>
       <details class="learned-memory"><summary id="memLearnedCount">Learned automatically</summary><div id="memLearned" class="hint"></div></details>
       <label for="memText">Pinned facts</label>
       <div class="hint">These are sent with every reply. Add one fact per line.</div>
@@ -762,7 +763,7 @@
     </div>
   </section>
 
-<script src="core.js?v=20261110f"></script>
-<script src="app.js?v=20261110f"></script>
+<script src="core.js?v=20261117a"></script>
+<script src="app.js?v=20261117a"></script>
 </body>
 </html>
