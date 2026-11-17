@@ -31,3 +31,16 @@ test('single-agent persona stays in system role and user actions remain untouche
   assert.equal(payload[1].content,'[user]: '+messages[0].content);
   assert.equal(messages[0].content,'*I take out my phone.* Hello.');
 });
+
+test('solo and roleplay group instructions keep a flexible 80–120-word default that may be exceeded',()=>{
+  const core=require('./source').loadCore(),agent={id:'a',name:'Sera',prompt:'You are Sera, a baker.'};
+  const solo=core.agentInstructions(agent);
+  const group=core.buildGroupApiMessages({members:['a'],roleplay:{enabled:true,user:{name:'Theo',description:''},characters:{a:{name:'Sera',description:'A baker.'}},setting:'Bakery'}},agent,[])[0].content;
+  for(const instructions of [solo,group]){
+    assert.match(instructions,/80–120 words as a flexible default, not a hard limit/);
+    assert.match(instructions,/Let the reply run longer whenever the scene/);
+    assert.match(instructions,/no separate request for a longer reply is required/);
+    assert.match(instructions,/do not pad them to reach the target/);
+    assert.doesNotMatch(instructions,/Expand only when/);
+  }
+});
